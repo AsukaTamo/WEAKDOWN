@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "com.example.courseapp-mergeDebugResources-59:/values-v27/values-v27.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\HP\\.gradle\\caches\\transforms-4\\8a7b980d9b369d46b6ccc10ae299f078\\transformed\\core-splashscreen-1.0.1\\res\\values-v27\\values-v27.xml",
+                    "from": {
+                        "startLines": "2,3,4,7",
+                        "startColumns": "4,4,4,4",
+                        "startOffsets": "55,136,229,405",
+                        "endLines": "2,3,6,9",
+                        "endColumns": "80,92,12,12",
+                        "endOffsets": "131,224,400,588"
+                    }
+                }
+            ]
+        }
+    ]
+}

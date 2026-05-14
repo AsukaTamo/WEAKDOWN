@@ -1,0 +1,1750 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>大学课程表 · 高保真原型</title>
+    <script src="https://cdn.tailwindcss.com">
+    </script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#2196F3',
+                        'primary-light': '#64B5F6',
+                        'primary-dark': '#1976D2',
+                        accent: '#FF9800',
+                        success: '#4CAF50',
+                        warning: '#FFC107',
+                        error: '#F44336',
+                        'bg-light': '#FAFAFA',
+                        'card-light': '#FFFFFF',
+                        'bg-dark': '#121212',
+                        'card-dark': '#1E1E1E',
+                        'text-primary': '#212121',
+                        'text-secondary': '#757575',
+                        'divider': '#E0E0E0',
+                    },
+                    fontFamily: {
+                        'sans': ['Roboto', 'system-ui', 'sans-serif'],
+                    },
+                    borderRadius: {
+                        'card': '12px',
+                        'btn': '8px',
+                        'fab': '24px',
+                        'nav': '16px',
+                        'modal': '16px',
+                    },
+                    spacing: { 'xs': '4px', 'sm': '8px', 'md': '16px', 'lg': '24px', 'xl': '32px' },
+                    boxShadow: {
+                        'card': '0 2px 8px rgba(0,0,0,0.10)',
+                        'card-hover': '0 4px 16px rgba(0,0,0,0.16)',
+                        'fab': '0 4px 16px rgba(255,152,0,0.35)',
+                        'modal': '0 8px 32px rgba(0,0,0,0.20)',
+                        'nav': '0 -2px 12px rgba(0,0,0,0.06)',
+                    },
+                }
+            }
+        }
+    </script>
+    <style>
+        :root {
+            --phone-width: 430px;
+            --phone-height: 932px;
+            --status-bar-height: 44px;
+            --top-bar-height: 56px;
+            --bottom-nav-height: 56px;
+            --time-axis-width: 48px;
+            --slot-height: 80px;
+            --transition-speed: 0.28s;
+        }
+
+        * {
+            -webkit-tap-highlight-color: transparent;
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Roboto', system-ui, sans-serif;
+            background: #1a1a2e;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        /* 手机模拟器外壳 */
+        .phone-frame {
+            width: var(--phone-width);
+            height: var(--phone-height);
+            background: #1c1c1e;
+            border-radius: 40px;
+            padding: 10px;
+            box-shadow:
+                0 0 0 3px #2a2a2e,
+                0 0 0 6px #1c1c1e,
+                0 0 0 8px #2a2a2e,
+                0 20px 50px rgba(0, 0, 0, 0.5),
+                0 0 100px rgba(33, 150, 243, 0.06);
+            position: relative;
+            overflow: hidden;
+            flex-shrink: 0;
+        }
+
+        .phone-screen {
+            width: 100%;
+            height: 100%;
+            background: #FAFAFA;
+            border-radius: 30px;
+            overflow: hidden;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            transition: background var(--transition-speed) ease;
+        }
+
+        .phone-screen.dark-mode {
+            background: #121212;
+        }
+
+        /* 状态栏 */
+        .status-bar {
+            height: var(--status-bar-height);
+            background: transparent;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 26px 0 28px;
+            font-size: 12px;
+            font-weight: 600;
+            color: #212121;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 100;
+            letter-spacing: 0.4px;
+        }
+        .dark-mode .status-bar {
+            color: #FFFFFF;
+        }
+        .status-bar .icons {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 11px;
+        }
+        .status-notch {
+            position: absolute;
+            top: 6px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 26px;
+            background: #1c1c1e;
+            border-radius: 18px;
+            z-index: 101;
+        }
+
+        /* 顶部标题栏 */
+        .top-bar {
+            height: var(--top-bar-height);
+            background: #2196F3;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            position: relative;
+            z-index: 50;
+            flex-direction: column;
+            padding: 0 56px;
+            transition: background var(--transition-speed);
+        }
+        .top-bar .semester {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.88);
+            font-weight: 400;
+            letter-spacing: 0.3px;
+            line-height: 1.3;
+        }
+        .top-bar .week-row {
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            user-select: none;
+        }
+        .top-bar .week-number {
+            font-size: 18px;
+            color: #FFFFFF;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+        }
+        .top-bar .week-arrow {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.7);
+            transition: transform 0.2s;
+        }
+        .top-bar .top-bar-right {
+            position: absolute;
+            right: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: white;
+            font-size: 15px;
+            cursor: pointer;
+            width: 36px;
+            height: 36px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+            transition: background 0.2s;
+        }
+        .top-bar .top-bar-right:active {
+            background: rgba(255, 255, 255, 0.18);
+        }
+
+        /* 主内容区 */
+        .main-content {
+            flex: 1;
+            position: relative;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* 页面容器 - 核心修复：使用绝对定位叠加，通过opacity和pointer-events控制显隐 */
+        .page {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow-y: auto;
+            overflow-x: hidden;
+            transition: opacity var(--transition-speed) ease, visibility var(--transition-speed) ease;
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+            -webkit-overflow-scrolling: touch;
+            will-change: opacity, visibility;
+        }
+        .page.active {
+            opacity: 1;
+            visibility: visible;
+            pointer-events: auto;
+            position: relative;
+            /* 活跃页面使用relative，撑开父容器 */;
+        }
+
+        /* 课表页面使用flex布局 */
+        #pageSchedule {
+            display: flex;
+            flex-direction: column;
+        }
+        #pageSchedule.active {
+            display: flex;
+        }
+
+        .schedule-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            position: relative;
+            flex: 1;
+        }
+        .schedule-scroll {
+            flex: 1;
+            overflow-y: auto;
+            overflow-x: hidden;
+            position: relative;
+            -webkit-overflow-scrolling: touch;
+        }
+        .schedule-grid-wrapper {
+            display: flex;
+            position: relative;
+            min-height: 880px;
+            background: #FAFAFA;
+            transition: background var(--transition-speed);
+        }
+        .dark-mode .schedule-grid-wrapper {
+            background: #121212;
+        }
+
+        /* 时间轴 */
+        .time-axis {
+            width: var(--time-axis-width);
+            flex-shrink: 0;
+            position: sticky;
+            left: 0;
+            z-index: 10;
+            background: #FAFAFA;
+            transition: background var(--transition-speed);
+            border-right: 1px solid #E0E0E0;
+        }
+        .dark-mode .time-axis {
+            background: #121212;
+            border-right-color: #424242;
+        }
+        .time-sheet-label-header {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            color: #9E9E9E;
+            border-bottom: 1px solid #E0E0E0;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            transition: all var(--transition-speed);
+        }
+        .dark-mode .time-sheet-label-header {
+            color: #757575;
+            border-bottom-color: #424242;
+        }
+        .time-slot-label {
+            height: var(--slot-height);
+            display: flex;
+            align-items: flex-start;
+            justify-content: center;
+            padding-top: 10px;
+            font-size: 10px;
+            color: #757575;
+            font-weight: 400;
+            letter-spacing: 0.2px;
+            position: relative;
+            border-bottom: 1px solid #E0E0E0;
+            transition: all var(--transition-speed);
+        }
+        .dark-mode .time-slot-label {
+            color: #B0B0B0;
+            border-bottom-color: #424242;
+        }
+
+        /* 课程列 */
+        .schedule-columns {
+            display: flex;
+            flex: 1;
+            position: relative;
+            min-width: 0;
+        }
+        .day-column {
+            flex: 1;
+            position: relative;
+            border-right: 1px solid #E0E0E0;
+            min-width: 40px;
+            transition: border-color var(--transition-speed);
+            background: repeating-linear-gradient(to bottom,
+                    transparent,
+                    transparent calc(var(--slot-height) - 1px),
+                    #E0E0E0 calc(var(--slot-height) - 1px),
+                    #E0E0E0 var(--slot-height));
+        }
+        .dark-mode .day-column {
+            border-right-color: #424242;
+            background: repeating-linear-gradient(to bottom,
+                    transparent,
+                    transparent calc(var(--slot-height) - 1px),
+                    #424242 calc(var(--slot-height) - 1px),
+                    #424242 var(--slot-height));
+        }
+        .day-column:last-child {
+            border-right: none;
+        }
+        .day-header {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            font-weight: 500;
+            color: #757575;
+            background: #FAFAFA;
+            position: sticky;
+            top: 0;
+            z-index: 5;
+            border-bottom: 1px solid #E0E0E0;
+            letter-spacing: 0.3px;
+            transition: all var(--transition-speed);
+        }
+        .dark-mode .day-header {
+            color: #B0B0B0;
+            background: #121212;
+            border-bottom-color: #424242;
+        }
+        .day-header.today {
+            color: #2196F3;
+            font-weight: 700;
+            background: #E3F2FD;
+        }
+        .dark-mode .day-header.today {
+            color: #64B5F6;
+            background: #1A3A5C;
+        }
+
+        /* 课程卡片 */
+        .course-card {
+            position: absolute;
+            border-radius: 10px;
+            padding: 7px 6px;
+            cursor: pointer;
+            user-select: none;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            z-index: 3;
+            box-shadow: 0 1px 4px rgba(0, 0, 0, 0.12);
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+            min-width: 36px;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        .course-card:active {
+            transform: scale(0.96);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        }
+        .course-card .course-name {
+            font-size: 12px;
+            font-weight: 600;
+            color: #FFFFFF;
+            line-height: 1.25;
+            overflow: hidden;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            letter-spacing: 0.3px;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+        }
+        .course-card .course-teacher,
+        .course-card .course-location {
+            font-size: 10px;
+            color: rgba(255, 255, 255, 0.9);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .course-card .course-meta {
+            font-size: 9px;
+            color: rgba(255, 255, 255, 0.7);
+            overflow: hidden;
+            white-space: nowrap;
+            text-overflow: ellipsis;
+        }
+        .course-card.type-required {
+            background: linear-gradient(135deg, #2196F3 0%, #1E88E5 100%);
+        }
+        .course-card.type-elective {
+            background: linear-gradient(135deg, #9C27B0 0%, #8E24AA 100%);
+        }
+        .course-card.type-lab {
+            background: linear-gradient(135deg, #4CAF50 0%, #43A047 100%);
+        }
+        .course-card.type-custom {
+            background: linear-gradient(135deg, #FF9800 0%, #F57C00 100%);
+        }
+        .course-card.ongoing {
+            border: 2.5px solid #FFFFFF;
+            box-shadow: 0 2px 12px rgba(0, 0, 0, 0.22), 0 0 0 4px rgba(255, 255, 255, 0.3);
+            z-index: 8;
+            animation: pulse-border 2s ease-in-out infinite;
+        }
+        @keyframes pulse-border {
+            0%,
+            100% {
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.22), 0 0 0 4px rgba(255, 255, 255, 0.3);
+            }
+            50% {
+                box-shadow: 0 2px 12px rgba(0, 0, 0, 0.22), 0 0 0 8px rgba(255, 255, 255, 0.15);
+            }
+        }
+        .course-card .progress-bar {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            height: 3px;
+            background: #FFFFFF;
+            border-radius: 0 2px 0 0;
+            transition: width 30s linear;
+        }
+        .course-card.upcoming {
+            border: 2px solid #FF9800;
+            box-shadow: 0 2px 10px rgba(255, 152, 0, 0.3);
+        }
+        .course-card .countdown-badge {
+            position: absolute;
+            top: -8px;
+            right: -4px;
+            background: #FF9800;
+            color: #FFF;
+            font-size: 9px;
+            font-weight: 700;
+            padding: 2px 7px;
+            border-radius: 10px;
+            letter-spacing: 0.3px;
+            box-shadow: 0 2px 6px rgba(255, 152, 0, 0.4);
+            z-index: 5;
+            white-space: nowrap;
+        }
+
+        /* FAB按钮 */
+        .fab-container {
+            position: absolute;
+            bottom: 80px;
+            right: 16px;
+            z-index: 60;
+            display: flex;
+            flex-direction: column-reverse;
+            align-items: flex-end;
+            gap: 12px;
+            transition: opacity 0.3s ease;
+        }
+        .fab-main {
+            width: 56px;
+            height: 56px;
+            border-radius: 28px;
+            background: #FF9800;
+            color: #FFF;
+            border: none;
+            cursor: pointer;
+            font-size: 22px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 16px rgba(255, 152, 0, 0.4);
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            z-index: 61;
+        }
+        .fab-main:active {
+            transform: scale(0.9);
+        }
+        .fab-main.open {
+            transform: rotate(45deg);
+            background: #F44336;
+            box-shadow: 0 4px 16px rgba(244, 67, 54, 0.4);
+        }
+        .fab-menu {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            opacity: 0;
+            transform: translateY(20px) scale(0.8);
+            pointer-events: none;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .fab-menu.open {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            pointer-events: auto;
+        }
+        .fab-menu-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            background: #FFFFFF;
+            border-radius: 24px;
+            padding: 10px 16px;
+            cursor: pointer;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.12);
+            white-space: nowrap;
+            font-size: 13px;
+            font-weight: 500;
+            color: #212121;
+            transition: all 0.15s;
+            user-select: none;
+        }
+        .fab-menu-item:active {
+            background: #F5F5F5;
+            transform: scale(0.95);
+        }
+        .fab-menu-item i {
+            width: 20px;
+            text-align: center;
+            font-size: 14px;
+            color: #2196F3;
+        }
+        .dark-mode .fab-menu-item {
+            background: #1E1E1E;
+            color: #FFFFFF;
+            box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+        }
+        .dark-mode .fab-menu-item:active {
+            background: #2C2C2C;
+        }
+
+        /* 底部导航栏 */
+        .bottom-nav {
+            height: var(--bottom-nav-height);
+            background: #FFFFFF;
+            display: flex;
+            align-items: center;
+            justify-content: space-around;
+            flex-shrink: 0;
+            border-radius: 16px 16px 0 0;
+            box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.06);
+            position: relative;
+            z-index: 50;
+            transition: background var(--transition-speed);
+        }
+        .dark-mode .bottom-nav {
+            background: #1E1E1E;
+            box-shadow: 0 -2px 12px rgba(0, 0, 0, 0.2);
+        }
+        .nav-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 3px;
+            cursor: pointer;
+            user-select: none;
+            padding: 6px 16px;
+            transition: all 0.2s;
+            position: relative;
+            color: #757575;
+            font-size: 11px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+        }
+        .dark-mode .nav-item {
+            color: #B0B0B0;
+        }
+        .nav-item i {
+            font-size: 20px;
+            transition: all 0.2s;
+        }
+        .nav-item.active {
+            color: #2196F3;
+        }
+        .nav-item.active i {
+            transform: scale(1.1);
+            color: #2196F3;
+        }
+        .nav-item:active {
+            transform: scale(0.9);
+        }
+
+        /* 弹窗 */
+        .modal-overlay {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.5);
+            z-index: 90;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s;
+        }
+        .modal-overlay.show {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-sheet {
+            background: #FFFFFF;
+            border-radius: 16px 16px 0 0;
+            width: 100%;
+            max-height: 70%;
+            overflow-y: auto;
+            padding: 20px 24px 32px;
+            box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.15);
+            transform: translateY(100%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .dark-mode .modal-sheet {
+            background: #1E1E1E;
+        }
+        .modal-overlay.show .modal-sheet {
+            transform: translateY(0);
+        }
+        .modal-handle {
+            width: 36px;
+            height: 4px;
+            background: #D0D0D0;
+            border-radius: 2px;
+            margin: 0 auto 16px;
+        }
+        .dark-mode .modal-handle {
+            background: #555;
+        }
+        .modal-title {
+            font-size: 18px;
+            font-weight: 600;
+            color: #212121;
+            text-align: center;
+            margin-bottom: 16px;
+            letter-spacing: 0.3px;
+        }
+        .dark-mode .modal-title {
+            color: #FFFFFF;
+        }
+        .week-selector-grid {
+            display: grid;
+            grid-template-columns: repeat(5, 1fr);
+            gap: 10px;
+            padding: 8px 0;
+        }
+        .week-option {
+            width: 100%;
+            aspect-ratio: 1;
+            border-radius: 50%;
+            border: 2px solid #E0E0E0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.15s;
+            color: #212121;
+            background: #FAFAFA;
+        }
+        .dark-mode .week-option {
+            border-color: #424242;
+            color: #FFF;
+            background: #2C2C2C;
+        }
+        .week-option:active {
+            transform: scale(0.9);
+        }
+        .week-option.selected {
+            background: #2196F3;
+            color: #FFF;
+            border-color: #2196F3;
+            font-weight: 700;
+            box-shadow: 0 2px 8px rgba(33, 150, 243, 0.35);
+        }
+
+        /* 课程管理页标签栏 */
+        .tab-bar {
+            display: flex;
+            height: 48px;
+            background: #FAFAFA;
+            flex-shrink: 0;
+            border-bottom: 1px solid #E0E0E0;
+            transition: all var(--transition-speed);
+        }
+        .dark-mode .tab-bar {
+            background: #121212;
+            border-bottom-color: #424242;
+        }
+        .tab-item {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 15px;
+            font-weight: 500;
+            color: #757575;
+            cursor: pointer;
+            position: relative;
+            transition: color 0.2s;
+            user-select: none;
+            letter-spacing: 0.3px;
+        }
+        .tab-item.active {
+            color: #2196F3;
+        }
+        .tab-item.active::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 32px;
+            height: 3px;
+            background: #2196F3;
+            border-radius: 2px;
+        }
+        .dark-mode .tab-item {
+            color: #B0B0B0;
+        }
+        .dark-mode .tab-item.active {
+            color: #64B5F6;
+        }
+        .dark-mode .tab-item.active::after {
+            background: #64B5F6;
+        }
+
+        /* 管理页内嵌面板 - 不使用.page的绝对定位，改用display切换 */
+        .manage-panel {
+            flex: 1;
+            overflow-y: auto;
+            display: none;
+            -webkit-overflow-scrolling: touch;
+        }
+        .manage-panel.active {
+            display: block;
+        }
+
+        /* 课程列表项 */
+        .course-list-item {
+            display: flex;
+            align-items: center;
+            height: 72px;
+            padding: 0 16px;
+            background: #FFFFFF;
+            border-bottom: 1px solid #F0F0F0;
+            cursor: pointer;
+            transition: background 0.15s;
+            position: relative;
+            gap: 12px;
+        }
+        .dark-mode .course-list-item {
+            background: #1E1E1E;
+            border-bottom-color: #333;
+        }
+        .course-list-item:active {
+            background: #F5F5F5;
+        }
+        .dark-mode .course-list-item:active {
+            background: #2C2C2C;
+        }
+        .course-color-indicator {
+            width: 5px;
+            height: 40px;
+            border-radius: 3px;
+            flex-shrink: 0;
+        }
+        .course-list-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            gap: 3px;
+            min-width: 0;
+        }
+        .course-list-name {
+            font-size: 15px;
+            font-weight: 500;
+            color: #212121;
+            letter-spacing: 0.3px;
+        }
+        .dark-mode .course-list-name {
+            color: #FFF;
+        }
+        .course-list-detail {
+            font-size: 12px;
+            color: #757575;
+            letter-spacing: 0.2px;
+        }
+        .dark-mode .course-list-detail {
+            color: #B0B0B0;
+        }
+        .course-list-arrow {
+            color: #BDBDBD;
+            font-size: 13px;
+        }
+
+        /* 设置列表 */
+        .settings-group {
+            margin: 0 16px 24px;
+            background: #FFFFFF;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+        }
+        .dark-mode .settings-group {
+            background: #1E1E1E;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .settings-item {
+            display: flex;
+            align-items: center;
+            height: 56px;
+            padding: 0 16px;
+            cursor: pointer;
+            transition: background 0.15s;
+            gap: 14px;
+            border-bottom: 1px solid #F5F5F5;
+            user-select: none;
+        }
+        .dark-mode .settings-item {
+            border-bottom-color: #2C2C2C;
+        }
+        .settings-item:last-child {
+            border-bottom: none;
+        }
+        .settings-item:active {
+            background: #F9F9F9;
+        }
+        .dark-mode .settings-item:active {
+            background: #252525;
+        }
+        .settings-item i:first-child {
+            width: 22px;
+            text-align: center;
+            font-size: 17px;
+            color: #757575;
+        }
+        .dark-mode .settings-item i:first-child {
+            color: #B0B0B0;
+        }
+        .settings-item span {
+            flex: 1;
+            font-size: 14px;
+            color: #212121;
+            font-weight: 400;
+            letter-spacing: 0.3px;
+        }
+        .dark-mode .settings-item span {
+            color: #FFF;
+        }
+        .settings-item i.fa-chevron-right {
+            font-size: 12px;
+            color: #BDBDBD;
+        }
+        .toggle-switch {
+            width: 48px;
+            height: 28px;
+            background: #E0E0E0;
+            border-radius: 14px;
+            position: relative;
+            cursor: pointer;
+            transition: background 0.3s;
+            flex-shrink: 0;
+        }
+        .toggle-switch.active {
+            background: #2196F3;
+        }
+        .toggle-switch::after {
+            content: '';
+            position: absolute;
+            top: 3px;
+            left: 3px;
+            width: 22px;
+            height: 22px;
+            background: #FFF;
+            border-radius: 50%;
+            transition: left 0.3s;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+        }
+        .toggle-switch.active::after {
+            left: 23px;
+        }
+
+        /* 用户头像区 */
+        .user-header {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            padding: 20px 16px;
+            background: linear-gradient(135deg, #2196F3 0%, #1565C0 100%);
+            margin: 0 16px 20px;
+            border-radius: 16px;
+            color: #FFF;
+            box-shadow: 0 4px 16px rgba(33, 150, 243, 0.25);
+        }
+        .user-avatar {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 3px solid rgba(255, 255, 255, 0.5);
+            flex-shrink: 0;
+            background: #E3F2FD;
+        }
+        .user-info-text {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+        .user-name {
+            font-size: 17px;
+            font-weight: 600;
+            letter-spacing: 0.4px;
+        }
+        .user-subtitle {
+            font-size: 12px;
+            opacity: 0.85;
+            letter-spacing: 0.3px;
+        }
+
+        /* Snackbar */
+        .snackbar {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%) translateY(120px);
+            background: #323232;
+            color: #FFF;
+            padding: 12px 22px;
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 500;
+            letter-spacing: 0.3px;
+            z-index: 110;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+            transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            white-space: nowrap;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            pointer-events: none;
+        }
+        .snackbar.show {
+            transform: translateX(-50%) translateY(0);
+            pointer-events: auto;
+        }
+        .snackbar.success {
+            background: #4CAF50;
+        }
+        .snackbar.error {
+            background: #F44336;
+        }
+
+        /* 背景图片层 */
+        .bg-image-layer {
+            position: absolute;
+            inset: 0;
+            background-image: url('https://images.unsplash.com/photo-1541339907198-e08756dedf3f?w=800&q=60');
+            background-size: cover;
+            background-position: center;
+            opacity: 0.05;
+            pointer-events: none;
+            z-index: 0;
+            transition: opacity var(--transition-speed);
+        }
+        .dark-mode .bg-image-layer {
+            opacity: 0.03;
+            background-image: url('https://images.unsplash.com/photo-1562774053-701939374585?w=800&q=60');
+        }
+
+        /* 动画 */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+        .animate-fade-in {
+            animation: fadeInUp 0.35s ease forwards;
+        }
+
+        /* 滚动条 */
+        ::-webkit-scrollbar {
+            width: 0px;
+        }
+        .schedule-scroll::-webkit-scrollbar,
+        .manage-panel::-webkit-scrollbar,
+        #pageProfile::-webkit-scrollbar {
+            width: 3px;
+        }
+        .schedule-scroll::-webkit-scrollbar-thumb,
+        .manage-panel::-webkit-scrollbar-thumb,
+        #pageProfile::-webkit-scrollbar-thumb {
+            background: #D0D0D0;
+            border-radius: 3px;
+        }
+
+        /* 响应式 */
+        @media (max-width: 460px) {
+            .phone-frame {
+                width: 100vw;
+                height: 100vh;
+                height: 100dvh;
+                border-radius: 0;
+                padding: 0;
+                box-shadow: none;
+            }
+            .phone-screen {
+                border-radius: 0;
+            }
+            body {
+                padding: 0;
+            }
+            :root {
+                --phone-width: 100vw;
+                --phone-height: 100vh;
+                --phone-height: 100dvh;
+            }
+        }
+        @media (min-width: 461px) and (max-width: 768px) {
+            .phone-frame {
+                width: 400px;
+                height: 860px;
+                border-radius: 32px;
+                padding: 8px;
+            }
+            .phone-screen {
+                border-radius: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <div class="phone-frame">
+        <div class="phone-screen" id="phoneScreen">
+            <div class="status-notch"></div>
+
+            <!-- 状态栏 -->
+            <div class="status-bar">
+                <span class="time-display" id="timeDisplay">9:41</span>
+                <span class="icons">
+                    <i class="fa-solid fa-signal"></i>
+                    <i class="fa-solid fa-wifi"></i>
+                    <i class="fa-solid fa-battery-full"></i>
+                </span>
+            </div>
+
+            <!-- 顶部标题栏 -->
+            <div class="top-bar" id="topBar">
+                <span class="semester">2025-2026学年 第二学期</span>
+                <div class="week-row" id="weekSelector" onclick="toggleWeekModal()">
+                    <span class="week-number" id="currentWeekLabel">第12周</span>
+                    <span class="week-arrow">▼</span>
+                </div>
+                <div class="top-bar-right" id="darkModeToggle" onclick="toggleDarkMode()" title="深色模式">
+                    <i class="fa-solid fa-moon" id="darkModeIcon"></i>
+                </div>
+            </div>
+
+            <!-- 主内容区 -->
+            <div class="main-content" id="mainContent">
+
+                <!-- ========== 首页：课表页 ========== -->
+                <div class="page active" id="pageSchedule">
+                    <div class="schedule-container">
+                        <div class="schedule-scroll" id="scheduleScroll">
+                            <div class="schedule-grid-wrapper">
+                                <div class="bg-image-layer"></div>
+                                <!-- 时间轴 -->
+                                <div class="time-axis" id="timeAxis">
+                                    <div class="time-sheet-label-header">节次</div>
+                                    <div class="time-slot-label"><span>08:00</span></div>
+                                    <div class="time-slot-label"><span>08:55</span></div>
+                                    <div class="time-slot-label"><span>10:00</span></div>
+                                    <div class="time-slot-label"><span>10:55</span></div>
+                                    <div class="time-slot-label"><span>14:00</span></div>
+                                    <div class="time-slot-label"><span>14:55</span></div>
+                                    <div class="time-slot-label"><span>16:00</span></div>
+                                    <div class="time-slot-label"><span>16:55</span></div>
+                                    <div class="time-slot-label"><span>19:00</span></div>
+                                    <div class="time-slot-label"><span>19:55</span></div>
+                                </div>
+                                <!-- 课程列 -->
+                                <div class="schedule-columns" id="scheduleColumns">
+                                    <div class="day-column" data-day="0">
+                                        <div class="day-header today">周一</div>
+                                    </div>
+                                    <div class="day-column" data-day="1">
+                                        <div class="day-header">周二</div>
+                                    </div>
+                                    <div class="day-column" data-day="2">
+                                        <div class="day-header">周三</div>
+                                    </div>
+                                    <div class="day-column" data-day="3">
+                                        <div class="day-header">周四</div>
+                                    </div>
+                                    <div class="day-column" data-day="4">
+                                        <div class="day-header">周五</div>
+                                    </div>
+                                    <div class="day-column" data-day="5">
+                                        <div class="day-header">周六</div>
+                                    </div>
+                                    <div class="day-column" data-day="6">
+                                        <div class="day-header">周日</div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        <!-- FAB -->
+                        <div class="fab-container" id="fabContainer">
+                            <div class="fab-menu" id="fabMenu">
+                                <div class="fab-menu-item" onclick="showSnackbar('即将从学校官网导入课表...', 'info')">
+                                    <i class="fa-solid fa-building-columns"></i> 学校官网导入
+                                </div>
+                                <div class="fab-menu-item" onclick="showSnackbar('请选择PDF文件...', 'info')">
+                                    <i class="fa-solid fa-file-pdf"></i> PDF文件导入
+                                </div>
+                                <div class="fab-menu-item" onclick="switchToAddCourse()">
+                                    <i class="fa-solid fa-pen-to-square"></i> 手动添加课程
+                                </div>
+                            </div>
+                            <button class="fab-main" id="fabMain" onclick="toggleFabMenu()">
+                                <i class="fa-solid fa-plus"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== 课程管理页 ========== -->
+                <div class="page" id="pageManage">
+                    <div style="display:flex;flex-direction:column;height:100%;">
+                        <div class="tab-bar" id="tabBar">
+                            <div class="tab-item active" data-tab="0" onclick="switchManageTab(0)">全部课程</div>
+                            <div class="tab-item" data-tab="1" onclick="switchManageTab(1)">添加课程</div>
+                        </div>
+                        <!-- 全部课程面板 -->
+                        <div class="manage-panel active" id="panelAllCourses">
+                            <div class="course-list-item animate-fade-in">
+                                <div class="course-color-indicator" style="background:#2196F3;"></div>
+                                <div class="course-list-info">
+                                    <span class="course-list-name">操作系统</span>
+                                    <span class="course-list-detail">周一 08:00-09:40 · 教三楼301 · 张教授</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-right course-list-arrow"></i>
+                            </div>
+                            <div class="course-list-item" style="animation:fadeInUp 0.35s ease 0.05s forwards;">
+                                <div class="course-color-indicator" style="background:#2196F3;"></div>
+                                <div class="course-list-info">
+                                    <span class="course-list-name">计算机网络</span>
+                                    <span class="course-list-detail">周一 10:00-11:40 · 教三楼301 · 李教授</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-right course-list-arrow"></i>
+                            </div>
+                            <div class="course-list-item" style="animation:fadeInUp 0.35s ease 0.1s forwards;">
+                                <div class="course-color-indicator" style="background:#4CAF50;"></div>
+                                <div class="course-list-info">
+                                    <span class="course-list-name">操作系统实验</span>
+                                    <span class="course-list-detail">周三 08:00-09:40 · 实验楼A201 · 张教授</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-right course-list-arrow"></i>
+                            </div>
+                            <div class="course-list-item" style="animation:fadeInUp 0.35s ease 0.15s forwards;">
+                                <div class="course-color-indicator" style="background:#9C27B0;"></div>
+                                <div class="course-list-info">
+                                    <span class="course-list-name">人工智能导论</span>
+                                    <span class="course-list-detail">周四 10:00-11:40 · 教五楼502 · 王教授</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-right course-list-arrow"></i>
+                            </div>
+                            <div class="course-list-item" style="animation:fadeInUp 0.35s ease 0.2s forwards;">
+                                <div class="course-color-indicator" style="background:#2196F3;"></div>
+                                <div class="course-list-info">
+                                    <span class="course-list-name">编译原理</span>
+                                    <span class="course-list-detail">周五 08:00-09:40 · 教三楼205 · 赵教授</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-right course-list-arrow"></i>
+                            </div>
+                            <div class="course-list-item" style="animation:fadeInUp 0.35s ease 0.25s forwards;">
+                                <div class="course-color-indicator" style="background:#FF9800;"></div>
+                                <div class="course-list-info">
+                                    <span class="course-list-name">职业规划</span>
+                                    <span class="course-list-detail">周五 14:00-15:40 · 教一楼101 · 陈老师</span>
+                                </div>
+                                <i class="fa-solid fa-chevron-right course-list-arrow"></i>
+                            </div>
+                            <div style="height:20px;"></div>
+                        </div>
+                        <!-- 添加课程面板 -->
+                        <div class="manage-panel" id="panelAddCourse">
+                            <div style="padding:16px;display:flex;flex-direction:column;gap:16px;">
+                                <div>
+                                    <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">课程名称</label>
+                                    <input type="text" placeholder="请输入课程名称" style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;transition:border-color 0.2s;" onfocus="this.style.borderColor='#2196F3'" onblur="this.style.borderColor='#E0E0E0'">
+                                </div>
+                                <div>
+                                    <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">授课教师</label>
+                                    <input type="text" placeholder="请输入教师姓名" style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;transition:border-color 0.2s;" onfocus="this.style.borderColor='#2196F3'" onblur="this.style.borderColor='#E0E0E0'">
+                                </div>
+                                <div>
+                                    <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">上课地点</label>
+                                    <input type="text" placeholder="例如：教三楼301" style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;transition:border-color 0.2s;" onfocus="this.style.borderColor='#2196F3'" onblur="this.style.borderColor='#E0E0E0'">
+                                </div>
+                                <div style="display:flex;gap:12px;">
+                                    <div style="flex:1;">
+                                        <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">上课星期</label>
+                                        <select style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;appearance:none;cursor:pointer;">
+                                            <option>周一</option><option>周二</option><option>周三</option><option>周四</option><option>周五</option><option>周六</option><option>周日</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">课程类型</label>
+                                        <select style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;appearance:none;cursor:pointer;">
+                                            <option>必修课</option><option>选修课</option><option>实验课</option><option>自定义</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <div style="display:flex;gap:12px;">
+                                    <div style="flex:1;">
+                                        <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">开始节次</label>
+                                        <select style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;appearance:none;cursor:pointer;">
+                                            <option>第1节</option><option>第3节</option><option>第5节</option><option>第7节</option><option>第9节</option>
+                                        </select>
+                                    </div>
+                                    <div style="flex:1;">
+                                        <label style="font-size:13px;font-weight:500;color:#757575;margin-bottom:6px;display:block;">持续节数</label>
+                                        <select style="width:100%;height:48px;border:1.5px solid #E0E0E0;border-radius:12px;padding:0 14px;font-size:14px;color:#212121;outline:none;background:#FFF;appearance:none;cursor:pointer;">
+                                            <option>2节</option><option>3节</option><option>4节</option>
+                                        </select>
+                                    </div>
+                                </div>
+                                <button style="width:100%;height:48px;background:#2196F3;color:#FFF;border:none;border-radius:12px;font-size:15px;font-weight:600;cursor:pointer;letter-spacing:0.5px;margin-top:8px;transition:transform 0.15s;" onmousedown="this.style.transform='scale(0.96)'" onmouseup="this.style.transform='scale(1)'" onclick="showSnackbar('课程保存成功！', 'success')">
+                                    <i class="fa-solid fa-check" style="margin-right:6px;"></i> 保存课程
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== 用户中心页 ========== -->
+                <div class="page" id="pageProfile" style="padding-top:8px;">
+                    <div class="user-header">
+                        <img src="https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?w=200&h=200&fit=crop&crop=face"
+                        alt="用户头像"
+                        class="user-avatar"
+                        loading="lazy"
+                        onerror="this.src='https://ui-avatars.com/api/?name=张同学&size=112&background=E3F2FD&color=2196F3&bold=true'">
+                        <div class="user-info-text">
+                            <span class="user-name">张同学</span>
+                            <span class="user-subtitle">计算机科学与技术 · 2023级</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right" style="color:rgba(255,255,255,0.7);margin-left:auto;"></i>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-item" onclick="showSnackbar('课表背景设置', 'info')">
+                            <i class="fa-solid fa-image"></i><span>课表背景设置</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                        <div class="settings-item">
+                            <i class="fa-solid fa-palette"></i><span>课程颜色方案</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                        <div class="settings-item">
+                            <i class="fa-solid fa-bell"></i><span>上课提醒</span>
+                            <div class="toggle-switch active" onclick="this.classList.toggle('active')"></div>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-item" onclick="showSnackbar('数据导出中...', 'info')">
+                            <i class="fa-solid fa-file-export"></i><span>导出课表</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                        <div class="settings-item" onclick="showSnackbar('从文件导入课表', 'info')">
+                            <i class="fa-solid fa-file-import"></i><span>导入课表</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                        <div class="settings-item" onclick="showSnackbar('正在同步数据...', 'info')">
+                            <i class="fa-solid fa-cloud-arrow-up"></i><span>数据同步</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-item" onclick="toggleDarkMode()">
+                            <i class="fa-solid fa-moon"></i><span>深色模式</span>
+                            <div class="toggle-switch" id="darkModeSwitch"></div>
+                        </div>
+                        <div class="settings-item">
+                            <i class="fa-solid fa-font"></i><span>字体大小</span>
+                            <span style="font-size:12px;color:#757575;">标准</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                        <div class="settings-item" onclick="showSnackbar('已检查更新，当前为最新版本', 'success')">
+                            <i class="fa-solid fa-rotate"></i><span>检查更新</span>
+                            <span style="font-size:12px;color:#4CAF50;">v2.4.1</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div class="settings-group">
+                        <div class="settings-item"><i class="fa-solid fa-circle-info"></i><span>关于应用</span><i class="fa-solid fa-chevron-right"></i></div>
+                        <div class="settings-item" onclick="showSnackbar('反馈已提交，感谢您的建议！', 'success')">
+                            <i class="fa-solid fa-comment-dots"></i><span>帮助与反馈</span><i class="fa-solid fa-chevron-right"></i>
+                        </div>
+                    </div>
+                    <div style="height:32px;"></div>
+                </div>
+            </div>
+
+            <!-- 底部导航栏 -->
+            <div class="bottom-nav" id="bottomNav">
+                <div class="nav-item active" data-page="schedule" onclick="switchPage('schedule')">
+                    <i class="fa-solid fa-calendar-days"></i><span>首页</span>
+                </div>
+                <div class="nav-item" data-page="manage" onclick="switchPage('manage')">
+                    <i class="fa-solid fa-plus-circle"></i><span>添加</span>
+                </div>
+                <div class="nav-item" data-page="profile" onclick="switchPage('profile')">
+                    <i class="fa-solid fa-user"></i><span>我的</span>
+                </div>
+            </div>
+
+            <!-- 周数选择器弹窗 -->
+            <div class="modal-overlay" id="weekModal">
+                <div class="modal-sheet">
+                    <div class="modal-handle"></div>
+                    <div class="modal-title">选择教学周</div>
+                    <div class="week-selector-grid" id="weekGrid"></div>
+                    <button style="width:100%;height:44px;background:#2196F3;color:#FFF;border:none;border-radius:10px;font-size:14px;font-weight:600;margin-top:12px;cursor:pointer;letter-spacing:0.4px;" onclick="confirmWeekSelection()">确认</button>
+                </div>
+            </div>
+
+            <!-- Snackbar -->
+            <div class="snackbar" id="snackbar">
+                <i class="fa-solid fa-circle-info" id="snackbarIcon"></i>
+                <span id="snackbarText">操作成功</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // ============ 全局状态 ============
+        let currentPage = 'schedule';
+        let currentWeek = 12;
+        let selectedWeek = 12;
+        let isDarkMode = false;
+        let isFabOpen = false;
+        let manageTab = 0;
+        let snackbarTimer = null;
+
+        // ============ 初始化 ============
+        function init() {
+            updateTimeDisplay();
+            setInterval(updateTimeDisplay, 30000);
+            generateWeekGrid();
+            renderCourseCards();
+            updateDarkModeUI();
+            // 确保首页可见
+            document.getElementById('pageSchedule').classList.add('active');
+            document.getElementById('pageManage').classList.remove('active');
+            document.getElementById('pageProfile').classList.remove('active');
+
+            // 卡片入场动画
+            setTimeout(() => {
+                const cards = document.querySelectorAll('.course-card');
+                cards.forEach((card, i) => {
+                    card.style.animation = `fadeInUp 0.4s ease ${i * 0.04}s forwards`;
+                    card.style.opacity = '0';
+                });
+                setTimeout(() => {
+                    cards.forEach(card => {
+                        card.style.animation = '';
+                        card.style.opacity = '1';
+                    });
+                }, 600);
+            }, 200);
+        }
+
+        function updateTimeDisplay() {
+            const now = new Date();
+            document.getElementById('timeDisplay').textContent =
+                now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        }
+
+        // ============ 页面切换（核心修复：使用opacity/visibility，不再有transform冲突） ============
+        function switchPage(page) {
+            if (currentPage === page) return;
+
+            const pageMap = {
+                'schedule': document.getElementById('pageSchedule'),
+                'manage': document.getElementById('pageManage'),
+                'profile': document.getElementById('pageProfile'),
+            };
+
+            const oldPageEl = pageMap[currentPage];
+            const newPageEl = pageMap[page];
+
+            if (!oldPageEl || !newPageEl) return;
+
+            // 旧页面淡出
+            oldPageEl.classList.remove('active');
+            // 新页面淡入
+            newPageEl.classList.add('active');
+
+            // 更新导航高亮
+            document.querySelectorAll('.nav-item').forEach(item => {
+                item.classList.toggle('active', item.dataset.page === page);
+            });
+
+            // 更新顶部栏
+            updateTopBar(page);
+
+            // FAB仅首页可见
+            const fabContainer = document.getElementById('fabContainer');
+            if (page === 'schedule') {
+                fabContainer.style.opacity = '1';
+                fabContainer.style.pointerEvents = 'auto';
+            } else {
+                fabContainer.style.opacity = '0';
+                fabContainer.style.pointerEvents = 'none';
+                if (isFabOpen) toggleFabMenu(true);
+            }
+
+            currentPage = page;
+
+            // 确保旧页面在过渡后不残留可见状态（安全保障）
+            setTimeout(() => {
+                if (!oldPageEl.classList.contains('active')) {
+                    oldPageEl.style.opacity = '';
+                }
+            }, 350);
+        }
+
+        function updateTopBar(page) {
+            const semester = document.querySelector('#topBar .semester');
+            const weekRow = document.getElementById('weekSelector');
+            if (page === 'schedule') {
+                semester.textContent = '2025-2026学年 第二学期';
+                weekRow.style.display = 'flex';
+                document.getElementById('currentWeekLabel').textContent = '第' + currentWeek + '周';
+            } else if (page === 'manage') {
+                semester.textContent = '课程管理';
+                weekRow.style.display = 'none';
+            } else {
+                semester.textContent = '我的';
+                weekRow.style.display = 'none';
+            }
+        }
+
+        // ============ 管理页标签切换（使用display，避免.page冲突） ============
+        function switchManageTab(tabIndex) {
+            manageTab = tabIndex;
+            const panelAll = document.getElementById('panelAllCourses');
+            const panelAdd = document.getElementById('panelAddCourse');
+            const tabItems = document.querySelectorAll('#tabBar .tab-item');
+
+            tabItems.forEach((item, i) => item.classList.toggle('active', i === tabIndex));
+
+            if (tabIndex === 0) {
+                panelAll.classList.add('active');
+                panelAdd.classList.remove('active');
+            } else {
+                panelAdd.classList.add('active');
+                panelAll.classList.remove('active');
+            }
+        }
+
+        function switchToAddCourse() {
+            if (isFabOpen) toggleFabMenu(true);
+            switchPage('manage');
+            setTimeout(() => switchManageTab(1), 150);
+        }
+
+        // ============ 周数选择器 ============
+        function generateWeekGrid() {
+            const grid = document.getElementById('weekGrid');
+            grid.innerHTML = '';
+            for (let i = 1; i <= 20; i++) {
+                const option = document.createElement('div');
+                option.className = 'week-option' + (i === currentWeek ? ' selected' : '');
+                option.textContent = i;
+                option.onclick = function() {
+                    selectedWeek = i;
+                    document.querySelectorAll('.week-option').forEach(o => o.classList.remove('selected'));
+                    option.classList.add('selected');
+                };
+                grid.appendChild(option);
+            }
+        }
+
+        function toggleWeekModal() {
+            if (currentPage !== 'schedule') return;
+            selectedWeek = currentWeek;
+            document.querySelectorAll('.week-option').forEach(o => {
+                o.classList.toggle('selected', parseInt(o.textContent) === selectedWeek);
+            });
+            document.getElementById('weekModal').classList.toggle('show');
+        }
+
+        function confirmWeekSelection() {
+            currentWeek = selectedWeek;
+            document.getElementById('currentWeekLabel').textContent = '第' + currentWeek + '周';
+            document.getElementById('weekModal').classList.remove('show');
+            showSnackbar('已切换到第' + currentWeek + '周', 'success');
+            renderCourseCards();
+        }
+
+        // 弹窗背景点击关闭
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('weekModal').addEventListener('click', function(e) {
+                if (e.target === this) this.classList.remove('show');
+            });
+        });
+
+        // ============ FAB菜单 ============
+        function toggleFabMenu(forceClose = false) {
+            isFabOpen = forceClose ? false : !isFabOpen;
+            const fabMain = document.getElementById('fabMain');
+            const fabMenu = document.getElementById('fabMenu');
+            fabMain.classList.toggle('open', isFabOpen);
+            fabMenu.classList.toggle('open', isFabOpen);
+        }
+
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('scheduleScroll').addEventListener('click', function(e) {
+                if (isFabOpen && !e.target.closest('.fab-container') && !e.target.closest('.course-card')) {
+                    toggleFabMenu(true);
+                }
+            });
+        });
+
+        // ============ 深色模式 ============
+        function toggleDarkMode() {
+            isDarkMode = !isDarkMode;
+            updateDarkModeUI();
+            showSnackbar(isDarkMode ? '深色模式已开启' : '浅色模式已开启', 'info');
+        }
+
+        function updateDarkModeUI() {
+            const screen = document.getElementById('phoneScreen');
+            const icon = document.getElementById('darkModeIcon');
+            const switchEl = document.getElementById('darkModeSwitch');
+            screen.classList.toggle('dark-mode', isDarkMode);
+            if (icon) {
+                icon.classList.toggle('fa-moon', !isDarkMode);
+                icon.classList.toggle('fa-sun', isDarkMode);
+            }
+            if (switchEl) switchEl.classList.toggle('active', isDarkMode);
+        }
+
+        // ============ Snackbar ============
+        function showSnackbar(message, type = 'info') {
+            const snackbar = document.getElementById('snackbar');
+            const icon = document.getElementById('snackbarIcon');
+            const text = document.getElementById('snackbarText');
+            if (snackbarTimer) clearTimeout(snackbarTimer);
+
+            snackbar.classList.remove('success', 'error');
+            icon.className = 'fa-solid';
+            if (type === 'success') {
+                snackbar.classList.add('success');
+                icon.className = 'fa-solid fa-circle-check';
+            } else if (type === 'error') {
+                snackbar.classList.add('error');
+                icon.className = 'fa-solid fa-circle-exclamation';
+            } else {
+                icon.className = 'fa-solid fa-circle-info';
+            }
+            text.textContent = message;
+            snackbar.classList.add('show');
+            snackbarTimer = setTimeout(() => snackbar.classList.remove('show'), 2800);
+        }
+
+        // ============ 渲染课程卡片 ============
+        function renderCourseCards() {
+            const columns = document.querySelectorAll('.day-column');
+            columns.forEach(col => {
+                col.querySelectorAll('.course-card').forEach(card => card.remove());
+            });
+
+            const slotHeight = 80;
+            const headerHeight = 32;
+
+            const courses = [
+                { name: '操作系统', teacher: '张教授', location: '教三楼301', day: 0, startSlot: 0, slots: 2,
+                    type: 'required', week: '1-18周' },
+                { name: '计算机网络', teacher: '李教授', location: '教三楼301', day: 0, startSlot: 2, slots: 2,
+                    type: 'required', week: '1-18周' },
+                { name: '数据库原理', teacher: '王教授', location: '教五楼201', day: 0, startSlot: 4, slots: 2,
+                    type: 'required', week: '1-18周' },
+                { name: '算法设计', teacher: '刘教授', location: '教二楼105', day: 1, startSlot: 0, slots: 2,
+                type: 'required', week: '1-18周' },
+                { name: '软件工程', teacher: '陈教授', location: '教五楼502', day: 1, startSlot: 2, slots: 2,
+                    type: 'required', week: '1-18周' },
+                { name: '操作系统实验', teacher: '张教授', location: '实验楼A201', day: 2, startSlot: 0, slots: 2,
+                type: 'lab', week: '3-16周' },
+                { name: '网络实验', teacher: '李教授', location: '实验楼B102', day: 2, startSlot: 2, slots: 2,
+                type: 'lab', week: '5-18周' },
+                { name: '数据库原理', teacher: '王教授', location: '教五楼201', day: 3, startSlot: 0, slots: 2,
+                    type: 'required', week: '1-18周' },
+                { name: '人工智能导论', teacher: '王教授', location: '教五楼502', day: 3, startSlot: 2, slots: 2,
+                    type: 'elective', week: '1-16周' },
+                { name: '编译原理', teacher: '赵教授', location: '教三楼205', day: 4, startSlot: 0, slots: 2,
+                    type: 'required', week: '1-18周' },
+                { name: '职业规划', teacher: '陈老师', location: '教一楼101', day: 4, startSlot: 4, slots: 2,
+                type: 'custom', week: '6-14周' },
+            ];
+
+            courses.forEach((course, index) => {
+                const column = columns[course.day];
+                if (!column) return;
+
+                const card = document.createElement('div');
+                card.className = 'course-card type-' + course.type;
+                card.style.top = (headerHeight + course.startSlot * slotHeight + 3) + 'px';
+                card.style.left = '2px';
+                card.style.right = '2px';
+                card.style.height = (course.slots * slotHeight - 6) + 'px';
+                card.style.animationDelay = (index * 0.03) + 's';
+                card.title = course.name + ' - ' + course.teacher + ' | ' + course.location;
+
+                const isOngoing = currentWeek === 12 && course.day === 2 && course.startSlot === 0;
+                const isUpcoming = currentWeek === 12 && course.day === 3 && course.startSlot === 2;
+
+                if (isOngoing) {
+                    card.classList.add('ongoing');
+                    const progressBar = document.createElement('div');
+                    progressBar.className = 'progress-bar';
+                    progressBar.style.width = '55%';
+                    card.appendChild(progressBar);
+                }
+                if (isUpcoming) {
+                    card.classList.add('upcoming');
+                    const badge = document.createElement('div');
+                    badge.className = 'countdown-badge';
+                    badge.textContent = '18分钟后';
+                    card.appendChild(badge);
+                }
+
+                card.innerHTML += `
+                    <span class="course-name">${course.name}</span>
+                    <span class="course-teacher">${course.teacher}</span>
+                    <span class="course-location">${course.location}</span>
+                    <span class="course-meta">${course.startSlot + 1}-${course.startSlot + course.slots}节 · ${course.week}</span>
+                `;
+
+                card.addEventListener('click', function(e) {
+                    e.stopPropagation();
+                    if (isFabOpen) toggleFabMenu(true);
+                    showSnackbar(course.name + ' | ' + course.teacher + ' | ' + course.location, 'info');
+                });
+
+                // 长按拖拽模拟
+                let longPressTimer;
+                card.addEventListener('touchstart', function(e) {
+                    longPressTimer = setTimeout(() => {
+                        card.style.transform = 'scale(1.05)';
+                        card.style.boxShadow = '0 6px 20px rgba(0,0,0,0.3)';
+                        card.style.zIndex = '15';
+                        card.style.opacity = '0.7';
+                        showSnackbar('拖拽模式：拖动卡片到新位置', 'info');
+                        setTimeout(() => {
+                            card.style.transform = 'scale(1)';
+                            card.style.boxShadow = '0 1px 4px rgba(0,0,0,0.12)';
+                            card.style.zIndex = '3';
+                            card.style.opacity = '1';
+                        }, 1500);
+                    }, 500);
+                });
+                card.addEventListener('touchend', () => clearTimeout(longPressTimer));
+                card.addEventListener('touchmove', () => clearTimeout(longPressTimer));
+
+                column.appendChild(card);
+            });
+        }
+
+        // ============ 键盘快捷键 ============
+        document.addEventListener('keydown', function(e) {
+            if (e.key === '1') switchPage('schedule');
+            if (e.key === '2') switchPage('manage');
+            if (e.key === '3') switchPage('profile');
+            if (e.key === 'd' && e.ctrlKey) {
+                e.preventDefault();
+                toggleDarkMode();
+            }
+            if (e.key === 'Escape') {
+                if (isFabOpen) toggleFabMenu(true);
+                document.getElementById('weekModal').classList.remove('show');
+            }
+        });
+
+        // ============ 启动 ============
+        document.addEventListener('DOMContentLoaded', init);
+
+        window.addEventListener('resize', function() {
+            clearTimeout(window._resizeTimer);
+            window._resizeTimer = setTimeout(renderCourseCards, 300);
+        });
+
+        console.log('📱 大学课程表 App · 高保真原型已就绪');
+        console.log('  导航：底部Tab切换 | 快捷键：1/2/3 切换页面 | Ctrl+D 深色模式');
+        console.log('  修复说明：页面切换使用opacity/visibility，彻底解决重叠问题');
+    </script>
+</body>
+</html>
