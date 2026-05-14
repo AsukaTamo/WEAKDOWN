@@ -1,9 +1,9 @@
 -- Merging decision tree log ---
 manifest
-ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-29:12
-INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-29:12
-INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-29:12
-INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-29:12
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-38:12
+INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-38:12
+INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-38:12
+INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:2:1-38:12
 MERGED from [com.google.accompanist:accompanist-systemuicontroller:0.34.0] C:\Users\HP\.gradle\caches\transforms-4\913c6a63c91dadf9adf6bf4b4df17dcf\transformed\accompanist-systemuicontroller-0.34.0\AndroidManifest.xml:17:1-23:12
 MERGED from [androidx.hilt:hilt-navigation-compose:1.1.0] C:\Users\HP\.gradle\caches\transforms-4\460705828e43b23430bdbe4a44ef73ed\transformed\hilt-navigation-compose-1.1.0\AndroidManifest.xml:2:1-7:12
 MERGED from [androidx.hilt:hilt-navigation:1.1.0] C:\Users\HP\.gradle\caches\transforms-4\df7111e08a08ff547afd3ccaac80e9a5\transformed\hilt-navigation-1.1.0\AndroidManifest.xml:2:1-7:12
@@ -85,9 +85,13 @@ uses-permission#android.permission.INTERNET
 ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:5:5-67
 	android:name
 		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:5:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:6:5-79
+	android:name
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:6:22-76
 application
-ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:7:5-27:19
-INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:7:5-27:19
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:8:5-36:19
+INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:8:5-36:19
 MERGED from [androidx.compose.ui:ui-tooling-android:1.6.0] C:\Users\HP\.gradle\caches\transforms-4\cbebf2c008f9ed15f385e2e7ddb09a53\transformed\ui-tooling-release\AndroidManifest.xml:22:5-26:19
 MERGED from [androidx.compose.ui:ui-tooling-android:1.6.0] C:\Users\HP\.gradle\caches\transforms-4\cbebf2c008f9ed15f385e2e7ddb09a53\transformed\ui-tooling-release\AndroidManifest.xml:22:5-26:19
 MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\HP\.gradle\caches\transforms-4\914cc47459ed2b0e60d951ec17506104\transformed\emoji2-1.3.0\AndroidManifest.xml:23:5-33:19
@@ -109,39 +113,53 @@ MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\HP\.gradle\caches\
 	android:appComponentFactory
 		ADDED from [androidx.core:core:1.12.0] C:\Users\HP\.gradle\caches\transforms-4\af62be0478921574bd0538a89bf01c1b\transformed\core-1.12.0\AndroidManifest.xml:28:18-86
 	android:supportsRtl
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:13:9-35
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:14:9-35
 	android:label
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:11:9-41
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:12:9-41
+	android:hardwareAccelerated
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:16:9-43
 	android:roundIcon
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:12:9-54
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:13:9-54
 	tools:targetApi
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:15:9-29
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:18:9-29
 	android:icon
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:10:9-43
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:11:9-43
 	android:allowBackup
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:9:9-35
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:10:9-35
 	android:theme
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:14:9-47
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:17:9-47
+	android:usesCleartextTraffic
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:15:9-44
 	android:name
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:8:9-34
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:9:9-34
 activity#com.example.courseapp.MainActivity
-ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:17:9-25:20
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:20:9-29:20
 	android:exported
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:19:13-36
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:22:13-36
+	android:configChanges
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:24:13-115
 	android:theme
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:20:13-58
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:23:13-58
 	android:name
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:18:13-41
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:21:13-41
 intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
-ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:21:13-24:29
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:25:13-28:29
 action#android.intent.action.MAIN
-ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:22:17-69
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:26:17-69
 	android:name
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:22:25-66
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:26:25-66
 category#android.intent.category.LAUNCHER
-ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:23:17-77
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:27:17-77
 	android:name
-		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:23:27-74
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:27:27-74
+activity#com.example.courseapp.ui.import.WebImportActivity
+ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:31:9-34:50
+	android:hardwareAccelerated
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:34:13-47
+	android:configChanges
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:33:13-74
+	android:name
+		ADDED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml:32:13-56
 uses-sdk
 INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
 INJECTED from E:\WEAKDOWN\app\src\main\AndroidManifest.xml

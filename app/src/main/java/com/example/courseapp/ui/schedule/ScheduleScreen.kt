@@ -430,13 +430,13 @@ private fun FabMenu(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 FabMenuItem(
-                    icon = Icons.Default.Language,
+                    icon = Icons.Default.Share,
                     label = "学校官网导入",
                     isDarkMode = isDarkMode,
                     onClick = onImportSchool
                 )
                 FabMenuItem(
-                    icon = Icons.Default.InsertDriveFile,
+                    icon = Icons.Default.Star,
                     label = "PDF文件导入",
                     isDarkMode = isDarkMode,
                     onClick = onImportPdf

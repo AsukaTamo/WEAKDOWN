@@ -152,6 +152,7 @@ int id actions 0x7f070025
 int id androidx_compose_ui_view_composition_context 0x7f070026
 int id async 0x7f070027
 int id blocking 0x7f070028
+int id btnImport 0x7f07005c
 int id chronometer 0x7f070029
 int id compose_view_saveable_id_tag 0x7f07002a
 int id consume_window_insets_tag 0x7f07002b
@@ -202,9 +203,11 @@ int id view_tree_on_back_pressed_dispatcher_owner 0x7f070057
 int id view_tree_saved_state_registry_owner 0x7f070058
 int id view_tree_view_model_store_owner 0x7f070059
 int id visible_removing_fragment_view_tag 0x7f07005a
+int id webView 0x7f07005d
 int id wrapped_composition_tag 0x7f07005b
 int integer default_icon_animation_duration 0x7f080000
 int integer status_bar_notification_info_maxnum 0x7f080001
+int layout activity_web_import 0x7f09000a
 int layout custom_dialog 0x7f090000
 int layout ime_base_split_test_activity 0x7f090001
 int layout ime_secondary_split_test_activity 0x7f090002

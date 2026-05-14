@@ -153,6 +153,7 @@ id actions
 id androidx_compose_ui_view_composition_context
 id async
 id blocking
+id btnImport
 id chronometer
 id compose_view_saveable_id_tag
 id consume_window_insets_tag
@@ -203,9 +204,11 @@ id view_tree_on_back_pressed_dispatcher_owner
 id view_tree_saved_state_registry_owner
 id view_tree_view_model_store_owner
 id visible_removing_fragment_view_tag
+id webView
 id wrapped_composition_tag
 integer default_icon_animation_duration
 integer status_bar_notification_info_maxnum
+layout activity_web_import
 layout custom_dialog
 layout ime_base_split_test_activity
 layout ime_secondary_split_test_activity

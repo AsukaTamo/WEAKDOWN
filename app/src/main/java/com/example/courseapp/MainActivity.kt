@@ -271,15 +271,10 @@ fun CourseApp(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            AnimatedContent(
-                targetState = currentScreen,
-                label = "screenTransition",
-                transitionSpec = {
-                    fadeIn() togetherWith fadeOut()
-                }
-            ) { screen ->
-                when (screen) {
-                    Screen.Schedule -> ScheduleScreen(
+            // Always keep ScheduleScreen in composition to avoid removal crashes
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (currentScreen == Screen.Schedule) {
+                    ScheduleScreen(
                         viewModel = scheduleViewModel,
                         onNavigateToAdd = {
                             currentScreen = Screen.Manage
@@ -287,34 +282,46 @@ fun CourseApp(
                         },
                         onNavigateToImport = { currentScreen = Screen.WebImport }
                     )
-                    Screen.Manage -> ManageScreen(viewModel = manageViewModel, isDarkMode = isDarkMode)
-                    Screen.Profile -> ProfileScreen(
-                        onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                        isDarkMode = isDarkMode,
-                        onTimeSlotSettings = { showTimeSlotSettings = true }
-                    )
-                    Screen.WebImport -> WebImportScreen(
-                        isDarkMode = isDarkMode,
-                        onBack = { currentScreen = Screen.Schedule },
-                        onImportSuccess = {
-                            scheduleViewModel.showMessage("检测到课表数据，正在解析...", "info")
-                            currentScreen = Screen.Schedule
-                        },
-                        onParseHtml = { html ->
-                            importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
-                            currentScreen = Screen.ImportPreview
-                        }
-                    )
-                    Screen.ImportPreview -> ImportPreviewScreen(
-                        viewModel = importViewModel,
-                        isDarkMode = isDarkMode,
-                        onBack = { currentScreen = Screen.WebImport },
-                        onImportComplete = {
-                            currentScreen = Screen.Schedule
-                            importViewModel.clearState()
-                        }
-                    )
                 }
+            }
+
+            if (currentScreen == Screen.Manage) {
+                ManageScreen(viewModel = manageViewModel, isDarkMode = isDarkMode)
+            }
+
+            if (currentScreen == Screen.Profile) {
+                ProfileScreen(
+                    onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
+                    isDarkMode = isDarkMode,
+                    onTimeSlotSettings = { showTimeSlotSettings = true }
+                )
+            }
+
+            if (currentScreen == Screen.WebImport) {
+                WebImportScreen(
+                    isDarkMode = isDarkMode,
+                    onBack = { currentScreen = Screen.Schedule },
+                    onImportSuccess = {
+                        scheduleViewModel.showMessage("检测到课表数据，正在解析...", "info")
+                        currentScreen = Screen.Schedule
+                    },
+                    onParseHtml = { html ->
+                        importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
+                        currentScreen = Screen.ImportPreview
+                    }
+                )
+            }
+
+            if (currentScreen == Screen.ImportPreview) {
+                ImportPreviewScreen(
+                    viewModel = importViewModel,
+                    isDarkMode = isDarkMode,
+                    onBack = { currentScreen = Screen.WebImport },
+                    onImportComplete = {
+                        currentScreen = Screen.Schedule
+                        importViewModel.clearState()
+                    }
+                )
             }
 
             // Week selector — slide-down frosted glass panel
