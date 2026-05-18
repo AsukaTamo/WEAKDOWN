@@ -3,12 +3,16 @@ package com.example.courseapp.ui.import
 import android.annotation.SuppressLint
 import android.content.Intent
 import android.os.Bundle
+import android.util.Log
+import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import com.example.courseapp.R
+
+private const val TAG = "WebImport"
 
 class WebImportActivity : ComponentActivity() {
 
@@ -44,7 +48,12 @@ class WebImportActivity : ComponentActivity() {
             }
         }
 
-        webView.webChromeClient = WebChromeClient()
+        webView.webChromeClient = object : WebChromeClient() {
+            override fun onConsoleMessage(cm: ConsoleMessage?): Boolean {
+                cm?.let { Log.d(TAG, "JS: ${it.message()}") }
+                return true
+            }
+        }
 
         // Load school URL
         val schoolUrl = intent.getStringExtra("school_url") ?: ""
@@ -61,30 +70,44 @@ class WebImportActivity : ComponentActivity() {
             btnImport.isEnabled = false
             btnImport.text = "正在提取..."
 
+            // Use JSON array wrapper so JSONArray can decode all escape sequences
             webView.evaluateJavascript(
-                "(function() { return document.documentElement.outerHTML; })()"
-            ) { html ->
-                // evaluateJavascript returns JSON-encoded string, strip surrounding quotes
-                val cleanedHtml = html?.removeSurrounding("\"")
-                    ?.replace("\\u003C", "<")
-                    ?.replace("\\u003E", ">")
-                    ?.replace("\\\"", "\"")
-                    ?.replace("\\n", "\n")
-                    ?.replace("\\t", "\t")
-                    ?: ""
+                "(function() { return [document.documentElement.outerHTML]; })()"
+            ) { json ->
+                try {
+                    val jsonArray = org.json.JSONArray(json)
+                    val html = jsonArray.getString(0) ?: ""
 
-                if (cleanedHtml.length < 100) {
-                    Toast.makeText(this, "页面内容提取失败，请确保页面已加载完成", Toast.LENGTH_SHORT).show()
+                    Log.d(TAG, "Extracted HTML length: ${html.length}")
+                    // Log a snippet around <table> to verify content
+                    val tableIdx = html.indexOf("<table")
+                    if (tableIdx >= 0) {
+                        Log.d(TAG, "Found <table> at index $tableIdx")
+                        Log.d(TAG, "Table snippet: ${html.substring(tableIdx, (tableIdx + 500).coerceAtMost(html.length))}")
+                    } else {
+                        Log.w(TAG, "No <table> found in HTML!")
+                        // Log first 500 chars for debugging
+                        Log.d(TAG, "HTML start: ${html.take(500)}")
+                    }
+
+                    if (html.length < 100) {
+                        Toast.makeText(this, "页面内容提取失败，请确保页面已加载完成", Toast.LENGTH_SHORT).show()
+                        btnImport.isEnabled = true
+                        btnImport.text = "导入到课表"
+                        return@evaluateJavascript
+                    }
+
+                    val resultIntent = Intent().apply {
+                        putExtra("html", html)
+                    }
+                    setResult(RESULT_OK, resultIntent)
+                    finish()
+                } catch (e: Exception) {
+                    Log.e(TAG, "HTML extraction error", e)
+                    Toast.makeText(this, "数据提取出错: ${e.message}", Toast.LENGTH_SHORT).show()
                     btnImport.isEnabled = true
                     btnImport.text = "导入到课表"
-                    return@evaluateJavascript
                 }
-
-                val resultIntent = Intent().apply {
-                    putExtra("html", cleanedHtml)
-                }
-                setResult(RESULT_OK, resultIntent)
-                finish()
             }
         }
     }

@@ -13,6 +13,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -29,11 +30,10 @@ fun ImportPreviewScreen(
     onBack: () -> Unit,
     onImportComplete: () -> Unit
 ) {
-    val parsedCourses by viewModel.parsedCourses.collectAsState()
-    val conflicts by viewModel.conflicts.collectAsState()
-    val selectedIds by viewModel.selectedIds.collectAsState()
-    val importComplete by viewModel.importComplete.collectAsState()
-    val snackbarFlow = viewModel.snackbarMessage.collectAsState(initial = "" to "")
+    val parsedCourses by viewModel.parsedCourses.collectAsStateWithLifecycle()
+    val conflicts by viewModel.conflicts.collectAsStateWithLifecycle()
+    val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val importComplete by viewModel.importComplete.collectAsStateWithLifecycle()
 
     val bgColor = if (isDarkMode) BgDark else BgLight
     val cardColor = if (isDarkMode) CardDark else Color.White
@@ -41,6 +41,7 @@ fun ImportPreviewScreen(
     val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
 
     var showConflictDialog by remember { mutableStateOf(false) }
+    var showReplaceAllDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(importComplete) {
         if (importComplete) onImportComplete()
@@ -71,32 +72,48 @@ fun ImportPreviewScreen(
                 color = if (isDarkMode) CardDark else Color.White,
                 shadowElevation = 8.dp
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    OutlinedButton(
-                        onClick = { viewModel.importSelected(replaceConflicts = false) },
-                        modifier = Modifier.weight(1f).height(48.dp),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Text("全部导入")
-                    }
+                    // Full replace — primary action
                     Button(
-                        onClick = {
-                            if (conflicts.isNotEmpty()) {
-                                showConflictDialog = true
-                            } else {
-                                viewModel.importSelected(replaceConflicts = false)
-                            }
-                        },
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        onClick = { showReplaceAllDialog = true },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Primary)
                     ) {
-                        Text("导入选中 (${selectedIds.size})")
+                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("全部替换当前课表", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+                    }
+                    // Add selected / add all
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { viewModel.importSelected(replaceConflicts = false) },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("全部追加")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                if (conflicts.isNotEmpty()) {
+                                    showConflictDialog = true
+                                } else {
+                                    viewModel.importSelected(replaceConflicts = false)
+                                }
+                            },
+                            modifier = Modifier.weight(1f).height(44.dp),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Text("追加选中 (${selectedIds.size})")
+                        }
                     }
                 }
             }
@@ -169,23 +186,34 @@ fun ImportPreviewScreen(
                                 color = textColor
                             )
                             Text(
-                                text = "${days[course.dayOfWeek]} 第${course.startSlot + 1}-${course.startSlot + course.slotCount}节",
+                                text = "${days[course.dayOfWeek]} 第${course.startSlot + 1}-${course.startSlot + course.slotCount}节  ${course.weekRange}",
                                 fontSize = 12.sp,
                                 color = subColor,
                                 modifier = Modifier.padding(top = 2.dp)
                             )
-                            if (course.teacher.isNotEmpty()) {
+                            if (course.teacher.isNotEmpty() || course.location.isNotEmpty()) {
                                 Text(
-                                    text = course.teacher,
+                                    text = listOfNotNull(
+                                        course.teacher.ifEmpty { null },
+                                        course.location.ifEmpty { null }
+                                    ).joinToString(" · "),
                                     fontSize = 12.sp,
                                     color = subColor
                                 )
                             }
-                            if (course.location.isNotEmpty()) {
+                            if (course.credits > 0f) {
                                 Text(
-                                    text = course.location,
-                                    fontSize = 12.sp,
+                                    text = "学分: ${course.credits}",
+                                    fontSize = 11.sp,
                                     color = subColor
+                                )
+                            }
+                            if (course.notes.isNotEmpty()) {
+                                Text(
+                                    text = course.notes,
+                                    fontSize = 11.sp,
+                                    color = subColor,
+                                    maxLines = 2
                                 )
                             }
                         }
@@ -225,6 +253,30 @@ fun ImportPreviewScreen(
                     showConflictDialog = false
                 }) {
                     Text("保留两者")
+                }
+            }
+        )
+    }
+
+    // Replace all confirmation dialog
+    if (showReplaceAllDialog) {
+        AlertDialog(
+            onDismissRequest = { showReplaceAllDialog = false },
+            title = { Text("全部替换") },
+            text = {
+                Text("将删除当前学期的所有课程，然后导入 ${selectedIds.size} 门新课程。此操作不可撤销。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.importSelected(replaceAll = true)
+                    showReplaceAllDialog = false
+                }) {
+                    Text("确认替换", color = Error)
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReplaceAllDialog = false }) {
+                    Text("取消")
                 }
             }
         )

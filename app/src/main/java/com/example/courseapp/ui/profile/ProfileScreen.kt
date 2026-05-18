@@ -1,5 +1,10 @@
 package com.example.courseapp.ui.profile
 
+import android.net.Uri
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -16,7 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -26,6 +33,9 @@ import com.example.courseapp.data.model.Semester
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ProfileViewModel
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun ProfileScreen(
@@ -43,6 +53,18 @@ fun ProfileScreen(
     var showSemesterDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
     var exportPath by remember { mutableStateOf<String?>(null) }
+
+    // Background image picker
+    var backgroundPickTarget by remember { mutableStateOf<Semester?>(null) }
+    val photoPickerLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia()
+    ) { uri: Uri? ->
+        val semester = backgroundPickTarget
+        if (uri != null && semester != null) {
+            viewModel.setBackground(semester, uri)
+        }
+        backgroundPickTarget = null
+    }
 
     LaunchedEffect(snackbarFlow.value.first) {
         val (msg, type) = snackbarFlow.value
@@ -212,7 +234,16 @@ fun ProfileScreen(
             isDarkMode = isDarkMode,
             onSelect = { viewModel.setActiveSemester(it.id) },
             onAdd = { id, name, startDate, weeks -> viewModel.addSemester(id, name, startDate, weeks) },
+            onUpdate = { viewModel.updateSemester(it) },
             onDelete = { viewModel.deleteSemester(it) },
+            onPickBackground = { semester ->
+                backgroundPickTarget = semester
+                photoPickerLauncher.launch(
+                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                )
+            },
+            onClearBackground = { viewModel.clearBackground(it) },
+            onScrimAlphaChange = { semester, alpha -> viewModel.updateScrimAlpha(semester, alpha) },
             onDismiss = { showSemesterDialog = false }
         )
     }
@@ -242,6 +273,7 @@ private data class SnackbarState(
     val visible: Boolean = false
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SemesterDialog(
     semesters: List<Semester>,
@@ -249,17 +281,23 @@ private fun SemesterDialog(
     isDarkMode: Boolean,
     onSelect: (Semester) -> Unit,
     onAdd: (String, String, String, Int) -> Unit,
+    onUpdate: (Semester) -> Unit,
     onDelete: (Semester) -> Unit,
+    onPickBackground: (Semester) -> Unit,
+    onClearBackground: (Semester) -> Unit,
+    onScrimAlphaChange: (Semester, Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     var showAddForm by remember { mutableStateOf(false) }
+    var editingSemester by remember { mutableStateOf<Semester?>(null) }
     var newName by remember { mutableStateOf("") }
     var newStartDate by remember { mutableStateOf("2026-02-23") }
     var newWeeks by remember { mutableStateOf("18") }
+    var showAddDatePicker by remember { mutableStateOf(false) }
+    var showEditDatePicker by remember { mutableStateOf(false) }
 
     val textColor = if (isDarkMode) Color.White else TextPrimary
     val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
-    val days = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -268,28 +306,203 @@ private fun SemesterDialog(
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 semesters.forEach { semester ->
                     val isActive = semester.id == activeSemester?.id
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .clip(RoundedCornerShape(8.dp))
-                            .background(if (isActive) Primary.copy(alpha = 0.1f) else Color.Transparent)
-                            .clickable { onSelect(semester) }
-                            .padding(12.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column(modifier = Modifier.weight(1f)) {
-                            Text(semester.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textColor)
-                            Text("起始: ${semester.startDate} · ${semester.totalWeeks}周", fontSize = 12.sp, color = subColor)
+                    val isEditing = editingSemester?.id == semester.id
+
+                    if (isEditing) {
+                        // Edit form for this semester
+                        var editName by remember { mutableStateOf(semester.name) }
+                        var editStartDate by remember { mutableStateOf(semester.startDate) }
+                        var editWeeks by remember { mutableStateOf(semester.totalWeeks.toString()) }
+                        var editScrimAlpha by remember { mutableStateOf(semester.scrimAlpha) }
+
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(Primary.copy(alpha = 0.08f))
+                                .padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            OutlinedTextField(
+                                value = editName,
+                                onValueChange = { editName = it },
+                                label = { Text("学期名称") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+                            // Date picker trigger
+                            Box(modifier = Modifier.fillMaxWidth().clickable { showEditDatePicker = true }) {
+                                OutlinedTextField(
+                                    value = editStartDate,
+                                    onValueChange = {},
+                                    label = { Text("起始日期") },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    enabled = false,
+                                    trailingIcon = {
+                                        Icon(Icons.Default.CalendarMonth, "选择日期")
+                                    },
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        disabledTextColor = textColor,
+                                        disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                        disabledLabelColor = subColor,
+                                        disabledTrailingIconColor = subColor
+                                    )
+                                )
+                            }
+                            OutlinedTextField(
+                                value = editWeeks,
+                                onValueChange = { editWeeks = it },
+                                label = { Text("总周数") },
+                                modifier = Modifier.fillMaxWidth(),
+                                singleLine = true
+                            )
+
+                            // Background settings
+                            Divider()
+                            Text("课表背景", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = textColor)
+
+                            if (semester.backgroundUri.isNotEmpty()) {
+                                // Preview thumbnail
+                                val bgFile = java.io.File(semester.backgroundUri)
+                                if (bgFile.exists()) {
+                                    val bitmap = remember(semester.backgroundUri) {
+                                        android.graphics.BitmapFactory.decodeFile(semester.backgroundUri)?.asImageBitmap()
+                                    }
+                                    if (bitmap != null) {
+                                        Image(
+                                            bitmap = bitmap,
+                                            contentDescription = "背景预览",
+                                            modifier = Modifier
+                                                .fillMaxWidth()
+                                                .height(100.dp)
+                                                .clip(RoundedCornerShape(8.dp)),
+                                            contentScale = ContentScale.Crop
+                                        )
+                                    }
+                                }
+
+                                // Scrim alpha slider
+                                Text(
+                                    "遮罩不透明度: ${(editScrimAlpha * 100).toInt()}%",
+                                    fontSize = 12.sp, color = subColor
+                                )
+                                Slider(
+                                    value = editScrimAlpha,
+                                    onValueChange = { editScrimAlpha = it },
+                                    onValueChangeFinished = {
+                                        onScrimAlphaChange(semester, editScrimAlpha)
+                                    },
+                                    valueRange = 0f..0.9f,
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+
+                                // Clear background button
+                                OutlinedButton(
+                                    onClick = { onClearBackground(semester) },
+                                    modifier = Modifier.fillMaxWidth(),
+                                    shape = RoundedCornerShape(8.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
+                                    Spacer(Modifier.width(4.dp))
+                                    Text("清除背景")
+                                }
+                            }
+
+                            // Pick background button
+                            OutlinedButton(
+                                onClick = { onPickBackground(semester) },
+                                modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Icon(Icons.Default.Image, null, modifier = Modifier.size(16.dp))
+                                Spacer(Modifier.width(4.dp))
+                                Text(if (semester.backgroundUri.isEmpty()) "设置背景" else "更换背景")
+                            }
+
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                OutlinedButton(
+                                    onClick = { editingSemester = null },
+                                    modifier = Modifier.weight(1f)
+                                ) { Text("取消") }
+                                Button(
+                                    onClick = {
+                                        onUpdate(
+                                            semester.copy(
+                                                name = editName,
+                                                startDate = editStartDate,
+                                                totalWeeks = editWeeks.toIntOrNull() ?: 18
+                                            )
+                                        )
+                                        editingSemester = null
+                                    },
+                                    modifier = Modifier.weight(1f),
+                                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                                ) { Text("保存") }
+                            }
                         }
-                        if (isActive) {
-                            Icon(Icons.Default.CheckCircle, null, tint = Primary, modifier = Modifier.size(20.dp))
+
+                        // Edit date picker dialog
+                        if (showEditDatePicker) {
+                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                            val initialMillis = try {
+                                sdf.parse(editStartDate)?.time ?: System.currentTimeMillis()
+                            } catch (_: Exception) {
+                                System.currentTimeMillis()
+                            }
+                            val datePickerState = rememberDatePickerState(
+                                initialSelectedDateMillis = initialMillis
+                            )
+                            DatePickerDialog(
+                                onDismissRequest = { showEditDatePicker = false },
+                                confirmButton = {
+                                    TextButton(onClick = {
+                                        datePickerState.selectedDateMillis?.let { millis ->
+                                            editStartDate = sdf.format(Date(millis))
+                                        }
+                                        showEditDatePicker = false
+                                    }) { Text("确定") }
+                                },
+                                dismissButton = {
+                                    TextButton(onClick = { showEditDatePicker = false }) { Text("取消") }
+                                }
+                            ) { DatePicker(state = datePickerState) }
                         }
-                        if (!isActive) {
+                    } else {
+                        // Normal display row
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(if (isActive) Primary.copy(alpha = 0.1f) else Color.Transparent)
+                                .clickable { onSelect(semester) }
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(semester.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textColor)
+                                Text("起始: ${semester.startDate} · ${semester.totalWeeks}周", fontSize = 12.sp, color = subColor)
+                            }
+                            if (isActive) {
+                                Icon(Icons.Default.CheckCircle, null, tint = Primary, modifier = Modifier.size(20.dp))
+                            }
+                            // Edit button
                             IconButton(
-                                onClick = { onDelete(semester) },
+                                onClick = { editingSemester = semester },
                                 modifier = Modifier.size(24.dp)
                             ) {
-                                Icon(Icons.Default.Delete, "删除", tint = Error, modifier = Modifier.size(16.dp))
+                                Icon(Icons.Default.Edit, "编辑", tint = subColor, modifier = Modifier.size(16.dp))
+                            }
+                            // Delete button (only for non-active)
+                            if (!isActive) {
+                                IconButton(
+                                    onClick = { onDelete(semester) },
+                                    modifier = Modifier.size(24.dp)
+                                ) {
+                                    Icon(Icons.Default.Delete, "删除", tint = Error, modifier = Modifier.size(16.dp))
+                                }
                             }
                         }
                     }
@@ -304,13 +517,25 @@ private fun SemesterDialog(
                         modifier = Modifier.fillMaxWidth(),
                         singleLine = true
                     )
-                    OutlinedTextField(
-                        value = newStartDate,
-                        onValueChange = { newStartDate = it },
-                        label = { Text("起始日期 (YYYY-MM-DD)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
+                    // Date picker trigger for add form
+                    Box(modifier = Modifier.fillMaxWidth().clickable { showAddDatePicker = true }) {
+                        OutlinedTextField(
+                            value = newStartDate,
+                            onValueChange = {},
+                            label = { Text("起始日期") },
+                            modifier = Modifier.fillMaxWidth(),
+                            enabled = false,
+                            trailingIcon = {
+                                Icon(Icons.Default.CalendarMonth, "选择日期")
+                            },
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = textColor,
+                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                disabledLabelColor = subColor,
+                                disabledTrailingIconColor = subColor
+                            )
+                        )
+                    }
                     OutlinedTextField(
                         value = newWeeks,
                         onValueChange = { newWeeks = it },
@@ -321,7 +546,6 @@ private fun SemesterDialog(
                     Button(
                         onClick = {
                             if (newName.isNotBlank() && newStartDate.isNotBlank()) {
-                                // Auto-generate ID from name
                                 val id = newName.replace(Regex("[^\\d-]"), "").ifBlank { System.currentTimeMillis().toString() }
                                 onAdd(id, newName, newStartDate, newWeeks.toIntOrNull() ?: 18)
                                 newName = ""; newStartDate = "2026-02-23"; newWeeks = "18"; showAddForm = false
@@ -331,6 +555,33 @@ private fun SemesterDialog(
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Primary)
                     ) { Text("添加学期") }
+
+                    // Add date picker dialog
+                    if (showAddDatePicker) {
+                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
+                        val initialMillis = try {
+                            sdf.parse(newStartDate)?.time ?: System.currentTimeMillis()
+                        } catch (_: Exception) {
+                            System.currentTimeMillis()
+                        }
+                        val datePickerState = rememberDatePickerState(
+                            initialSelectedDateMillis = initialMillis
+                        )
+                        DatePickerDialog(
+                            onDismissRequest = { showAddDatePicker = false },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    datePickerState.selectedDateMillis?.let { millis ->
+                                        newStartDate = sdf.format(Date(millis))
+                                    }
+                                    showAddDatePicker = false
+                                }) { Text("确定") }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = { showAddDatePicker = false }) { Text("取消") }
+                            }
+                        ) { DatePicker(state = datePickerState) }
+                    }
                 } else {
                     TextButton(onClick = { showAddForm = true }) {
                         Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))

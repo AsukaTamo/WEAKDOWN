@@ -50,6 +50,12 @@ class ScheduleViewModel @Inject constructor(
     private val _draggedCourse = MutableStateFlow<Course?>(null)
     val draggedCourse: StateFlow<Course?> = _draggedCourse.asStateFlow()
 
+    private val _backgroundUri = MutableStateFlow("")
+    val backgroundUri: StateFlow<String> = _backgroundUri.asStateFlow()
+
+    private val _scrimAlpha = MutableStateFlow(0.4f)
+    val scrimAlpha: StateFlow<Float> = _scrimAlpha.asStateFlow()
+
     val todayIndex: Int
         get() {
             val cal = Calendar.getInstance()
@@ -75,6 +81,8 @@ class ScheduleViewModel @Inject constructor(
         viewModelScope.launch {
             repository.getActiveSemester().collect { semester ->
                 _activeSemester.value = semester
+                _backgroundUri.value = semester?.backgroundUri ?: ""
+                _scrimAlpha.value = semester?.scrimAlpha ?: 0.4f
                 if (semester != null) {
                     try {
                         val parts = semester.startDate.split("-")
@@ -95,8 +103,10 @@ class ScheduleViewModel @Inject constructor(
 
     private fun loadCourses() {
         viewModelScope.launch {
-            repository.getAllCourses().collect { list ->
-                _courses.value = list
+            combine(repository.getAllCourses(), _currentWeek) { list, week ->
+                list.filter { isWeekInRange(week, it.weekRange) }
+            }.collect { filtered ->
+                _courses.value = filtered
             }
         }
     }
@@ -320,5 +330,35 @@ class ScheduleViewModel @Inject constructor(
             TimeSlot("19:00", "19:45"),
             TimeSlot("19:55", "20:40"),
         )
+
+        /**
+         * Check if a given week number falls within a weekRange string.
+         * Supports formats: "1-18周", "1-5,7-9周", "1-5(单),7-9周", "7-8,9-11(单),12-14,15-17周"
+         */
+        fun isWeekInRange(week: Int, weekRange: String): Boolean {
+            if (weekRange.isEmpty()) return true
+            val cleaned = weekRange.removeSuffix("周").trim()
+            if (cleaned.isEmpty()) return true
+
+            val segments = cleaned.split(",").map { it.trim() }.filter { it.isNotEmpty() }
+
+            for (segment in segments) {
+                val m = Regex("(\\d+)(?:\\s*-\\s*(\\d+))?\\s*(?:\\((单|双)\\))?").find(segment)
+                if (m != null) {
+                    val start = m.groupValues[1].toIntOrNull() ?: continue
+                    val end = m.groupValues[2].toIntOrNull() ?: start
+                    val parity = m.groupValues[3]
+
+                    if (week in start..end) {
+                        when (parity) {
+                            "单" -> if (week % 2 == 1) return true
+                            "双" -> if (week % 2 == 0) return true
+                            else -> return true
+                        }
+                    }
+                }
+            }
+            return false
+        }
     }
 }

@@ -46,6 +46,8 @@ fun CourseDetailSheet(
     var editType by remember(course) { mutableStateOf(course.type) }
     var editStartSlot by remember(course) { mutableIntStateOf(course.startSlot) }
     var editSlotCount by remember(course) { mutableIntStateOf(course.slotCount) }
+    var editCredits by remember(course) { mutableStateOf(course.credits.toString()) }
+    var editNotes by remember(course) { mutableStateOf(course.notes) }
     var isEditing by remember { mutableStateOf(false) }
 
     val days = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
@@ -148,6 +150,16 @@ fun CourseDetailSheet(
                     "第${course.startSlot + 1}节 - 第${course.startSlot + course.slotCount}节",
                     subColor, textColor
                 )
+                if (course.credits > 0f) {
+                    DetailRow("学分", course.credits.toString(), subColor, textColor)
+                }
+                if (course.notes.isNotEmpty()) {
+                    Column(modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+                        Text("备注信息", fontSize = 14.sp, color = subColor)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(course.notes, fontSize = 14.sp, color = textColor, fontWeight = FontWeight.Medium)
+                    }
+                }
 
                 Spacer(modifier = Modifier.height(8.dp))
 
@@ -185,6 +197,8 @@ fun CourseDetailSheet(
                 EditField("授课教师", editTeacher, { editTeacher = it }, inputBg, textColor, subColor)
                 EditField("上课地点", editLocation, { editLocation = it }, inputBg, textColor, subColor)
                 EditField("周数范围", editWeekRange, { editWeekRange = it }, inputBg, textColor, subColor)
+                EditField("学分", editCredits, { editCredits = it }, inputBg, textColor, subColor)
+                EditField("备注", editNotes, { editNotes = it }, inputBg, textColor, subColor)
 
                 // Day selector
                 Text("上课星期", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = subColor)
@@ -314,7 +328,9 @@ fun CourseDetailSheet(
                             dayOfWeek = editDay,
                             type = editType,
                             startSlot = editStartSlot,
-                            slotCount = editSlotCount
+                            slotCount = editSlotCount,
+                            credits = editCredits.toFloatOrNull() ?: 0f,
+                            notes = editNotes
                         )
                         onSave(updated)
                     },

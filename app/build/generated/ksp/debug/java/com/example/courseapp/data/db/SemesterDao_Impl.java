@@ -50,7 +50,7 @@ public final class SemesterDao_Impl implements SemesterDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "INSERT OR REPLACE INTO `semesters` (`id`,`name`,`startDate`,`totalWeeks`,`isActive`) VALUES (?,?,?,?,?)";
+        return "INSERT OR REPLACE INTO `semesters` (`id`,`name`,`startDate`,`totalWeeks`,`isActive`,`backgroundUri`,`scrimAlpha`) VALUES (?,?,?,?,?,?,?)";
       }
 
       @Override
@@ -62,6 +62,8 @@ public final class SemesterDao_Impl implements SemesterDao {
         statement.bindLong(4, entity.getTotalWeeks());
         final int _tmp = entity.isActive() ? 1 : 0;
         statement.bindLong(5, _tmp);
+        statement.bindString(6, entity.getBackgroundUri());
+        statement.bindDouble(7, entity.getScrimAlpha());
       }
     };
     this.__deletionAdapterOfSemester = new EntityDeletionOrUpdateAdapter<Semester>(__db) {
@@ -81,7 +83,7 @@ public final class SemesterDao_Impl implements SemesterDao {
       @Override
       @NonNull
       protected String createQuery() {
-        return "UPDATE OR ABORT `semesters` SET `id` = ?,`name` = ?,`startDate` = ?,`totalWeeks` = ?,`isActive` = ? WHERE `id` = ?";
+        return "UPDATE OR ABORT `semesters` SET `id` = ?,`name` = ?,`startDate` = ?,`totalWeeks` = ?,`isActive` = ?,`backgroundUri` = ?,`scrimAlpha` = ? WHERE `id` = ?";
       }
 
       @Override
@@ -93,7 +95,9 @@ public final class SemesterDao_Impl implements SemesterDao {
         statement.bindLong(4, entity.getTotalWeeks());
         final int _tmp = entity.isActive() ? 1 : 0;
         statement.bindLong(5, _tmp);
-        statement.bindString(6, entity.getId());
+        statement.bindString(6, entity.getBackgroundUri());
+        statement.bindDouble(7, entity.getScrimAlpha());
+        statement.bindString(8, entity.getId());
       }
     };
     this.__preparedStmtOfDeactivateAll = new SharedSQLiteStatement(__db) {
@@ -234,6 +238,8 @@ public final class SemesterDao_Impl implements SemesterDao {
           final int _cursorIndexOfStartDate = CursorUtil.getColumnIndexOrThrow(_cursor, "startDate");
           final int _cursorIndexOfTotalWeeks = CursorUtil.getColumnIndexOrThrow(_cursor, "totalWeeks");
           final int _cursorIndexOfIsActive = CursorUtil.getColumnIndexOrThrow(_cursor, "isActive");
+          final int _cursorIndexOfBackgroundUri = CursorUtil.getColumnIndexOrThrow(_cursor, "backgroundUri");
+          final int _cursorIndexOfScrimAlpha = CursorUtil.getColumnIndexOrThrow(_cursor, "scrimAlpha");
           final List<Semester> _result = new ArrayList<Semester>(_cursor.getCount());
           while (_cursor.moveToNext()) {
             final Semester _item;
@@ -249,7 +255,11 @@ public final class SemesterDao_Impl implements SemesterDao {
             final int _tmp;
             _tmp = _cursor.getInt(_cursorIndexOfIsActive);
             _tmpIsActive = _tmp != 0;
-            _item = new Semester(_tmpId,_tmpName,_tmpStartDate,_tmpTotalWeeks,_tmpIsActive);
+            final String _tmpBackgroundUri;
+            _tmpBackgroundUri = _cursor.getString(_cursorIndexOfBackgroundUri);
+            final float _tmpScrimAlpha;
+            _tmpScrimAlpha = _cursor.getFloat(_cursorIndexOfScrimAlpha);
+            _item = new Semester(_tmpId,_tmpName,_tmpStartDate,_tmpTotalWeeks,_tmpIsActive,_tmpBackgroundUri,_tmpScrimAlpha);
             _result.add(_item);
           }
           return _result;
@@ -280,6 +290,8 @@ public final class SemesterDao_Impl implements SemesterDao {
           final int _cursorIndexOfStartDate = CursorUtil.getColumnIndexOrThrow(_cursor, "startDate");
           final int _cursorIndexOfTotalWeeks = CursorUtil.getColumnIndexOrThrow(_cursor, "totalWeeks");
           final int _cursorIndexOfIsActive = CursorUtil.getColumnIndexOrThrow(_cursor, "isActive");
+          final int _cursorIndexOfBackgroundUri = CursorUtil.getColumnIndexOrThrow(_cursor, "backgroundUri");
+          final int _cursorIndexOfScrimAlpha = CursorUtil.getColumnIndexOrThrow(_cursor, "scrimAlpha");
           final Semester _result;
           if (_cursor.moveToFirst()) {
             final String _tmpId;
@@ -294,7 +306,11 @@ public final class SemesterDao_Impl implements SemesterDao {
             final int _tmp;
             _tmp = _cursor.getInt(_cursorIndexOfIsActive);
             _tmpIsActive = _tmp != 0;
-            _result = new Semester(_tmpId,_tmpName,_tmpStartDate,_tmpTotalWeeks,_tmpIsActive);
+            final String _tmpBackgroundUri;
+            _tmpBackgroundUri = _cursor.getString(_cursorIndexOfBackgroundUri);
+            final float _tmpScrimAlpha;
+            _tmpScrimAlpha = _cursor.getFloat(_cursorIndexOfScrimAlpha);
+            _result = new Semester(_tmpId,_tmpName,_tmpStartDate,_tmpTotalWeeks,_tmpIsActive,_tmpBackgroundUri,_tmpScrimAlpha);
           } else {
             _result = null;
           }
@@ -327,6 +343,8 @@ public final class SemesterDao_Impl implements SemesterDao {
           final int _cursorIndexOfStartDate = CursorUtil.getColumnIndexOrThrow(_cursor, "startDate");
           final int _cursorIndexOfTotalWeeks = CursorUtil.getColumnIndexOrThrow(_cursor, "totalWeeks");
           final int _cursorIndexOfIsActive = CursorUtil.getColumnIndexOrThrow(_cursor, "isActive");
+          final int _cursorIndexOfBackgroundUri = CursorUtil.getColumnIndexOrThrow(_cursor, "backgroundUri");
+          final int _cursorIndexOfScrimAlpha = CursorUtil.getColumnIndexOrThrow(_cursor, "scrimAlpha");
           final Semester _result;
           if (_cursor.moveToFirst()) {
             final String _tmpId;
@@ -341,7 +359,11 @@ public final class SemesterDao_Impl implements SemesterDao {
             final int _tmp;
             _tmp = _cursor.getInt(_cursorIndexOfIsActive);
             _tmpIsActive = _tmp != 0;
-            _result = new Semester(_tmpId,_tmpName,_tmpStartDate,_tmpTotalWeeks,_tmpIsActive);
+            final String _tmpBackgroundUri;
+            _tmpBackgroundUri = _cursor.getString(_cursorIndexOfBackgroundUri);
+            final float _tmpScrimAlpha;
+            _tmpScrimAlpha = _cursor.getFloat(_cursorIndexOfScrimAlpha);
+            _result = new Semester(_tmpId,_tmpName,_tmpStartDate,_tmpTotalWeeks,_tmpIsActive,_tmpBackgroundUri,_tmpScrimAlpha);
           } else {
             _result = null;
           }

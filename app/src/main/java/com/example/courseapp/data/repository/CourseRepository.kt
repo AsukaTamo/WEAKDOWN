@@ -42,6 +42,9 @@ class CourseRepository @Inject constructor(
     suspend fun deleteCoursesByIds(ids: List<Long>) =
         courseDao.deleteCoursesByIds(ids)
 
+    suspend fun deleteAllBySemester(semester: String) =
+        courseDao.deleteAllBySemester(semester)
+
     suspend fun getCourseById(id: Long): Course? =
         courseDao.getCourseById(id)
 

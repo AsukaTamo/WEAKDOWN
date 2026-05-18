@@ -4,7 +4,6 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -17,7 +16,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.courseapp.data.model.TimeSlotTemplate
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
@@ -38,7 +36,6 @@ fun TimeSlotSettingsScreen(
     val cardColor = if (isDarkMode) CardDark else Color.White
     val textColor = if (isDarkMode) Color.White else TextPrimary
     val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
-    val inputBg = if (isDarkMode) BgDark else Color(0xFFF5F5F5)
 
     LaunchedEffect(timeSlots) {
         editingSlots = timeSlots.toList()
@@ -113,7 +110,6 @@ fun TimeSlotSettingsScreen(
                     onClick = {
                         val lastEnd = editingSlots.lastOrNull()?.end ?: "08:00"
                         val newStart = lastEnd
-                        // Calculate new end as start + 45 min
                         val parts = newStart.split(":")
                         val totalMin = parts[0].toInt() * 60 + parts[1].toInt() + 45
                         val newEnd = "${(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}"
@@ -174,6 +170,18 @@ fun TimeSlotSettingsScreen(
     }
 }
 
+private fun parseTimeToMinutes(time: String): Int {
+    val parts = time.split(":")
+    return parts[0].toInt() * 60 + parts[1].toInt()
+}
+
+private fun minutesToTime(totalMin: Int): String {
+    val h = (totalMin / 60) % 24
+    val m = totalMin % 60
+    return "${h.toString().padStart(2, '0')}:${m.toString().padStart(2, '0')}"
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TimeSlotEditItem(
     index: Int,
@@ -186,6 +194,12 @@ private fun TimeSlotEditItem(
     val cardColor = if (isDarkMode) CardDark else Color.White
     val textColor = if (isDarkMode) Color.White else TextPrimary
     val subColor = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
+
+    var showStartPicker by remember { mutableStateOf(false) }
+    var showEndPicker by remember { mutableStateOf(false) }
+    var showDurationMenu by remember { mutableStateOf(false) }
+
+    val durationMin = parseTimeToMinutes(slot.end) - parseTimeToMinutes(slot.start)
 
     Row(
         modifier = Modifier
@@ -204,25 +218,67 @@ private fun TimeSlotEditItem(
             modifier = Modifier.width(50.dp)
         )
 
-        // Start time
+        // Start time — clickable
         Text(
             text = slot.start,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             color = textColor,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { showStartPicker = true }
+                .background(if (isDarkMode) Color(0xFF2A2D3E) else Color(0xFFF5F5F5))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
         )
 
-        Text("~", fontSize = 14.sp, color = subColor, modifier = Modifier.padding(horizontal = 4.dp))
+        Text("~", fontSize = 14.sp, color = subColor, modifier = Modifier.padding(horizontal = 6.dp))
 
-        // End time
+        // End time — clickable
         Text(
             text = slot.end,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             color = textColor,
-            modifier = Modifier.weight(1f)
+            modifier = Modifier
+                .clip(RoundedCornerShape(6.dp))
+                .clickable { showEndPicker = true }
+                .background(if (isDarkMode) Color(0xFF2A2D3E) else Color(0xFFF5F5F5))
+                .padding(horizontal = 10.dp, vertical = 6.dp)
         )
+
+        Spacer(modifier = Modifier.width(8.dp))
+
+        // Duration — clickable for quick presets
+        Box {
+            Text(
+                text = "${durationMin}分钟",
+                fontSize = 12.sp,
+                color = Primary,
+                fontWeight = FontWeight.Medium,
+                modifier = Modifier
+                    .clip(RoundedCornerShape(6.dp))
+                    .clickable { showDurationMenu = true }
+                    .background(Primary.copy(alpha = 0.1f))
+                    .padding(horizontal = 8.dp, vertical = 4.dp)
+            )
+            DropdownMenu(
+                expanded = showDurationMenu,
+                onDismissRequest = { showDurationMenu = false }
+            ) {
+                listOf(45, 50, 90, 100, 120).forEach { dur ->
+                    DropdownMenuItem(
+                        text = { Text("${dur}分钟") },
+                        onClick = {
+                            val startMin = parseTimeToMinutes(slot.start)
+                            onEndTimeChange(minutesToTime(startMin + dur))
+                            showDurationMenu = false
+                        }
+                    )
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.weight(1f))
 
         // Delete button
         IconButton(
@@ -236,5 +292,55 @@ private fun TimeSlotEditItem(
                 modifier = Modifier.size(16.dp)
             )
         }
+    }
+
+    // Start time picker dialog
+    if (showStartPicker) {
+        val parts = slot.start.split(":")
+        val state = rememberTimePickerState(
+            initialHour = parts[0].toInt(),
+            initialMinute = parts[1].toInt(),
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showStartPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    onStartTimeChange(
+                        "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
+                    )
+                    showStartPicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showStartPicker = false }) { Text("取消") }
+            },
+            text = { TimePicker(state = state) }
+        )
+    }
+
+    // End time picker dialog
+    if (showEndPicker) {
+        val parts = slot.end.split(":")
+        val state = rememberTimePickerState(
+            initialHour = parts[0].toInt(),
+            initialMinute = parts[1].toInt(),
+            is24Hour = true
+        )
+        AlertDialog(
+            onDismissRequest = { showEndPicker = false },
+            confirmButton = {
+                TextButton(onClick = {
+                    onEndTimeChange(
+                        "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
+                    )
+                    showEndPicker = false
+                }) { Text("确定") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showEndPicker = false }) { Text("取消") }
+            },
+            text = { TimePicker(state = state) }
+        )
     }
 }

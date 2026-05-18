@@ -35,14 +35,14 @@ public final class AppDatabase_Impl extends AppDatabase {
   @Override
   @NonNull
   protected SupportSQLiteOpenHelper createOpenHelper(@NonNull final DatabaseConfiguration config) {
-    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(3) {
+    final SupportSQLiteOpenHelper.Callback _openCallback = new RoomOpenHelper(config, new RoomOpenHelper.Delegate(4) {
       @Override
       public void createAllTables(@NonNull final SupportSQLiteDatabase db) {
         db.execSQL("CREATE TABLE IF NOT EXISTS `courses` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `teacher` TEXT NOT NULL, `location` TEXT NOT NULL, `dayOfWeek` INTEGER NOT NULL, `startSlot` INTEGER NOT NULL, `slotCount` INTEGER NOT NULL, `type` TEXT NOT NULL, `weekRange` TEXT NOT NULL, `colorIndex` INTEGER NOT NULL, `semester` TEXT NOT NULL, `credits` REAL NOT NULL, `notes` TEXT NOT NULL, `examDate` TEXT NOT NULL, `customColor` TEXT NOT NULL)");
-        db.execSQL("CREATE TABLE IF NOT EXISTS `semesters` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `startDate` TEXT NOT NULL, `totalWeeks` INTEGER NOT NULL, `isActive` INTEGER NOT NULL, PRIMARY KEY(`id`))");
+        db.execSQL("CREATE TABLE IF NOT EXISTS `semesters` (`id` TEXT NOT NULL, `name` TEXT NOT NULL, `startDate` TEXT NOT NULL, `totalWeeks` INTEGER NOT NULL, `isActive` INTEGER NOT NULL, `backgroundUri` TEXT NOT NULL, `scrimAlpha` REAL NOT NULL, PRIMARY KEY(`id`))");
         db.execSQL("CREATE TABLE IF NOT EXISTS `time_slot_templates` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `name` TEXT NOT NULL, `slotsJson` TEXT NOT NULL, `isActive` INTEGER NOT NULL)");
         db.execSQL("CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)");
-        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'bd9d3fc2595e63a01b76b0bacab12a21')");
+        db.execSQL("INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'ac4bbcaba6a2223a51a4bf30c4a5b1ce')");
       }
 
       @Override
@@ -118,12 +118,14 @@ public final class AppDatabase_Impl extends AppDatabase {
                   + " Expected:\n" + _infoCourses + "\n"
                   + " Found:\n" + _existingCourses);
         }
-        final HashMap<String, TableInfo.Column> _columnsSemesters = new HashMap<String, TableInfo.Column>(5);
+        final HashMap<String, TableInfo.Column> _columnsSemesters = new HashMap<String, TableInfo.Column>(7);
         _columnsSemesters.put("id", new TableInfo.Column("id", "TEXT", true, 1, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsSemesters.put("name", new TableInfo.Column("name", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsSemesters.put("startDate", new TableInfo.Column("startDate", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsSemesters.put("totalWeeks", new TableInfo.Column("totalWeeks", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         _columnsSemesters.put("isActive", new TableInfo.Column("isActive", "INTEGER", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsSemesters.put("backgroundUri", new TableInfo.Column("backgroundUri", "TEXT", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
+        _columnsSemesters.put("scrimAlpha", new TableInfo.Column("scrimAlpha", "REAL", true, 0, null, TableInfo.CREATED_FROM_ENTITY));
         final HashSet<TableInfo.ForeignKey> _foreignKeysSemesters = new HashSet<TableInfo.ForeignKey>(0);
         final HashSet<TableInfo.Index> _indicesSemesters = new HashSet<TableInfo.Index>(0);
         final TableInfo _infoSemesters = new TableInfo("semesters", _columnsSemesters, _foreignKeysSemesters, _indicesSemesters);
@@ -149,7 +151,7 @@ public final class AppDatabase_Impl extends AppDatabase {
         }
         return new RoomOpenHelper.ValidationResult(true, null);
       }
-    }, "bd9d3fc2595e63a01b76b0bacab12a21", "c96c40c343ffab1347643fd1ff567ca7");
+    }, "ac4bbcaba6a2223a51a4bf30c4a5b1ce", "d5e84ed8e2cd61253a58732d3cf4d1b9");
     final SupportSQLiteOpenHelper.Configuration _sqliteConfig = SupportSQLiteOpenHelper.Configuration.builder(config.context).name(config.name).callback(_openCallback).build();
     final SupportSQLiteOpenHelper _helper = config.sqliteOpenHelperFactory.create(_sqliteConfig);
     return _helper;

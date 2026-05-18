@@ -9,7 +9,7 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.TimeSlotTemplate
 
-@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class], version = 3, exportSchema = false)
+@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class], version = 4, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
@@ -49,6 +49,13 @@ abstract class AppDatabase : RoomDatabase() {
                 // Insert default template
                 val defaultSlots = """[{"start":"08:00","end":"08:45"},{"start":"08:55","end":"09:40"},{"start":"10:00","end":"10:45"},{"start":"10:55","end":"11:40"},{"start":"14:00","end":"14:45"},{"start":"14:55","end":"15:40"},{"start":"16:00","end":"16:45"},{"start":"16:55","end":"17:40"},{"start":"19:00","end":"19:45"},{"start":"19:55","end":"20:40"}]"""
                 db.execSQL("INSERT INTO time_slot_templates (name, slotsJson, isActive) VALUES ('默认作息表', '$defaultSlots', 1)")
+            }
+        }
+
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE semesters ADD COLUMN backgroundUri TEXT NOT NULL DEFAULT ''")
+                db.execSQL("ALTER TABLE semesters ADD COLUMN scrimAlpha REAL NOT NULL DEFAULT 0.4")
             }
         }
     }

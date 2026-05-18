@@ -1,9 +1,9 @@
 package com.example.courseapp.viewmodel
 
+import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.courseapp.data.importer.CourseHtmlParser
-import com.example.courseapp.data.importer.ParsedCourse
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.repository.CourseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -39,12 +39,18 @@ class ImportViewModel @Inject constructor(
     fun parseHtml(html: String, semester: String) {
         viewModelScope.launch {
             try {
+                Log.d("ImportVM", "parseHtml called, html length: ${html.length}, semester: $semester")
                 val parsed = CourseHtmlParser.parse(html)
+                Log.d("ImportVM", "Parsed ${parsed.size} courses from HTML")
+                for (p in parsed) {
+                    Log.d("ImportVM", "  Course: ${p.name}, day=${p.dayOfWeek}, slot=${p.startSlot}, count=${p.slotCount}, weeks=${p.weekRange}")
+                }
                 val courses = CourseHtmlParser.toCourses(parsed, semester)
                 _parsedCourses.value = courses
                 _selectedIds.value = courses.indices.map { it.toLong() }.toSet()
                 checkConflicts(courses)
             } catch (e: Exception) {
+                Log.e("ImportVM", "Parse error", e)
                 _snackbarMessage.emit("解析失败：${e.message}" to "error")
             }
         }
@@ -59,7 +65,8 @@ class ImportViewModel @Inject constructor(
                 existing.dayOfWeek == newCourse.dayOfWeek &&
                 existing.semester == newCourse.semester &&
                 existing.startSlot < newCourse.startSlot + newCourse.slotCount &&
-                existing.startSlot + existing.slotCount > newCourse.startSlot
+                existing.startSlot + existing.slotCount > newCourse.startSlot &&
+                weekRangesOverlap(existing.weekRange, newCourse.weekRange)
             }
             for (existing in conflicting) {
                 conflictList.add(ImportConflict(newCourse, existing))
@@ -67,6 +74,16 @@ class ImportViewModel @Inject constructor(
         }
 
         _conflicts.value = conflictList
+    }
+
+    private fun weekRangesOverlap(range1: String, range2: String): Boolean {
+        for (week in 1..30) {
+            if (ScheduleViewModel.isWeekInRange(week, range1) &&
+                ScheduleViewModel.isWeekInRange(week, range2)) {
+                return true
+            }
+        }
+        return false
     }
 
     fun toggleSelection(index: Long) {
@@ -83,13 +100,17 @@ class ImportViewModel @Inject constructor(
         _selectedIds.value = emptySet()
     }
 
-    fun importSelected(replaceConflicts: Boolean = false) {
+    fun importSelected(replaceConflicts: Boolean = false, replaceAll: Boolean = false) {
         viewModelScope.launch {
             val courses = _parsedCourses.value
             val selected = _selectedIds.value.map { courses[it.toInt()] }
+            val semester = selected.firstOrNull()?.semester ?: ""
 
-            if (replaceConflicts) {
-                // Delete conflicting existing courses
+            if (replaceAll && semester.isNotEmpty()) {
+                // Delete all existing courses for this semester, then insert all selected
+                repository.deleteAllBySemester(semester)
+            } else if (replaceConflicts) {
+                // Delete only conflicting existing courses
                 val conflicts = _conflicts.value
                 for (conflict in conflicts) {
                     if (selected.contains(conflict.newCourse)) {

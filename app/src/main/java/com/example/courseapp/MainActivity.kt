@@ -42,12 +42,12 @@ import com.example.courseapp.viewmodel.ManageViewModel
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import dagger.hilt.android.AndroidEntryPoint
 
-sealed class Screen(val route: String) {
-    data object Schedule : Screen("schedule")
-    data object Manage : Screen("manage")
-    data object Profile : Screen("profile")
-    data object WebImport : Screen("web_import")
-    data object ImportPreview : Screen("import_preview")
+sealed class Screen {
+    data object Schedule : Screen()
+    data object Manage : Screen()
+    data object Profile : Screen()
+    data object WebImport : Screen()
+    data object ImportPreview : Screen()
 }
 
 data class NavItem(
@@ -87,6 +87,7 @@ fun CourseApp(
     val importViewModel: ImportViewModel = hiltViewModel()
 
     val currentWeek by scheduleViewModel.currentWeek.collectAsStateWithLifecycle()
+    val backgroundUri by scheduleViewModel.backgroundUri.collectAsStateWithLifecycle()
     var showWeekDialog by remember { mutableStateOf(false) }
     var showTimeSlotSettings by remember { mutableStateOf(false) }
 
@@ -104,10 +105,11 @@ fun CourseApp(
         Screen.ImportPreview -> "导入预览"
     }
     val showWeekSelector = currentScreen == Screen.Schedule
+    val hasBackground = currentScreen == Screen.Schedule && backgroundUri.isNotEmpty()
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = if (isDarkMode) BgDark else BgLight,
+        containerColor = if (hasBackground) Color.Transparent else if (isDarkMode) BgDark else BgLight,
         topBar = {
             // Dark mode toggle animation
             var darkModeAnimating by remember { mutableStateOf(false) }
@@ -123,7 +125,11 @@ fun CourseApp(
                     .fillMaxWidth()
                     .background(
                         brush = Brush.horizontalGradient(
-                            colors = listOf(TopBarStart, TopBarEnd)
+                            colors = if (hasBackground) {
+                                listOf(TopBarStart.copy(alpha = 0.6f), TopBarEnd.copy(alpha = 0.6f))
+                            } else {
+                                listOf(TopBarStart, TopBarEnd)
+                            }
                         )
                     )
                     .statusBarsPadding()

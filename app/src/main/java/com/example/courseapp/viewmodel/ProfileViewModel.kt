@@ -1,6 +1,7 @@
 package com.example.courseapp.viewmodel
 
 import android.content.Context
+import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.courseapp.data.model.Course
@@ -69,11 +70,59 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    fun updateSemester(semester: Semester) {
+        viewModelScope.launch {
+            repository.updateSemester(semester)
+            _snackbarMessage.emit("学期「${semester.name}」已更新" to "success")
+        }
+    }
+
     fun deleteSemester(semester: Semester) {
         viewModelScope.launch {
             repository.deleteSemester(semester)
             _snackbarMessage.emit("已删除学期「${semester.name}」" to "success")
         }
+    }
+
+    // ── Background management ──
+
+    fun setBackground(semester: Semester, uri: Uri) {
+        viewModelScope.launch {
+            try {
+                val path = copyImageToInternal(uri, semester.id)
+                repository.updateSemester(semester.copy(backgroundUri = path))
+                _snackbarMessage.emit("背景已设置" to "success")
+            } catch (e: Exception) {
+                _snackbarMessage.emit("背景设置失败: ${e.message}" to "error")
+            }
+        }
+    }
+
+    fun clearBackground(semester: Semester) {
+        viewModelScope.launch {
+            // Delete the file
+            if (semester.backgroundUri.isNotEmpty()) {
+                File(semester.backgroundUri).delete()
+            }
+            repository.updateSemester(semester.copy(backgroundUri = ""))
+            _snackbarMessage.emit("背景已清除" to "success")
+        }
+    }
+
+    fun updateScrimAlpha(semester: Semester, alpha: Float) {
+        viewModelScope.launch {
+            repository.updateSemester(semester.copy(scrimAlpha = alpha))
+        }
+    }
+
+    private fun copyImageToInternal(uri: Uri, semesterId: String): String {
+        val dir = File(context.filesDir, "backgrounds")
+        dir.mkdirs()
+        val dest = File(dir, "$semesterId.jpg")
+        context.contentResolver.openInputStream(uri)?.use { input ->
+            dest.outputStream().use { output -> input.copyTo(output) }
+        } ?: throw IllegalStateException("无法读取图片")
+        return dest.absolutePath
     }
 
     // ── JSON export/import ──

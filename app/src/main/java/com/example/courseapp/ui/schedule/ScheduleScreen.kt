@@ -17,6 +17,9 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.layout.ContentScale
+import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -55,6 +58,8 @@ fun ScheduleScreen(
     val selectedCourse by viewModel.selectedCourse.collectAsStateWithLifecycle()
     val timeSlots by viewModel.timeSlots.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
+    val backgroundUri by viewModel.backgroundUri.collectAsStateWithLifecycle()
+    val scrimAlpha by viewModel.scrimAlpha.collectAsStateWithLifecycle()
 
     var showWeekDialog by remember { mutableStateOf(false) }
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
@@ -73,6 +78,31 @@ fun ScheduleScreen(
     }
 
     Box(modifier = Modifier.fillMaxSize()) {
+        // Background image layer
+        if (backgroundUri.isNotEmpty()) {
+            val file = java.io.File(backgroundUri)
+            if (file.exists()) {
+                val bitmap = remember(backgroundUri) {
+                    BitmapFactory.decodeFile(backgroundUri)?.asImageBitmap()
+                }
+                if (bitmap != null) {
+                    androidx.compose.foundation.Image(
+                        bitmap = bitmap,
+                        contentDescription = null,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
+                    )
+                    // Scrim overlay
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(Color.Black.copy(alpha = scrimAlpha))
+                    )
+                }
+            }
+        }
+
+        val hasBackground = backgroundUri.isNotEmpty()
         Column(modifier = Modifier.fillMaxSize()) {
             val gridScrollState = rememberScrollState()
             LaunchedEffect(Unit) {
@@ -84,6 +114,7 @@ fun ScheduleScreen(
                 currentWeek = currentWeek,
                 todayIndex = viewModel.todayIndex,
                 isDarkMode = isDarkMode,
+                hasBackground = hasBackground,
                 weekDates = weekDates,
                 timeSlots = timeSlots,
                 onCourseClick = { viewModel.onCourseClick(it) },
@@ -231,6 +262,7 @@ private fun ScheduleGrid(
     currentWeek: Int,
     todayIndex: Int,
     isDarkMode: Boolean,
+    hasBackground: Boolean = false,
     weekDates: List<String>,
     timeSlots: List<TimeSlot>,
     onCourseClick: (Course) -> Unit,
@@ -242,7 +274,7 @@ private fun ScheduleGrid(
     scrollState: ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (isDarkMode) BgDark else BgLight
+    val bgColor = if (hasBackground) Color.Transparent else if (isDarkMode) BgDark else BgLight
     val timeLabelColor = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
     val separatorColor = if (isDarkMode) Color(0xFF2A2D38) else Color(0xFFECEEF4)
 
