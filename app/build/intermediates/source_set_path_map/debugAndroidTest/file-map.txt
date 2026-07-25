@@ -1,4 +1,0 @@
-com.example.courseapp.test.app-androidTest-0 E:\WEAKDOWN\app\build\generated\res\resValues\androidTest\debug
-com.example.courseapp.test.app-mergeDebugAndroidTestResources-1 E:\WEAKDOWN\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\merged.dir
-com.example.courseapp.test.app-mergeDebugAndroidTestResources-2 E:\WEAKDOWN\app\build\intermediates\incremental\debugAndroidTest\mergeDebugAndroidTestResources\stripped.dir
-com.example.courseapp.test.app-merged_res-3 E:\WEAKDOWN\app\build\intermediates\merged_res\debugAndroidTest

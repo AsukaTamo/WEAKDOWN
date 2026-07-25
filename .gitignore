@@ -1,0 +1,51 @@
+# Local machine and secrets
+local.properties
+*.keystore
+*.jks
+*.pem
+*.env
+.env
+.env.*
+
+# Gradle
+.gradle/
+build/
+**/build/
+
+# Android / Kotlin generated artifacts
+*.apk
+*.aab
+*.ap_
+*.dex
+*.class
+*.compiler.options
+
+# IDE user state and caches
+.idea/caches/
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/shelf/
+.idea/usage.statistics.xml
+.idea/dictionaries/
+.idea/libraries/
+*.iml
+
+# OS files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Logs and temporary files
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+
+# Local archives and downloaded distributions
+gradle-*.zip
+
+# Local AI/tooling caches and generated data
+.code-review-graph/
+.agents/
+.roo/
