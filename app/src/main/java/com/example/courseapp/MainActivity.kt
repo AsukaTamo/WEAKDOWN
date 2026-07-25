@@ -1,5 +1,6 @@
 package com.example.courseapp
 
+import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -22,6 +23,13 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scheduleViewModel: ScheduleViewModel = hiltViewModel()
             val isDarkMode by scheduleViewModel.isDarkMode.collectAsStateWithLifecycle()
+
+            SideEffect {
+                WindowCompat.getInsetsController(window, window.decorView).apply {
+                    isAppearanceLightStatusBars = !isDarkMode
+                    isAppearanceLightNavigationBars = !isDarkMode
+                }
+            }
 
             CourseAppTheme(darkTheme = isDarkMode) {
                 CourseAppScaffold(

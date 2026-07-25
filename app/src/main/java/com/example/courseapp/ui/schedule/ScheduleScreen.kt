@@ -47,7 +47,8 @@ fun ScheduleScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
     onNavigateToAdd: () -> Unit = {},
     onNavigateToImport: () -> Unit = {},
-    onScrollOffsetChanged: ((Float) -> Unit)? = null
+    onScrollOffsetChanged: ((Float) -> Unit)? = null,
+    drawBackground: Boolean = true
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val currentWeek by viewModel.currentWeek.collectAsStateWithLifecycle()
@@ -58,6 +59,7 @@ fun ScheduleScreen(
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
     val backgroundUri by viewModel.backgroundUri.collectAsStateWithLifecycle()
     val scrimAlpha by viewModel.scrimAlpha.collectAsStateWithLifecycle()
+    val showScheduleGuides by viewModel.showScheduleGuides.collectAsStateWithLifecycle()
 
     var showWeekDialog by remember { mutableStateOf(false) }
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
@@ -75,9 +77,22 @@ fun ScheduleScreen(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        // Background image layer
-        if (backgroundUri.isNotEmpty()) {
+    val hasBackground = backgroundUri.isNotEmpty()
+    val palette = schedulePalette(isDarkMode, hasBackground)
+
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(
+                    listOf(
+                        palette.appCanvas,
+                        palette.appCanvasEnd
+                    )
+                )
+            )
+    ) {
+        if (drawBackground && backgroundUri.isNotEmpty()) {
             val file = java.io.File(backgroundUri)
             if (file.exists()) {
                 val bitmap = remember(backgroundUri) {
@@ -113,7 +128,6 @@ fun ScheduleScreen(
             }
         }
 
-        val hasBackground = backgroundUri.isNotEmpty()
         Column(modifier = Modifier.fillMaxSize()) {
             val gridScrollState = rememberScrollState()
             LaunchedEffect(Unit) {
@@ -125,6 +139,7 @@ fun ScheduleScreen(
                 todayIndex = viewModel.todayIndex,
                 isDarkMode = isDarkMode,
                 hasBackground = hasBackground,
+                showGuides = showScheduleGuides,
                 weekDates = weekDates,
                 timeSlots = timeSlots,
                 onCourseClick = { viewModel.onCourseClick(it) },
@@ -273,6 +288,7 @@ private fun ScheduleGrid(
     todayIndex: Int,
     isDarkMode: Boolean,
     hasBackground: Boolean = false,
+    showGuides: Boolean = true,
     weekDates: List<String>,
     timeSlots: List<TimeSlot>,
     onCourseClick: (Course) -> Unit,
@@ -335,8 +351,17 @@ private fun ScheduleGrid(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.Center
+                        verticalArrangement = Arrangement.Center,
+                        modifier = Modifier.fillMaxWidth()
                     ) {
+                        Text(
+                            text = "${i + 1}",
+                            fontSize = 15.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = palette.timeText,
+                            lineHeight = 15.sp
+                        )
+                        Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = ts.start,
                             fontSize = 10.sp,
@@ -369,7 +394,7 @@ private fun ScheduleGrid(
                 val dayCourses = courses.filter { it.dayOfWeek == day }
                 Column(
                     modifier = Modifier
-                        .widthIn(min = 64.dp)
+                        .widthIn(min = 74.dp)
                         .weight(1f, fill = false)
                 ) {
                     // Day header with date — glass style
@@ -378,6 +403,8 @@ private fun ScheduleGrid(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(HEADER_HEIGHT)
+                            .padding(horizontal = 3.dp, vertical = 7.dp)
+                            .clip(RoundedCornerShape(18.dp))
                             .background(
                                 if (isToday) {
                                     palette.todaySurface
@@ -422,7 +449,7 @@ private fun ScheduleGrid(
 
                         // Course cards
                         for (course in dayCourses) {
-                            val cardHeight = SLOT_HEIGHT * course.slotCount - 3.dp
+                            val cardHeight = SLOT_HEIGHT * course.slotCount - 1.dp
                             val active = isCourseActive(course)
                             val upcoming = isCourseUpcoming(course)
 
@@ -527,10 +554,10 @@ private fun FabMenu(
             onClick = onToggle,
             containerColor = if (isOpen) Error else palette.fabContainer,
             contentColor = Color.White,
-            shape = RoundedCornerShape(28.dp),
+            shape = RoundedCornerShape(20.dp),
             elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 6.dp,
-                pressedElevation = 8.dp
+                defaultElevation = 12.dp,
+                pressedElevation = 16.dp
             ),
             modifier = Modifier.size(ScheduleDimensions.FabSize)
         ) {
