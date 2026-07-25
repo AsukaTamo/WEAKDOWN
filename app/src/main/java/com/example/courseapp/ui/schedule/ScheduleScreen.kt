@@ -16,19 +16,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.Course
-import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.CourseCard
 import com.example.courseapp.ui.components.CourseContextMenu
@@ -40,9 +38,9 @@ import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
 
 private val dayLabels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
-private val SLOT_HEIGHT = 64.dp
-private val HEADER_HEIGHT = 50.dp
-private val TIME_AXIS_WIDTH = 58.dp
+private val SLOT_HEIGHT = ScheduleDimensions.SlotHeight
+private val HEADER_HEIGHT = ScheduleDimensions.HeaderHeight
+private val TIME_AXIS_WIDTH = ScheduleDimensions.TimeAxisWidth
 
 @Composable
 fun ScheduleScreen(
@@ -92,11 +90,24 @@ fun ScheduleScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
-                    // Scrim overlay
                     Box(
                         Modifier
                             .fillMaxSize()
                             .background(Color.Black.copy(alpha = scrimAlpha))
+                    )
+                    Box(
+                        Modifier
+                            .fillMaxSize()
+                            .background(
+                                Brush.verticalGradient(
+                                    colorStops = arrayOf(
+                                        0.00f to Color.Black.copy(alpha = 0.18f),
+                                        0.18f to Color.Transparent,
+                                        0.72f to Color.Transparent,
+                                        1.00f to Color.Black.copy(alpha = 0.18f)
+                                    )
+                                )
+                            )
                     )
                 }
             }
@@ -111,7 +122,6 @@ fun ScheduleScreen(
             }
             ScheduleGrid(
                 courses = courses,
-                currentWeek = currentWeek,
                 todayIndex = viewModel.todayIndex,
                 isDarkMode = isDarkMode,
                 hasBackground = hasBackground,
@@ -132,6 +142,7 @@ fun ScheduleScreen(
         FabMenu(
             isOpen = isFabOpen,
             isDarkMode = isDarkMode,
+            hasBackground = hasBackground,
             onToggle = { viewModel.toggleFab() },
             onImportSchool = {
                 viewModel.closeFab()
@@ -259,7 +270,6 @@ private data class SnackbarState(
 @Composable
 private fun ScheduleGrid(
     courses: List<Course>,
-    currentWeek: Int,
     todayIndex: Int,
     isDarkMode: Boolean,
     hasBackground: Boolean = false,
@@ -274,19 +284,29 @@ private fun ScheduleGrid(
     scrollState: ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
-    val bgColor = if (hasBackground) Color.Transparent else if (isDarkMode) BgDark else BgLight
-    val timeLabelColor = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
-    val separatorColor = if (isDarkMode) Color(0xFF2A2D38) else Color(0xFFECEEF4)
+    val palette = schedulePalette(isDarkMode, hasBackground)
+    val bgColor = if (hasBackground) Color.Transparent else palette.pageFallback
+    val headerSurface = if (hasBackground) Color.Black.copy(alpha = 0.10f) else bgColor
 
     val periodCount = timeSlots.size
 
-    Row(modifier = modifier.background(bgColor)) {
+    Row(
+        modifier = modifier
+            .background(bgColor)
+            .then(
+                if (hasBackground) {
+                    Modifier.background(palette.gridGlass)
+                } else {
+                    Modifier
+                }
+            )
+    ) {
         // ── Time axis (sticky left) ──
         Column(
             modifier = Modifier
                 .width(TIME_AXIS_WIDTH)
                 .verticalScroll(scrollState)
-                .background(bgColor)
+                .background(if (hasBackground) Color.Black.copy(alpha = 0.08f) else bgColor)
         ) {
             // Header spacer
             Box(
@@ -298,7 +318,7 @@ private fun ScheduleGrid(
                 Text(
                     text = "节次",
                     fontSize = 9.sp,
-                    color = if (isDarkMode) Color(0xFF6B7080) else Color(0xFFB0B4C0),
+                    color = palette.mutedText,
                     fontWeight = FontWeight.Light,
                     letterSpacing = 0.5.sp
                 )
@@ -310,7 +330,7 @@ private fun ScheduleGrid(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(SLOT_HEIGHT)
-                        .background(bgColor),
+                        .background(Color.Transparent),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(
@@ -321,7 +341,7 @@ private fun ScheduleGrid(
                             text = ts.start,
                             fontSize = 10.sp,
                             fontWeight = FontWeight.Light,
-                            color = timeLabelColor,
+                            color = palette.timeText,
                             letterSpacing = 0.1.sp,
                             lineHeight = 12.sp
                         )
@@ -329,7 +349,7 @@ private fun ScheduleGrid(
                             text = ts.end,
                             fontSize = 9.sp,
                             fontWeight = FontWeight.Thin,
-                            color = timeLabelColor.copy(alpha = 0.55f),
+                            color = palette.mutedText,
                             letterSpacing = 0.1.sp,
                             lineHeight = 11.sp
                         )
@@ -360,8 +380,10 @@ private fun ScheduleGrid(
                             .height(HEADER_HEIGHT)
                             .background(
                                 if (isToday) {
-                                    if (isDarkMode) TodayHeaderBgDark else TodayHeaderBg
-                                } else bgColor
+                                    palette.todaySurface
+                                } else {
+                                    headerSurface
+                                }
                             ),
                         contentAlignment = Alignment.Center
                     ) {
@@ -370,18 +392,14 @@ private fun ScheduleGrid(
                                 text = dayLabels[day],
                                 fontSize = 12.sp,
                                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isToday) {
-                                    if (isDarkMode) PrimaryLight else Primary
-                                } else if (isDarkMode) Color(0xFF8E93A6) else TextSecondary,
+                                color = if (isToday) palette.todayText else palette.headerText,
                                 letterSpacing = 0.3.sp
                             )
                             Text(
                                 text = weekDates.getOrElse(day) { "" },
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Light,
-                                color = if (isToday) {
-                                    if (isDarkMode) PrimaryLight.copy(alpha = 0.7f) else Primary.copy(alpha = 0.7f)
-                                } else if (isDarkMode) Color(0xFF6B7080) else Color(0xFFB0B4C0),
+                                color = if (isToday) palette.todayText.copy(alpha = 0.78f) else palette.mutedText,
                                 letterSpacing = 0.2.sp
                             )
                         }
@@ -397,7 +415,7 @@ private fun ScheduleGrid(
                         for (i in 1 until periodCount) {
                             Divider(
                                 modifier = Modifier.offset(y = SLOT_HEIGHT * i),
-                                color = separatorColor,
+                                color = palette.gridLine,
                                 thickness = 0.5.dp
                             )
                         }
@@ -415,12 +433,16 @@ private fun ScheduleGrid(
                                 isUpcoming = upcoming,
                                 progress = if (active) getCourseProgress(course) else 0f,
                                 minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
+                                hasWallpaperBackground = hasBackground,
                                 onClick = { onCourseClick(course) },
                                 onLongClick = { onCourseLongClick(course) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .height(cardHeight)
-                                    .padding(horizontal = 2.dp, vertical = 1.5.dp)
+                                    .padding(
+                                        horizontal = ScheduleDimensions.CourseInset,
+                                        vertical = 2.dp
+                                    )
                                     .offset(y = SLOT_HEIGHT * course.startSlot)
                             )
                         }
@@ -431,20 +453,36 @@ private fun ScheduleGrid(
     }
 }
 
+private data class FabMenuAction(
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val label: String,
+    val onClick: () -> Unit
+)
+
 @Composable
 private fun FabMenu(
     isOpen: Boolean,
     isDarkMode: Boolean,
+    hasBackground: Boolean,
     onToggle: () -> Unit,
     onImportSchool: () -> Unit,
     onImportPdf: () -> Unit,
     onManualAdd: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = schedulePalette(isDarkMode, hasBackground)
     val rotation by animateFloatAsState(
         targetValue = if (isOpen) 45f else 0f,
-        animationSpec = tween(250, easing = FastOutSlowInEasing),
+        animationSpec = tween(
+            durationMillis = ScheduleMotion.StandardMillis,
+            easing = ScheduleMotion.EmphasizedEasing
+        ),
         label = "fabRotation"
+    )
+    val actions = listOf(
+        FabMenuAction(Icons.Default.Share, "学校官网导入", onImportSchool),
+        FabMenuAction(Icons.Default.Star, "PDF文件导入", onImportPdf),
+        FabMenuAction(Icons.Default.Edit, "手动添加课程", onManualAdd)
     )
 
     Column(
@@ -452,46 +490,49 @@ private fun FabMenu(
         horizontalAlignment = Alignment.End,
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        AnimatedVisibility(
-            visible = isOpen,
-            enter = fadeIn() + slideInVertically(initialOffsetY = { 20 }),
-            exit = fadeOut() + slideOutVertically(targetOffsetY = { 20 })
+        Column(
+            horizontalAlignment = Alignment.End,
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Column(
-                horizontalAlignment = Alignment.End,
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                FabMenuItem(
-                    icon = Icons.Default.Share,
-                    label = "学校官网导入",
-                    isDarkMode = isDarkMode,
-                    onClick = onImportSchool
-                )
-                FabMenuItem(
-                    icon = Icons.Default.Star,
-                    label = "PDF文件导入",
-                    isDarkMode = isDarkMode,
-                    onClick = onImportPdf
-                )
-                FabMenuItem(
-                    icon = Icons.Default.Edit,
-                    label = "手动添加课程",
-                    isDarkMode = isDarkMode,
-                    onClick = onManualAdd
-                )
+            actions.forEachIndexed { index, action ->
+                val delay = index * ScheduleMotion.FabStaggerMillis
+                AnimatedVisibility(
+                    visible = isOpen,
+                    enter = fadeIn(
+                        animationSpec = tween(ScheduleMotion.FastMillis, delayMillis = delay)
+                    ) + slideInVertically(
+                        animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
+                        initialOffsetY = { it / 3 }
+                    ) + scaleIn(
+                        animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
+                        initialScale = 0.96f
+                    ),
+                    exit = fadeOut(animationSpec = tween(90)) + scaleOut(
+                        animationSpec = tween(90),
+                        targetScale = 0.98f
+                    )
+                ) {
+                    FabMenuItem(
+                        icon = action.icon,
+                        label = action.label,
+                        isDarkMode = isDarkMode,
+                        hasBackground = hasBackground,
+                        onClick = action.onClick
+                    )
+                }
             }
         }
 
         FloatingActionButton(
             onClick = onToggle,
-            containerColor = if (isOpen) Error else Accent,
+            containerColor = if (isOpen) Error else palette.fabContainer,
             contentColor = Color.White,
             shape = RoundedCornerShape(28.dp),
             elevation = FloatingActionButtonDefaults.elevation(
                 defaultElevation = 6.dp,
                 pressedElevation = 8.dp
             ),
-            modifier = Modifier.size(56.dp)
+            modifier = Modifier.size(ScheduleDimensions.FabSize)
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
@@ -507,9 +548,11 @@ private fun FabMenuItem(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     isDarkMode: Boolean,
+    hasBackground: Boolean,
     onClick: () -> Unit
 ) {
-    val bgColor = if (isDarkMode) CardDark else CardLight
+    val palette = schedulePalette(isDarkMode, hasBackground)
+    val bgColor = palette.fabMenuSurface
     val textColor = if (isDarkMode) Color.White else TextPrimary
 
     Row(
@@ -525,7 +568,7 @@ private fun FabMenuItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = Primary,
+            tint = if (hasBackground) Color(0xFF0F766E) else Primary,
             modifier = Modifier.size(20.dp)
         )
         Text(
