@@ -12,6 +12,10 @@
         "source": "C:\\Users\\HP\\.gradle\\daemon\\8.7\\com.example.courseapp-main-63:\\mipmap-anydpi-v26\\ic_launcher.xml"
     },
     {
+        "merged": "C:\\Users\\HP\\.gradle\\daemon\\8.7\\com.example.courseapp-merged_res-61:\\layout_activity_web_import.xml.flat",
+        "source": "C:\\Users\\HP\\.gradle\\daemon\\8.7\\com.example.courseapp-main-63:\\layout\\activity_web_import.xml"
+    },
+    {
         "merged": "com.example.courseapp-merged_res-61:/layout_activity_web_import.xml.flat",
         "source": "com.example.courseapp-main-63:/layout/activity_web_import.xml"
     }

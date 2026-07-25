@@ -29,7 +29,7 @@ data class SchoolInfo(
 )
 
 private val schoolList = listOf(
-    SchoolInfo("中国地质大学(武汉)", "https://www.cug.edu.cn/"),
+    SchoolInfo("中国地质大学(武汉)", "https://sfrz.cug.edu.cn/tpass/login?service=https%3A%2F%2Fi.cug.edu.cn%2Fweb%2F%3FCASLOGIN%3DCASLOGIN%23%2Flogin%3FredirectUrl%3D%252Fweb%252F%253FCASLOGIN%253DCASLOGIN%2523%252Fcurrent%252Fsys-portal"),
     SchoolInfo("武汉大学", "https://www.whu.edu.cn/"),
     SchoolInfo("华中科技大学", "https://www.hust.edu.cn/"),
     SchoolInfo("武汉理工大学", "https://www.whut.edu.cn/"),

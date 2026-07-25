@@ -3,6 +3,7 @@ local
 color ic_launcher_background
 drawable ic_launcher_foreground
 id btnImport
+id btnToggleUA
 id webView
 layout activity_web_import
 mipmap ic_launcher

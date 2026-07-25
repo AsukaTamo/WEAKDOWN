@@ -8,6 +8,7 @@ import android.webkit.ConsoleMessage
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.widget.Button
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import com.example.courseapp.R
@@ -17,6 +18,11 @@ private const val TAG = "WebImport"
 class WebImportActivity : ComponentActivity() {
 
     private lateinit var webView: WebView
+    private lateinit var btnToggleUA: Button
+    private var isDesktopMode = true
+
+    private val desktopUA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+    private val mobileUA = "Mozilla/5.0 (Linux; Android 13; SM-S918B) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Mobile Safari/537.36"
 
     @SuppressLint("SetJavaScriptEnabled")
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -24,7 +30,8 @@ class WebImportActivity : ComponentActivity() {
         setContentView(R.layout.activity_web_import)
 
         webView = findViewById(R.id.webView)
-        val btnImport = findViewById<android.widget.Button>(R.id.btnImport)
+        val btnImport = findViewById<Button>(R.id.btnImport)
+        btnToggleUA = findViewById(R.id.btnToggleUA)
 
         // WebView settings
         webView.settings.apply {
@@ -33,12 +40,24 @@ class WebImportActivity : ComponentActivity() {
             databaseEnabled = true
             useWideViewPort = true
             loadWithOverviewMode = true
+            
+            // Zoom settings
             setSupportZoom(true)
             builtInZoomControls = true
-            displayZoomControls = false
+            displayZoomControls = true
+            allowContentAccess = true
+            allowFileAccess = true
+            setGeolocationEnabled(true)
+            
+            // Enable pinch-to-zoom gestures
+            javaScriptCanOpenWindowsAutomatically = false
+            
+            // Text zoom percentage
+            textZoom = 100
+            
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
             // Desktop UA so sites serve full PC layout
-            userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36"
+            userAgentString = desktopUA
         }
 
         // Keep navigation in-app
@@ -63,6 +82,26 @@ class WebImportActivity : ComponentActivity() {
             Toast.makeText(this, "未指定学校网址", Toast.LENGTH_SHORT).show()
             finish()
             return
+        }
+
+        // Toggle UA button: switch between mobile and desktop mode
+        btnToggleUA.setOnClickListener {
+            isDesktopMode = !isDesktopMode
+            
+            if (isDesktopMode) {
+                webView.settings.userAgentString = desktopUA
+                btnToggleUA.text = "手机版"
+                webView.settings.useWideViewPort = true
+                webView.settings.loadWithOverviewMode = true
+            } else {
+                webView.settings.userAgentString = mobileUA
+                btnToggleUA.text = "电脑版"
+                webView.settings.useWideViewPort = false
+                webView.settings.loadWithOverviewMode = false
+            }
+            
+            // Reload current page with new UA
+            webView.reload()
         }
 
         // Import button: extract HTML and return to caller

@@ -154,6 +154,7 @@ id androidx_compose_ui_view_composition_context
 id async
 id blocking
 id btnImport
+id btnToggleUA
 id chronometer
 id compose_view_saveable_id_tag
 id consume_window_insets_tag
