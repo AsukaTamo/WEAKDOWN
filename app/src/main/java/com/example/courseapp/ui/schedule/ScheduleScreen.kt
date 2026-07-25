@@ -116,10 +116,10 @@ fun ScheduleScreen(
                             .background(
                                 Brush.verticalGradient(
                                     colorStops = arrayOf(
-                                        0f to Color.Black.copy(alpha = 0.16f),
-                                        0.22f to Color.Transparent,
-                                        0.78f to Color.Transparent,
-                                        1f to Color.Black.copy(alpha = 0.20f)
+                                        0.00f to Color.Black.copy(alpha = 0.18f),
+                                        0.18f to Color.Transparent,
+                                        0.72f to Color.Transparent,
+                                        1.00f to Color.Black.copy(alpha = 0.18f)
                                     )
                                 )
                             )
@@ -301,7 +301,8 @@ private fun ScheduleGrid(
     modifier: Modifier = Modifier
 ) {
     val palette = schedulePalette(isDarkMode, hasBackground)
-    val bgColor = if (hasBackground) Color.Transparent else palette.gridSurface
+    val bgColor = if (hasBackground) Color.Transparent else palette.pageFallback
+    val headerSurface = if (hasBackground) Color.Black.copy(alpha = 0.10f) else bgColor
 
     val periodCount = timeSlots.size
 
@@ -309,8 +310,11 @@ private fun ScheduleGrid(
         modifier = modifier
             .background(bgColor)
             .then(
-                if (hasBackground) Modifier.background(Color.Black.copy(alpha = 0.08f))
-                else Modifier
+                if (hasBackground) {
+                    Modifier.background(palette.gridGlass)
+                } else {
+                    Modifier
+                }
             )
     ) {
         // ── Time axis (sticky left) ──
@@ -318,7 +322,7 @@ private fun ScheduleGrid(
             modifier = Modifier
                 .width(TIME_AXIS_WIDTH)
                 .verticalScroll(scrollState)
-                .background(if (hasBackground) Color.Black.copy(alpha = 0.08f) else Color.Transparent)
+                .background(if (hasBackground) Color.Black.copy(alpha = 0.08f) else bgColor)
         ) {
             // Header spacer
             Box(
@@ -342,7 +346,6 @@ private fun ScheduleGrid(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(SLOT_HEIGHT)
-                        .padding(horizontal = 2.dp)
                         .background(Color.Transparent),
                     contentAlignment = Alignment.Center
                 ) {
@@ -361,19 +364,19 @@ private fun ScheduleGrid(
                         Spacer(modifier = Modifier.height(4.dp))
                         Text(
                             text = ts.start,
-                            fontSize = 9.sp,
-                            fontWeight = FontWeight.Normal,
+                            fontSize = 10.sp,
+                            fontWeight = FontWeight.Light,
                             color = palette.timeText,
-                            letterSpacing = 0.sp,
-                            lineHeight = 10.sp
+                            letterSpacing = 0.1.sp,
+                            lineHeight = 12.sp
                         )
                         Text(
                             text = ts.end,
                             fontSize = 9.sp,
-                            fontWeight = FontWeight.Light,
+                            fontWeight = FontWeight.Thin,
                             color = palette.mutedText,
-                            letterSpacing = 0.sp,
-                            lineHeight = 10.sp
+                            letterSpacing = 0.1.sp,
+                            lineHeight = 11.sp
                         )
                     }
                 }
@@ -406,7 +409,7 @@ private fun ScheduleGrid(
                                 if (isToday) {
                                     palette.todaySurface
                                 } else {
-                                    Color.Transparent
+                                    headerSurface
                                 }
                             ),
                         contentAlignment = Alignment.Center
@@ -416,15 +419,15 @@ private fun ScheduleGrid(
                                 text = dayLabels[day],
                                 fontSize = 12.sp,
                                 fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                color = if (isToday) palette.todayText else palette.dayText,
-                                letterSpacing = 0.sp
+                                color = if (isToday) palette.todayText else palette.headerText,
+                                letterSpacing = 0.3.sp
                             )
                             Text(
                                 text = weekDates.getOrElse(day) { "" },
                                 fontSize = 10.sp,
                                 fontWeight = FontWeight.Light,
-                                color = if (isToday) palette.todayText.copy(alpha = 0.72f) else palette.mutedText,
-                                letterSpacing = 0.sp
+                                color = if (isToday) palette.todayText.copy(alpha = 0.78f) else palette.mutedText,
+                                letterSpacing = 0.2.sp
                             )
                         }
                     }
@@ -435,15 +438,13 @@ private fun ScheduleGrid(
                             .fillMaxWidth()
                             .height(SLOT_HEIGHT * periodCount)
                     ) {
-                        if (showGuides) {
-                            // Subtle horizontal separators
-                            for (i in 1 until periodCount) {
-                                Divider(
-                                    modifier = Modifier.offset(y = SLOT_HEIGHT * i),
-                                    color = palette.gridLine,
-                                    thickness = 0.5.dp
-                                )
-                            }
+                        // Subtle horizontal separators
+                        for (i in 1 until periodCount) {
+                            Divider(
+                                modifier = Modifier.offset(y = SLOT_HEIGHT * i),
+                                color = palette.gridLine,
+                                thickness = 0.5.dp
+                            )
                         }
 
                         // Course cards
@@ -466,8 +467,8 @@ private fun ScheduleGrid(
                                     .fillMaxWidth()
                                     .height(cardHeight)
                                     .padding(
-                                        horizontal = ScheduleDimensions.CourseHorizontalInset,
-                                        vertical = 1.dp
+                                        horizontal = ScheduleDimensions.CourseInset,
+                                        vertical = 2.dp
                                     )
                                     .offset(y = SLOT_HEIGHT * course.startSlot)
                             )
@@ -499,7 +500,10 @@ private fun FabMenu(
     val palette = schedulePalette(isDarkMode, hasBackground)
     val rotation by animateFloatAsState(
         targetValue = if (isOpen) 45f else 0f,
-        animationSpec = tween(ScheduleMotion.StandardMillis, easing = ScheduleMotion.EmphasizedEasing),
+        animationSpec = tween(
+            durationMillis = ScheduleMotion.StandardMillis,
+            easing = ScheduleMotion.EmphasizedEasing
+        ),
         label = "fabRotation"
     )
     val actions = listOf(
@@ -521,15 +525,15 @@ private fun FabMenu(
                 val delay = index * ScheduleMotion.FabStaggerMillis
                 AnimatedVisibility(
                     visible = isOpen,
-                    enter = fadeIn(animationSpec = tween(ScheduleMotion.FastMillis, delayMillis = delay)) +
-                        slideInVertically(
-                            animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
-                            initialOffsetY = { it / 3 }
-                        ) +
-                        scaleIn(
-                            animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
-                            initialScale = 0.96f
-                        ),
+                    enter = fadeIn(
+                        animationSpec = tween(ScheduleMotion.FastMillis, delayMillis = delay)
+                    ) + slideInVertically(
+                        animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
+                        initialOffsetY = { it / 3 }
+                    ) + scaleIn(
+                        animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
+                        initialScale = 0.96f
+                    ),
                     exit = fadeOut(animationSpec = tween(90)) + scaleOut(
                         animationSpec = tween(90),
                         targetScale = 0.98f
@@ -576,7 +580,7 @@ private fun FabMenuItem(
 ) {
     val palette = schedulePalette(isDarkMode, hasBackground)
     val bgColor = palette.fabMenuSurface
-    val textColor = if (isDarkMode && !hasBackground) Color.White else TextPrimary
+    val textColor = if (isDarkMode) Color.White else TextPrimary
 
     Row(
         verticalAlignment = Alignment.CenterVertically,
@@ -591,7 +595,7 @@ private fun FabMenuItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = palette.navSelected,
+            tint = if (hasBackground) Color(0xFF0F766E) else Primary,
             modifier = Modifier.size(20.dp)
         )
         Text(

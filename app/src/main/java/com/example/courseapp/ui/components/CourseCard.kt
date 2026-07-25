@@ -67,7 +67,8 @@ fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color
     if (course.customColor.isNotEmpty()) {
         try {
             val base = Color(android.graphics.Color.parseColor(course.customColor))
-            return base.copy(alpha = 0.95f) to base.copy(alpha = if (isDarkMode) 0.72f else 0.82f)
+            val end = base.copy(alpha = if (isDarkMode) 0.70f else 0.86f)
+            return if (isDarkMode) base.copy(alpha = 0.88f) to end else base to end
         } catch (_: Exception) {
         }
     }
@@ -75,30 +76,42 @@ fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color
     val name = course.name
     return when {
         name.contains("操作系统") && !name.contains("实验") ->
-            CourseOsStart to CourseOsEnd
+            if (isDarkMode) CourseOsStart.copy(alpha = 0.88f) to CourseOsEnd.copy(alpha = 0.84f)
+            else CourseOsStart to CourseOsEnd
         name.contains("算法") ->
-            CourseAlgoStart to CourseAlgoEnd
+            if (isDarkMode) CourseAlgoStart.copy(alpha = 0.88f) to CourseAlgoEnd.copy(alpha = 0.84f)
+            else CourseAlgoStart to CourseAlgoEnd
         name.contains("数据库") ->
-            CourseDbStart to CourseDbEnd
+            if (isDarkMode) CourseDbStart.copy(alpha = 0.88f) to CourseDbEnd.copy(alpha = 0.84f)
+            else CourseDbStart to CourseDbEnd
         name.contains("人工智能") ->
-            CourseAiStart to CourseAiEnd
+            if (isDarkMode) CourseAiStart.copy(alpha = 0.88f) to CourseAiEnd.copy(alpha = 0.84f)
+            else CourseAiStart to CourseAiEnd
         name.contains("网络") || name.contains("实验") ->
-            CourseNetStart to CourseNetEnd
+            if (isDarkMode) CourseNetStart.copy(alpha = 0.88f) to CourseNetEnd.copy(alpha = 0.84f)
+            else CourseNetStart to CourseNetEnd
         name.contains("职业") || name.contains("规划") ->
-            CourseCareerStart to CourseCareerEnd
+            if (isDarkMode) CourseCareerStart.copy(alpha = 0.88f) to CourseCareerEnd.copy(alpha = 0.84f)
+            else CourseCareerStart to CourseCareerEnd
         name.contains("软件") ->
-            CourseSeStart to CourseSeEnd
+            if (isDarkMode) CourseSeStart.copy(alpha = 0.88f) to CourseSeEnd.copy(alpha = 0.84f)
+            else CourseSeStart to CourseSeEnd
         name.contains("编译") ->
-            CourseCompilerStart to CourseCompilerEnd
+            if (isDarkMode) CourseCompilerStart.copy(alpha = 0.88f) to CourseCompilerEnd.copy(alpha = 0.84f)
+            else CourseCompilerStart to CourseCompilerEnd
         else -> when (course.type) {
             CourseType.REQUIRED ->
-                if (isDarkMode) CourseRequiredDark to CourseOsEnd else CourseRequired to CourseOsEnd
+                if (isDarkMode) CourseRequiredDark to CourseOsEnd.copy(alpha = 0.84f)
+                else CourseRequired to CourseOsEnd
             CourseType.ELECTIVE ->
-                if (isDarkMode) CourseElectiveDark to CourseDbEnd else CourseElective to CourseDbEnd
+                if (isDarkMode) CourseElectiveDark to CourseDbEnd.copy(alpha = 0.84f)
+                else CourseElective to CourseDbEnd
             CourseType.LAB ->
-                if (isDarkMode) CourseLabDark to CourseNetEnd else CourseLab to CourseNetEnd
+                if (isDarkMode) CourseLabDark to CourseNetEnd.copy(alpha = 0.84f)
+                else CourseLab to CourseNetEnd
             CourseType.CUSTOM ->
-                if (isDarkMode) CourseCustomDark to CourseCareerEnd else CourseCustom to CourseCareerEnd
+                if (isDarkMode) CourseCustomDark to CourseCareerEnd.copy(alpha = 0.84f)
+                else CourseCustom to CourseCareerEnd
         }
     }
 }
@@ -119,35 +132,20 @@ fun CourseCard(
 ) {
     val palette = schedulePalette(isDarkMode, hasWallpaperBackground)
     val (rawStart, rawEnd) = remember(course, isDarkMode) { courseGradientColors(course, isDarkMode) }
-    val startColor = rawStart.copy(alpha = if (hasWallpaperBackground) 0.92f else 0.96f)
-    val endColor = rawEnd.copy(alpha = if (hasWallpaperBackground) 0.78f else 0.86f)
+    val startColor = if (hasWallpaperBackground) rawStart.copy(alpha = 0.90f) else rawStart
+    val endColor = if (hasWallpaperBackground) rawEnd.copy(alpha = 0.82f) else rawEnd
     val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
     val scale by animateFloatAsState(
         targetValue = if (pressed) ScheduleMotion.PressedScale else 1f,
-        animationSpec = tween(ScheduleMotion.FastMillis, easing = ScheduleMotion.StandardEasing),
+        animationSpec = tween(
+            durationMillis = ScheduleMotion.FastMillis,
+            easing = ScheduleMotion.StandardEasing
+        ),
         label = "courseCardPressScale"
     )
     val compact = course.slotCount <= 1
-    val rawLocationText = course.location.trim()
-    val rawTeacherText = course.teacher.trim()
-    val courseDetailText = remember(rawTeacherText, rawLocationText) {
-        buildList {
-            if (rawTeacherText.isNotEmpty()) add(rawTeacherText)
-            if (rawLocationText.isNotEmpty()) add("@$rawLocationText")
-        }.joinToString("  ")
-    }
-    val useLightContent = isDarkMode || hasWallpaperBackground
-    val primaryTextColor = if (useLightContent) Color.White else Color(0xFF102027)
-    val secondaryTextColor = if (useLightContent) Color.White.copy(alpha = 0.88f) else Color(0xFF31424D)
-    val progressColor = if (useLightContent) Color.White else Color(0xFF102027)
-    val borderColor = when {
-        isActive && useLightContent -> palette.courseHighlight
-        isActive -> Color(0xFF0F8F7B).copy(alpha = 0.70f)
-        useLightContent -> palette.courseStroke
-        else -> Color(0xFF102027).copy(alpha = 0.24f)
-    }
 
     Box(
         modifier = modifier
@@ -156,26 +154,33 @@ fun CourseCard(
                 scaleY = scale
             }
             .shadow(
-                elevation = if (isActive) 12.dp else 7.dp,
+                elevation = when {
+                    isActive -> 10.dp
+                    hasWallpaperBackground -> 7.dp
+                    else -> 3.dp
+                },
                 shape = shape,
-                ambientColor = Color.Black.copy(alpha = 0.14f),
-                spotColor = Color.Black.copy(alpha = 0.20f)
+                ambientColor = Color.Black.copy(alpha = if (hasWallpaperBackground) 0.24f else 0.10f),
+                spotColor = Color.Black.copy(alpha = if (hasWallpaperBackground) 0.28f else 0.12f)
             )
             .clip(shape)
-            .background(Brush.linearGradient(listOf(startColor, endColor)), shape)
             .background(
-                Brush.verticalGradient(
+                brush = Brush.linearGradient(listOf(startColor, endColor)),
+                shape = shape
+            )
+            .background(
+                brush = Brush.verticalGradient(
                     listOf(
-                        Color.White.copy(alpha = 0.20f),
+                        Color.White.copy(alpha = if (hasWallpaperBackground) 0.18f else 0.12f),
                         Color.Transparent,
-                        Color.Black.copy(alpha = 0.20f)
+                        Color.Black.copy(alpha = if (hasWallpaperBackground) 0.16f else 0.08f)
                     )
                 ),
-                shape
+                shape = shape
             )
             .border(
-                width = if (isActive) 1.8.dp else 1.dp,
-                color = borderColor,
+                width = if (isActive) 1.6.dp else 1.dp,
+                color = if (isActive) palette.courseHighlight else palette.courseStroke,
                 shape = shape
             )
             .combinedClickable(
@@ -187,31 +192,52 @@ fun CourseCard(
             .padding(horizontal = 7.dp, vertical = 6.dp)
     ) {
         Column(
-            modifier = Modifier.fillMaxSize(),
-            verticalArrangement = Arrangement.spacedBy(if (compact) 2.dp else 4.dp)
+            verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
+            modifier = Modifier.fillMaxSize()
         ) {
             Text(
                 text = course.name,
-                color = primaryTextColor,
+                color = Color.White,
                 fontSize = if (compact) 10.sp else 11.sp,
-                fontWeight = FontWeight.Bold,
+                fontWeight = FontWeight.SemiBold,
                 lineHeight = if (compact) 12.sp else 13.sp,
-                maxLines = Int.MAX_VALUE,
-                overflow = TextOverflow.Clip,
+                maxLines = if (compact) 2 else 3,
+                overflow = TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (courseDetailText.isNotEmpty()) {
+            if (course.location.isNotEmpty()) {
                 Text(
-                    text = courseDetailText,
-                    color = secondaryTextColor,
-                    fontSize = if (compact) 9.sp else 10.sp,
+                    text = course.location,
+                    color = Color.White.copy(alpha = 0.86f),
+                    fontSize = if (compact) 8.sp else 9.sp,
                     fontWeight = FontWeight.Medium,
-                    lineHeight = if (compact) 11.sp else 12.sp,
-                    maxLines = Int.MAX_VALUE,
-                    overflow = TextOverflow.Clip,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.fillMaxWidth()
                 )
+            }
+
+            if (!compact) {
+                Text(
+                    text = "第${course.startSlot + 1}-${course.startSlot + course.slotCount}节 · ${course.weekRange}",
+                    color = Color.White.copy(alpha = 0.68f),
+                    fontSize = 8.sp,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                if (course.teacher.isNotEmpty()) {
+                    Text(
+                        text = course.teacher,
+                        color = Color.White.copy(alpha = 0.72f),
+                        fontSize = 8.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
 
             Spacer(modifier = Modifier.weight(1f))
@@ -221,27 +247,27 @@ fun CourseCard(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(3.dp)
-                        .background(progressColor.copy(alpha = 0.25f), RoundedCornerShape(2.dp))
+                        .background(Color.White.copy(alpha = 0.24f), RoundedCornerShape(2.dp))
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxHeight()
                             .fillMaxWidth(fraction = progress.coerceIn(0f, 1f))
-                            .background(progressColor, RoundedCornerShape(2.dp))
+                            .background(Color.White, RoundedCornerShape(2.dp))
                     )
                 }
             } else if (isUpcoming && minutesUntil > 0 && !compact) {
                 Text(
                     text = if (minutesUntil < 60) {
-                        "${minutesUntil}分钟后"
+                        "${minutesUntil}分钟后开始"
                     } else {
-                        "${minutesUntil / 60}小时${minutesUntil % 60}分钟后"
+                        "${minutesUntil / 60}小时${minutesUntil % 60}分钟后开始"
                     },
-                    color = secondaryTextColor,
+                    color = Color.White.copy(alpha = 0.86f),
                     fontSize = 8.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontWeight = FontWeight.Medium,
                     maxLines = 1,
-                    overflow = TextOverflow.Clip
+                    overflow = TextOverflow.Ellipsis
                 )
             }
         }
