@@ -1,5 +1,6 @@
 package com.example.courseapp.viewmodel
 
+import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.courseapp.data.model.Course
@@ -10,6 +11,7 @@ import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
 import com.example.courseapp.data.repository.CourseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -20,8 +22,11 @@ data class TimeSlot(val start: String, val end: String)
 
 @HiltViewModel
 class ScheduleViewModel @Inject constructor(
-    private val repository: CourseRepository
+    private val repository: CourseRepository,
+    @ApplicationContext private val context: Context
 ) : ViewModel() {
+
+    private val preferences = context.getSharedPreferences("schedule_settings", Context.MODE_PRIVATE)
 
     private val _courses = MutableStateFlow<List<Course>>(emptyList())
     val courses: StateFlow<List<Course>> = _courses.asStateFlow()
@@ -29,7 +34,7 @@ class ScheduleViewModel @Inject constructor(
     private val _currentWeek = MutableStateFlow(1)
     val currentWeek: StateFlow<Int> = _currentWeek.asStateFlow()
 
-    private val _isDarkMode = MutableStateFlow(false)
+    private val _isDarkMode = MutableStateFlow(preferences.getBoolean(KEY_DARK_MODE, false))
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
 
     private val _snackbarMessage = MutableSharedFlow<Pair<String, String>>()
@@ -55,6 +60,11 @@ class ScheduleViewModel @Inject constructor(
 
     private val _scrimAlpha = MutableStateFlow(0.4f)
     val scrimAlpha: StateFlow<Float> = _scrimAlpha.asStateFlow()
+
+    private val _showScheduleGuides = MutableStateFlow(
+        preferences.getBoolean(KEY_SHOW_SCHEDULE_GUIDES, true)
+    )
+    val showScheduleGuides: StateFlow<Boolean> = _showScheduleGuides.asStateFlow()
 
     val todayIndex: Int
         get() {
@@ -177,7 +187,13 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun toggleDarkMode() {
-        _isDarkMode.value = !_isDarkMode.value
+        setDarkMode(!_isDarkMode.value)
+    }
+
+    fun setDarkMode(enabled: Boolean) {
+        if (_isDarkMode.value == enabled) return
+        _isDarkMode.value = enabled
+        preferences.edit().putBoolean(KEY_DARK_MODE, enabled).apply()
         viewModelScope.launch {
             _snackbarMessage.emit(
                 (if (_isDarkMode.value) "深色模式已开启" else "浅色模式已开启") to "info"
@@ -191,6 +207,11 @@ class ScheduleViewModel @Inject constructor(
 
     fun closeFab() {
         _isFabOpen.value = false
+    }
+
+    fun setScheduleGuidesEnabled(enabled: Boolean) {
+        _showScheduleGuides.value = enabled
+        preferences.edit().putBoolean(KEY_SHOW_SCHEDULE_GUIDES, enabled).apply()
     }
 
     fun showMessage(message: String, type: String = "info") {
@@ -318,6 +339,9 @@ class ScheduleViewModel @Inject constructor(
     }
 
     companion object {
+        private const val KEY_DARK_MODE = "dark_mode"
+        private const val KEY_SHOW_SCHEDULE_GUIDES = "show_schedule_guides"
+
         fun defaultTimeSlots() = listOf(
             TimeSlot("08:00", "08:45"),
             TimeSlot("08:55", "09:40"),

@@ -40,7 +40,10 @@ import java.util.Locale
 @Composable
 fun ProfileScreen(
     onDarkModeToggle: () -> Unit = {},
+    onDarkModeChange: (Boolean) -> Unit = { onDarkModeToggle() },
     isDarkMode: Boolean = false,
+    showScheduleGuides: Boolean = true,
+    onScheduleGuidesChange: (Boolean) -> Unit = {},
     onTimeSlotSettings: () -> Unit = {},
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
@@ -52,7 +55,9 @@ fun ProfileScreen(
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
     var showSemesterDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
-    var exportPath by remember { mutableStateOf<String?>(null) }
+    var backgroundScrimAlpha by remember(activeSemester?.id, activeSemester?.scrimAlpha) {
+        mutableStateOf(activeSemester?.scrimAlpha ?: 0.4f)
+    }
 
     // Background image picker
     var backgroundPickTarget by remember { mutableStateOf<Semester?>(null) }
@@ -86,8 +91,7 @@ fun ProfileScreen(
             item {
                 UserHeader(
                     name = viewModel.userName,
-                    subtitle = viewModel.userSubtitle,
-                    isDarkMode = isDarkMode
+                    subtitle = viewModel.userSubtitle
                 )
             }
 
@@ -104,6 +108,101 @@ fun ProfileScreen(
                 }
             }
 
+            // Background settings
+            item {
+                val semester = activeSemester
+                SettingsGroup(isDarkMode = isDarkMode) {
+                    SettingsItem(
+                        icon = Icons.Outlined.Image,
+                        title = "课表背景",
+                        subtitle = when {
+                            semester == null -> "请先选择或创建学期"
+                            semester.backgroundUri.isEmpty() -> "未设置，点击选择图片"
+                            else -> "已设置，点击更换图片"
+                        },
+                        isDarkMode = isDarkMode,
+                        onClick = {
+                            if (semester == null) {
+                                viewModel.showMessage("请先选择或创建学期", "info")
+                            } else {
+                                backgroundPickTarget = semester
+                                photoPickerLauncher.launch(
+                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                )
+                            }
+                        }
+                    )
+
+                    if (semester?.backgroundUri?.isNotEmpty() == true) {
+                        val bgFile = java.io.File(semester.backgroundUri)
+                        if (bgFile.exists()) {
+                            val bitmap = remember(semester.backgroundUri) {
+                                android.graphics.BitmapFactory.decodeFile(semester.backgroundUri)?.asImageBitmap()
+                            }
+                            if (bitmap != null) {
+                                Image(
+                                    bitmap = bitmap,
+                                    contentDescription = "背景预览",
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 16.dp)
+                                        .height(92.dp)
+                                        .clip(RoundedCornerShape(10.dp)),
+                                    contentScale = ContentScale.Crop
+                                )
+                                Spacer(modifier = Modifier.height(8.dp))
+                            }
+                        }
+
+                        Column(
+                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                            verticalArrangement = Arrangement.spacedBy(2.dp)
+                        ) {
+                            Text(
+                                text = "背景遮罩 ${(backgroundScrimAlpha * 100).toInt()}%",
+                                fontSize = 12.sp,
+                                color = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+                            )
+                            Slider(
+                                value = backgroundScrimAlpha,
+                                onValueChange = { backgroundScrimAlpha = it },
+                                onValueChangeFinished = {
+                                    viewModel.updateScrimAlpha(semester, backgroundScrimAlpha)
+                                },
+                                valueRange = 0f..0.9f
+                            )
+                        }
+
+                        SettingsItem(
+                            icon = Icons.Outlined.Delete,
+                            title = "清除背景",
+                            titleColor = Error,
+                            isDarkMode = isDarkMode,
+                            onClick = { viewModel.clearBackground(semester) }
+                        )
+                    }
+
+                    SettingsItem(
+                        icon = Icons.Outlined.Tune,
+                        title = "辅助线",
+                        subtitle = "控制课表横向分割线显示",
+                        isDarkMode = isDarkMode,
+                        trailing = {
+                            Switch(
+                                checked = showScheduleGuides,
+                                onCheckedChange = onScheduleGuidesChange,
+                                colors = SwitchDefaults.colors(
+                                    checkedThumbColor = Color.White,
+                                    checkedTrackColor = Primary,
+                                    uncheckedThumbColor = Color.White,
+                                    uncheckedTrackColor = Color(0xFFE0E0E0)
+                                )
+                            )
+                        }
+                    )
+                }
+            }
+
             // Appearance
             item {
                 SettingsGroup(isDarkMode = isDarkMode) {
@@ -114,7 +213,7 @@ fun ProfileScreen(
                         trailing = {
                             Switch(
                                 checked = isDarkMode,
-                                onCheckedChange = { onDarkModeToggle() },
+                                onCheckedChange = onDarkModeChange,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
                                     checkedTrackColor = Primary,
@@ -154,24 +253,6 @@ fun ProfileScreen(
             // Data management
             item {
                 SettingsGroup(isDarkMode = isDarkMode) {
-                    SettingsItem(
-                        icon = Icons.Outlined.Share,
-                        title = "导出课表 (JSON)",
-                        subtitle = exportPath?.let { "已导出到: ${it.substringAfterLast("/")}" },
-                        isDarkMode = isDarkMode,
-                        onClick = {
-                            val path = viewModel.saveExportFile()
-                            exportPath = path
-                            if (path != null) viewModel.showMessage("导出成功", "success")
-                            else viewModel.showMessage("导出失败", "error")
-                        }
-                    )
-                    SettingsItem(
-                        icon = Icons.Outlined.GetApp,
-                        title = "导入课表 (JSON)",
-                        isDarkMode = isDarkMode,
-                        onClick = { viewModel.showMessage("请在文件管理器中选择 course_backup.json", "info") }
-                    )
                     SettingsItem(
                         icon = Icons.Outlined.Delete,
                         title = "清空所有数据",
@@ -236,14 +317,6 @@ fun ProfileScreen(
             onAdd = { id, name, startDate, weeks -> viewModel.addSemester(id, name, startDate, weeks) },
             onUpdate = { viewModel.updateSemester(it) },
             onDelete = { viewModel.deleteSemester(it) },
-            onPickBackground = { semester ->
-                backgroundPickTarget = semester
-                photoPickerLauncher.launch(
-                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                )
-            },
-            onClearBackground = { viewModel.clearBackground(it) },
-            onScrimAlphaChange = { semester, alpha -> viewModel.updateScrimAlpha(semester, alpha) },
             onDismiss = { showSemesterDialog = false }
         )
     }
@@ -283,9 +356,6 @@ private fun SemesterDialog(
     onAdd: (String, String, String, Int) -> Unit,
     onUpdate: (Semester) -> Unit,
     onDelete: (Semester) -> Unit,
-    onPickBackground: (Semester) -> Unit,
-    onClearBackground: (Semester) -> Unit,
-    onScrimAlphaChange: (Semester, Float) -> Unit,
     onDismiss: () -> Unit
 ) {
     var showAddForm by remember { mutableStateOf(false) }
@@ -313,8 +383,6 @@ private fun SemesterDialog(
                         var editName by remember { mutableStateOf(semester.name) }
                         var editStartDate by remember { mutableStateOf(semester.startDate) }
                         var editWeeks by remember { mutableStateOf(semester.totalWeeks.toString()) }
-                        var editScrimAlpha by remember { mutableStateOf(semester.scrimAlpha) }
-
                         Column(
                             modifier = Modifier
                                 .fillMaxWidth()
@@ -356,68 +424,6 @@ private fun SemesterDialog(
                                 modifier = Modifier.fillMaxWidth(),
                                 singleLine = true
                             )
-
-                            // Background settings
-                            Divider()
-                            Text("课表背景", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = textColor)
-
-                            if (semester.backgroundUri.isNotEmpty()) {
-                                // Preview thumbnail
-                                val bgFile = java.io.File(semester.backgroundUri)
-                                if (bgFile.exists()) {
-                                    val bitmap = remember(semester.backgroundUri) {
-                                        android.graphics.BitmapFactory.decodeFile(semester.backgroundUri)?.asImageBitmap()
-                                    }
-                                    if (bitmap != null) {
-                                        Image(
-                                            bitmap = bitmap,
-                                            contentDescription = "背景预览",
-                                            modifier = Modifier
-                                                .fillMaxWidth()
-                                                .height(100.dp)
-                                                .clip(RoundedCornerShape(8.dp)),
-                                            contentScale = ContentScale.Crop
-                                        )
-                                    }
-                                }
-
-                                // Scrim alpha slider
-                                Text(
-                                    "遮罩不透明度: ${(editScrimAlpha * 100).toInt()}%",
-                                    fontSize = 12.sp, color = subColor
-                                )
-                                Slider(
-                                    value = editScrimAlpha,
-                                    onValueChange = { editScrimAlpha = it },
-                                    onValueChangeFinished = {
-                                        onScrimAlphaChange(semester, editScrimAlpha)
-                                    },
-                                    valueRange = 0f..0.9f,
-                                    modifier = Modifier.fillMaxWidth()
-                                )
-
-                                // Clear background button
-                                OutlinedButton(
-                                    onClick = { onClearBackground(semester) },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    shape = RoundedCornerShape(8.dp)
-                                ) {
-                                    Icon(Icons.Default.Delete, null, modifier = Modifier.size(16.dp))
-                                    Spacer(Modifier.width(4.dp))
-                                    Text("清除背景")
-                                }
-                            }
-
-                            // Pick background button
-                            OutlinedButton(
-                                onClick = { onPickBackground(semester) },
-                                modifier = Modifier.fillMaxWidth(),
-                                shape = RoundedCornerShape(8.dp)
-                            ) {
-                                Icon(Icons.Default.Image, null, modifier = Modifier.size(16.dp))
-                                Spacer(Modifier.width(4.dp))
-                                Text(if (semester.backgroundUri.isEmpty()) "设置背景" else "更换背景")
-                            }
 
                             Row(
                                 modifier = Modifier.fillMaxWidth(),
@@ -600,8 +606,7 @@ private fun SemesterDialog(
 @Composable
 private fun UserHeader(
     name: String,
-    subtitle: String,
-    isDarkMode: Boolean
+    subtitle: String
 ) {
     Row(
         modifier = Modifier
