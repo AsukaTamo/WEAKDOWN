@@ -23,6 +23,7 @@ import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -42,6 +43,7 @@ import com.example.courseapp.ui.manage.ManageScreen
 import com.example.courseapp.ui.profile.ProfileScreen
 import com.example.courseapp.ui.schedule.ScheduleScreen
 import com.example.courseapp.ui.settings.TimeSlotSettingsScreen
+import com.example.courseapp.ui.splash.WeakdownSplashOverlay
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ImportViewModel
 import com.example.courseapp.viewmodel.ManageViewModel
@@ -84,10 +86,20 @@ class MainActivity : ComponentActivity() {
             }
 
             CourseAppTheme(darkTheme = isDarkMode) {
-                CourseApp(
-                    scheduleViewModel = scheduleViewModel,
-                    isDarkMode = isDarkMode
-                )
+                var showWeakdownSplash by rememberSaveable { mutableStateOf(true) }
+
+                Box(modifier = Modifier.fillMaxSize()) {
+                    CourseApp(
+                        scheduleViewModel = scheduleViewModel,
+                        isDarkMode = isDarkMode
+                    )
+
+                    if (showWeakdownSplash) {
+                        WeakdownSplashOverlay(
+                            onFinished = { showWeakdownSplash = false }
+                        )
+                    }
+                }
             }
         }
     }
