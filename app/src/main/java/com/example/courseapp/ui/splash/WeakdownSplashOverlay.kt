@@ -29,7 +29,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.PI
-import kotlin.math.cos
 import kotlin.math.sin
 import kotlin.random.Random
 
@@ -44,14 +43,13 @@ private val SplashEasing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 private data class SplashStar(
     val startX: Float,
     val startY: Float,
-    val gatherX: Float,
-    val gatherY: Float,
-    val scatterX: Float,
-    val scatterY: Float,
+    val driftX: Float,
+    val driftY: Float,
     val radius: Float,
     val alpha: Float,
     val tintWeight: Float,
-    val twinklePhase: Float
+    val twinklePhase: Float,
+    val twinkleSpeed: Float
 )
 
 @Composable
@@ -116,28 +114,19 @@ fun WeakdownSplashOverlay(
             )
 
             val starAppearProgress = intervalProgress(value, start = 0.02f, end = 0.24f)
-            val gatherProgress = intervalProgress(value, start = 0.26f, end = 0.74f)
-            val scatterProgress = intervalProgress(value, start = 0.76f, end = 0.93f)
-            val center = Offset(size.width * 0.5f, size.height * 0.48f)
-            val drift = -8f * value
+            val driftProgress = intervalProgress(value, start = 0.12f, end = 0.92f)
+            val fadeProgress = fadeOutAfter(value, start = 0.84f)
 
             stars.forEach { star ->
                 val start = Offset(star.startX * size.width, star.startY * size.height)
-                val gathered = Offset(
-                    x = center.x + star.gatherX * size.minDimension,
-                    y = center.y + star.gatherY * size.minDimension
+                val position = Offset(
+                    x = start.x + star.driftX * size.minDimension * driftProgress,
+                    y = start.y + star.driftY * size.minDimension * driftProgress
                 )
-                val scattered = Offset(
-                    x = gathered.x + star.scatterX * size.minDimension,
-                    y = gathered.y + star.scatterY * size.minDimension
-                )
-                val gatheringPosition = lerp(start, gathered, gatherProgress)
-                val position = lerp(gatheringPosition, scattered, scatterProgress)
-                val twinkle = 0.86f + sin((value * PI.toFloat() * 2.2f) + star.twinklePhase) * 0.14f
+                val twinkle = 0.78f + sin((value * PI.toFloat() * star.twinkleSpeed) + star.twinklePhase) * 0.22f
                 val starAlpha = star.alpha *
                     starAppearProgress *
-                    lerp(0.78f, 1f, gatherProgress) *
-                    fadeOutAfter(value, start = 0.84f) *
+                    fadeProgress *
                     twinkle
                 val starColor = lerpColor(
                     Color.White,
@@ -149,13 +138,13 @@ fun WeakdownSplashOverlay(
                     drawCircle(
                         color = Color(0xFF38BDF8).copy(alpha = starAlpha * 0.16f),
                         radius = star.radius * 3.5f,
-                        center = position.copy(y = position.y + drift)
+                        center = position
                     )
                 }
                 drawCircle(
                     color = starColor.copy(alpha = starAlpha),
                     radius = star.radius,
-                    center = position.copy(y = position.y + drift)
+                    center = position
                 )
             }
         }
@@ -195,21 +184,18 @@ private fun generateSplashStars(): List<SplashStar> {
     return List(StarCount) { index ->
         val column = index % StarColumns
         val row = index / StarColumns
-        val angle = random.nextFloat() * (PI.toFloat() * 2f)
-        val scatterDistance = 0.22f + random.nextFloat() * 0.24f
         SplashStar(
             startX = ((column + 0.2f + random.nextFloat() * 0.6f) / StarColumns)
                 .coerceIn(0.02f, 0.98f),
             startY = ((row + 0.18f + random.nextFloat() * 0.64f) / StarRows)
                 .coerceIn(0.02f, 0.98f),
-            gatherX = (random.nextFloat() - 0.5f) * 0.38f,
-            gatherY = (random.nextFloat() - 0.5f) * 0.16f,
-            scatterX = cos(angle) * scatterDistance,
-            scatterY = sin(angle) * scatterDistance,
+            driftX = (random.nextFloat() - 0.5f) * 0.12f,
+            driftY = (random.nextFloat() - 0.5f) * 0.16f,
             radius = 0.65f + random.nextFloat() * 1.45f,
             alpha = 0.36f + random.nextFloat() * 0.58f,
             tintWeight = random.nextFloat() * 0.7f,
-            twinklePhase = random.nextFloat() * PI.toFloat() * 2f
+            twinklePhase = random.nextFloat() * PI.toFloat() * 2f,
+            twinkleSpeed = 1.4f + random.nextFloat() * 2.4f
         )
     }
 }
