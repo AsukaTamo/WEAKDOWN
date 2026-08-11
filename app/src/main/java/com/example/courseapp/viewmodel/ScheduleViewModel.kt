@@ -107,7 +107,7 @@ class ScheduleViewModel @Inject constructor(
                         val now = Calendar.getInstance()
                         val diffMs = now.timeInMillis - semesterStartDate.timeInMillis
                         val diffWeeks = (diffMs / (7 * 24 * 60 * 60 * 1000L)).toInt() + 1
-                        _currentWeek.value = diffWeeks.coerceIn(1, semester.totalWeeks)
+                        _currentWeek.value = diffWeeks.coerceIn(1, semester.totalWeeks.coerceAtLeast(1))
                     } catch (_: Exception) {}
                 }
             }
@@ -188,7 +188,8 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun selectWeek(week: Int) {
-        val maxWeek = maxOf(_activeSemester.value?.totalWeeks ?: 0, DEFAULT_SELECTABLE_WEEK_LIMIT)
+        val maxWeek = _activeSemester.value?.totalWeeks?.coerceAtLeast(1)
+            ?: DEFAULT_SELECTABLE_WEEK_LIMIT
         _currentWeek.value = week.coerceIn(1, maxWeek)
     }
 
