@@ -9,6 +9,8 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -21,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -187,15 +190,30 @@ fun CourseAppScaffold(
                     animationSpec = tween(300, easing = FastOutSlowInEasing)
                 ) + fadeOut(animationSpec = tween(200))
             ) {
-                WeekSelectorDialog(
-                    currentWeek = currentWeek,
-                    isDarkMode = isDarkMode,
-                    onWeekSelected = {
-                        scheduleViewModel.selectWeek(it)
-                        showWeekDialog = false
-                    },
-                    onDismiss = { showWeekDialog = false }
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(Color.Transparent)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                            ) {
+                                showWeekDialog = false
+                            }
+                    )
+                    Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                        WeekSelectorDialog(
+                            currentWeek = currentWeek,
+                            isDarkMode = isDarkMode,
+                            onWeekSelected = {
+                                scheduleViewModel.selectWeek(it)
+                                showWeekDialog = false
+                            },
+                            onDismiss = { showWeekDialog = false }
+                        )
+                    }
+                }
             }
         }
     }

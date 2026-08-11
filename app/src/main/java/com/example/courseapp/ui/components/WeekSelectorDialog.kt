@@ -26,9 +26,11 @@ fun WeekSelectorDialog(
     currentWeek: Int,
     onWeekSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
-    isDarkMode: Boolean = false
+    isDarkMode: Boolean = false,
+    maxWeek: Int = 30
 ) {
     var selectedWeek by remember { mutableIntStateOf(currentWeek) }
+    val rowCount = (maxWeek + 4) / 5
 
     Box(
         modifier = Modifier
@@ -84,14 +86,14 @@ fun WeekSelectorDialog(
 
             // Week grid - 5 columns
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                for (row in 0..3) {
+                for (row in 0 until rowCount) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         for (col in 0..4) {
                             val week = row * 5 + col + 1
-                            if (week <= 20) {
+                            if (week <= maxWeek) {
                                 WeekOption(
                                     week = week,
                                     isSelected = week == selectedWeek,

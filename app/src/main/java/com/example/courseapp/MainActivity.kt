@@ -474,15 +474,30 @@ fun CourseApp(
                     animationSpec = tween(300, easing = FastOutSlowInEasing)
                 ) + fadeOut(animationSpec = tween(200))
             ) {
-                WeekSelectorDialog(
-                    currentWeek = currentWeek,
-                    isDarkMode = isDarkMode,
-                    onWeekSelected = {
-                        scheduleViewModel.selectWeek(it)
-                        showWeekDialog = false
-                    },
-                    onDismiss = { showWeekDialog = false }
-                )
+                Box(modifier = Modifier.fillMaxSize()) {
+                    Box(
+                        modifier = Modifier
+                            .matchParentSize()
+                            .background(Color.Transparent)
+                            .clickable(
+                                indication = null,
+                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+                            ) {
+                                showWeekDialog = false
+                            }
+                    )
+                    Box(modifier = Modifier.align(Alignment.TopCenter)) {
+                        WeekSelectorDialog(
+                            currentWeek = currentWeek,
+                            isDarkMode = isDarkMode,
+                            onWeekSelected = {
+                                scheduleViewModel.selectWeek(it)
+                                showWeekDialog = false
+                            },
+                            onDismiss = { showWeekDialog = false }
+                        )
+                    }
+                }
             }
         }
     }

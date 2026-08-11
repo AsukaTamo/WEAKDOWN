@@ -31,6 +31,9 @@ class ScheduleViewModel @Inject constructor(
     private val _courses = MutableStateFlow<List<Course>>(emptyList())
     val courses: StateFlow<List<Course>> = _courses.asStateFlow()
 
+    private val _allCourses = MutableStateFlow<List<Course>>(emptyList())
+    val allCourses: StateFlow<List<Course>> = _allCourses.asStateFlow()
+
     private val _currentWeek = MutableStateFlow(1)
     val currentWeek: StateFlow<Int> = _currentWeek.asStateFlow()
 
@@ -113,7 +116,12 @@ class ScheduleViewModel @Inject constructor(
 
     private fun loadCourses() {
         viewModelScope.launch {
-            combine(repository.getAllCourses(), _currentWeek) { list, week ->
+            repository.getAllCourses().collect { list ->
+                _allCourses.value = list
+            }
+        }
+        viewModelScope.launch {
+            combine(_allCourses, _currentWeek) { list, week ->
                 list.filter { isWeekInRange(week, it.weekRange) }
             }.collect { filtered ->
                 _courses.value = filtered
@@ -180,10 +188,13 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun selectWeek(week: Int) {
-        _currentWeek.value = week
-        viewModelScope.launch {
-            _snackbarMessage.emit("已切换到第${week}周" to "success")
-        }
+        val maxWeek = maxOf(_activeSemester.value?.totalWeeks ?: 0, DEFAULT_SELECTABLE_WEEK_LIMIT)
+        _currentWeek.value = week.coerceIn(1, maxWeek)
+    }
+
+    fun shiftWeek(delta: Int) {
+        if (delta == 0) return
+        selectWeek(_currentWeek.value + delta)
     }
 
     fun toggleDarkMode() {
@@ -339,6 +350,7 @@ class ScheduleViewModel @Inject constructor(
     }
 
     companion object {
+        const val DEFAULT_SELECTABLE_WEEK_LIMIT = 30
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_SHOW_SCHEDULE_GUIDES = "show_schedule_guides"
 
