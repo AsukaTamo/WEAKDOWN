@@ -11,11 +11,6 @@ import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class ImportConflict(
-    val newCourse: Course,
-    val existingCourse: Course
-)
-
 @HiltViewModel
 class ImportViewModel @Inject constructor(
     private val repository: CourseRepository
@@ -24,11 +19,8 @@ class ImportViewModel @Inject constructor(
     private val _parsedCourses = MutableStateFlow<List<Course>>(emptyList())
     val parsedCourses: StateFlow<List<Course>> = _parsedCourses.asStateFlow()
 
-    private val _conflicts = MutableStateFlow<List<ImportConflict>>(emptyList())
-    val conflicts: StateFlow<List<ImportConflict>> = _conflicts.asStateFlow()
-
-    private val _selectedIds = MutableStateFlow<Set<Long>>(emptySet())
-    val selectedIds: StateFlow<Set<Long>> = _selectedIds.asStateFlow()
+    private val _currentSemesterCourseCount = MutableStateFlow(0)
+    val currentSemesterCourseCount: StateFlow<Int> = _currentSemesterCourseCount.asStateFlow()
 
     private val _snackbarMessage = MutableSharedFlow<Pair<String, String>>()
     val snackbarMessage: SharedFlow<Pair<String, String>> = _snackbarMessage.asSharedFlow()
@@ -47,8 +39,7 @@ class ImportViewModel @Inject constructor(
                 }
                 val courses = CourseHtmlParser.toCourses(parsed, semester)
                 _parsedCourses.value = courses
-                _selectedIds.value = courses.indices.map { it.toLong() }.toSet()
-                checkConflicts(courses)
+                _currentSemesterCourseCount.value = repository.getCourseCount(semester)
             } catch (e: Exception) {
                 Log.e("ImportVM", "Parse error", e)
                 _snackbarMessage.emit("解析失败：${e.message}" to "error")
@@ -56,83 +47,38 @@ class ImportViewModel @Inject constructor(
         }
     }
 
-    private suspend fun checkConflicts(newCourses: List<Course>) {
-        val existingCourses = repository.getAllCourses().first()
-        val conflictList = mutableListOf<ImportConflict>()
-
-        for (newCourse in newCourses) {
-            val conflicting = existingCourses.filter { existing ->
-                existing.dayOfWeek == newCourse.dayOfWeek &&
-                existing.semester == newCourse.semester &&
-                existing.startSlot < newCourse.startSlot + newCourse.slotCount &&
-                existing.startSlot + existing.slotCount > newCourse.startSlot &&
-                weekRangesOverlap(existing.weekRange, newCourse.weekRange)
-            }
-            for (existing in conflicting) {
-                conflictList.add(ImportConflict(newCourse, existing))
-            }
-        }
-
-        _conflicts.value = conflictList
-    }
-
-    private fun weekRangesOverlap(range1: String, range2: String): Boolean {
-        for (week in 1..30) {
-            if (ScheduleViewModel.isWeekInRange(week, range1) &&
-                ScheduleViewModel.isWeekInRange(week, range2)) {
-                return true
-            }
-        }
-        return false
-    }
-
-    fun toggleSelection(index: Long) {
-        _selectedIds.value = _selectedIds.value.toMutableSet().apply {
-            if (contains(index)) remove(index) else add(index)
-        }
-    }
-
-    fun selectAll() {
-        _selectedIds.value = _parsedCourses.value.indices.map { it.toLong() }.toSet()
-    }
-
-    fun deselectAll() {
-        _selectedIds.value = emptySet()
-    }
-
-    fun importSelected(replaceConflicts: Boolean = false, replaceAll: Boolean = false) {
+    fun importCurrentSemester(overwriteExisting: Boolean) {
         viewModelScope.launch {
             val courses = _parsedCourses.value
-            val selected = _selectedIds.value.map { courses[it.toInt()] }
-            val semester = selected.firstOrNull()?.semester ?: ""
 
-            if (replaceAll && semester.isNotEmpty()) {
-                // Delete all existing courses for this semester, then insert all selected
+            if (courses.isEmpty()) {
+                _snackbarMessage.emit("没有可导入的课程" to "error")
+                return@launch
+            }
+
+            val semester = courses.first().semester
+
+            if (overwriteExisting) {
                 repository.deleteAllBySemester(semester)
-            } else if (replaceConflicts) {
-                // Delete only conflicting existing courses
-                val conflicts = _conflicts.value
-                for (conflict in conflicts) {
-                    if (selected.contains(conflict.newCourse)) {
-                        repository.deleteCourse(conflict.existingCourse)
-                    }
-                }
             }
 
-            // Insert selected courses
-            for (course in selected) {
-                repository.insertCourse(course)
-            }
+            repository.insertCourses(courses)
 
             _importComplete.value = true
-            _snackbarMessage.emit("已导入 ${selected.size} 门课程" to "success")
+            _snackbarMessage.emit("已导入 ${courses.size} 门课程" to "success")
         }
+    }
+
+    fun currentImportAction(): ImportOverwriteAction {
+        return ImportOverwritePolicy.actionFor(
+            currentSemesterCourseCount = _currentSemesterCourseCount.value,
+            selectedCourseCount = _parsedCourses.value.size
+        )
     }
 
     fun clearState() {
         _parsedCourses.value = emptyList()
-        _conflicts.value = emptyList()
-        _selectedIds.value = emptySet()
+        _currentSemesterCourseCount.value = 0
         _importComplete.value = false
     }
 }

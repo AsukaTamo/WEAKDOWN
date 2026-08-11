@@ -8,6 +8,6 @@ data class TimeSlotTemplate(
     @PrimaryKey(autoGenerate = true)
     val id: Long = 0,
     val name: String,
-    val slotsJson: String,  // JSON array of {"start":"08:00","end":"08:45"}
+    val slotsJson: String,  // JSON array of {"start":"08:30","end":"09:15"}
     val isActive: Boolean = false
 )

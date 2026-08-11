@@ -23,6 +23,7 @@ import com.example.courseapp.ui.theme.*
 fun CourseMoveSheet(
     course: Course?,
     isDarkMode: Boolean,
+    periodCount: Int,
     onDismiss: () -> Unit,
     onMove: (Course, Int, Int) -> Unit,
     onMoveAndReplace: (Course, Int, Int) -> Unit
@@ -114,7 +115,7 @@ fun CourseMoveSheet(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                (0 until 10).forEach { slotIdx ->
+                (0 until periodCount.coerceAtLeast(1)).forEach { slotIdx ->
                     val selected = selectedSlot == slotIdx
                     Box(
                         modifier = Modifier

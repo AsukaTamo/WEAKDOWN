@@ -266,7 +266,7 @@ fun CourseDetailSheet(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    val periodCount = timeSlotLabels.size / 2 // 10 periods
+                    val periodCount = timeSlotLabels.size / 2
                     (0 until periodCount).forEach { slotIdx ->
                         val selected = editStartSlot == slotIdx
                         Box(
