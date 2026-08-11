@@ -6,8 +6,17 @@ import com.example.courseapp.data.model.CourseType
 import org.jsoup.Jsoup
 import org.jsoup.nodes.Document
 import org.jsoup.nodes.Element
+import org.jsoup.nodes.TextNode
 
 private const val TAG = "HtmlParser"
+
+private fun logD(message: String) {
+    runCatching { Log.d(TAG, message) }
+}
+
+private fun logE(message: String, throwable: Throwable? = null) {
+    runCatching { Log.e(TAG, message, throwable) }
+}
 
 data class ParsedCourse(
     val name: String,
@@ -27,24 +36,25 @@ data class ParsedCourse(
 object CourseHtmlParser {
 
     fun parse(html: String): List<ParsedCourse> {
-        Log.d(TAG, "parse() called, html length: ${html.length}")
-        val doc = Jsoup.parse(html)
+        logD("parse() called, html length: ${html.length}")
+        val normalizedHtml = normalizeScheduleHtml(html)
+        val doc = Jsoup.parse(normalizedHtml)
 
-        val tables = doc.select("table")
-        Log.d(TAG, "Found ${tables.size} <table> elements")
+        val tableRoots = doc.select("table, tbody")
+        logD("Found ${tableRoots.size} table-like roots")
 
         val results = mutableListOf<ParsedCourse>()
 
         results.addAll(parseTableFormat(doc))
-        Log.d(TAG, "parseTableFormat returned ${results.size} courses")
+        logD("parseTableFormat returned ${results.size} courses")
 
         if (results.isEmpty()) {
             results.addAll(parseDivFormat(doc))
-            Log.d(TAG, "parseDivFormat returned ${results.size} courses")
+            logD("parseDivFormat returned ${results.size} courses")
         }
         if (results.isEmpty()) {
-            results.addAll(parseJsonFormat(html))
-            Log.d(TAG, "parseJsonFormat returned ${results.size} courses")
+            results.addAll(parseJsonFormat(normalizedHtml))
+            logD("parseJsonFormat returned ${results.size} courses")
         }
 
         return results.distinctBy { "${it.name}_${it.dayOfWeek}_${it.startSlot}_${it.weekRange}" }
@@ -54,11 +64,11 @@ object CourseHtmlParser {
 
     private fun parseTableFormat(doc: Document): List<ParsedCourse> {
         val results = mutableListOf<ParsedCourse>()
-        val tables = doc.select("table")
+        val tables = doc.select("table, tbody")
 
         for ((tableIdx, table) in tables.withIndex()) {
             val rows = table.select("tr")
-            Log.d(TAG, "Table #$tableIdx: ${rows.size} rows")
+            logD("Table #$tableIdx: ${rows.size} rows")
             if (rows.size < 3) continue
 
             // Detect weekday column mapping — try header first, then first few data rows
@@ -69,24 +79,24 @@ object CourseHtmlParser {
             for (tryRow in rows.take(3)) {
                 val cells = tryRow.select("th, td")
                 val texts = cells.map { it.text().trim() }
-                Log.d(TAG, "  Trying row for weekdays: $texts")
+                logD("  Trying row for weekdays: $texts")
                 val detected = detectWeekdayColumns(cells)
                 if (detected.isNotEmpty()) {
                     weekdayColMap = detected
-                    Log.d(TAG, "  Weekday column map: $weekdayColMap (from row $headerRowCount)")
+                    logD("  Weekday column map: $weekdayColMap (from row $headerRowCount)")
                     break
                 }
                 headerRowCount++
             }
             if (weekdayColMap.isEmpty()) continue
 
-            Log.d(TAG, "Using headerRowCount=$headerRowCount, weekdayColMap=$weekdayColMap")
+            logD("Using headerRowCount=$headerRowCount, weekdayColMap=$weekdayColMap")
 
             // Pre-scan: build a map of rowIdx -> period number from column 1
             val dataRows = rows.drop(headerRowCount)
             // The weekday row is always dataRows[0] — skip it for course parsing
             val courseStartRow = 1
-            Log.d(TAG, "dataRows=${dataRows.size}, courseStartRow=$courseStartRow")
+            logD("dataRows=${dataRows.size}, courseStartRow=$courseStartRow")
             // Build row → period map: scan column 1 for period labels,
             // fill gaps by incrementing from last known value.
             val rowPeriodMap = mutableMapOf<Int, Int>()
@@ -122,7 +132,7 @@ object CourseHtmlParser {
                     }
                 }
             }
-            Log.d(TAG, "Row period map: $rowPeriodMap")
+            logD("Row period map: $rowPeriodMap")
 
             // Now parse course cells
             val consumed = mutableSetOf<Pair<Int, Int>>()
@@ -147,7 +157,7 @@ object CourseHtmlParser {
                         }
                         hCol += hcs
                     }
-                    Log.d(TAG, "Skipping weekday row $rowIdx")
+                    logD("Skipping weekday row $rowIdx")
                     continue
                 }
                 val cells = row.select("td, th")
@@ -200,16 +210,16 @@ object CourseHtmlParser {
                     val startSlot = period - 1
                     val slotCount = rowspan
 
-                    Log.d(TAG, "Cell at row=$rowIdx col=$colIdx day=$dayOfWeek period=$period rowspan=$rowspan text='${cellText.take(50)}'")
+                    logD("Cell at row=$rowIdx col=$colIdx day=$dayOfWeek period=$period rowspan=$rowspan text='${cellText.take(50)}'")
 
                     val parsed = parseCourseCell(cell, dayOfWeek, startSlot, slotCount)
                     if (parsed.isNotEmpty()) {
                         for (p in parsed) {
-                            Log.d(TAG, "  -> Parsed course: ${p.name}, weeks=${p.weekRange}")
+                            logD("  -> Parsed course: ${p.name}, weeks=${p.weekRange}")
                         }
                         results.addAll(parsed)
                     } else {
-                        Log.d(TAG, "  -> parseCourseCell returned empty")
+                        logD("  -> parseCourseCell returned empty")
                     }
 
                     colIdx += colspan
@@ -308,7 +318,7 @@ object CourseHtmlParser {
             }?.replace("*", "")?.trim() ?: ""
         }
         if (courseName.isEmpty()) {
-            Log.d(TAG, "    parseSingleCourseBlock: no course name found in '${body.text().take(80)}'")
+            logD("    parseSingleCourseBlock: no course name found in '${body.text().take(80)}'")
             return null
         }
 
@@ -318,11 +328,16 @@ object CourseHtmlParser {
         var location = ""
         var campus = ""
         var teacher = ""
+        var courseType = CourseType.REQUIRED
         var assessment = ""
+        var notes = ""
         var credits = 0f
 
         for (p in paragraphs) {
             val pText = p.text().trim()
+            val label = p.selectFirst("span[title]")?.attr("title")?.trim().orEmpty()
+            val ownText = p.ownText().trim()
+            val directText = directTextAfterLabel(p)
 
             // Week range + period info: "(1-2节)1-5周,7-9周" or "7-8周；9-11周(单)"
             if (weekRange.isEmpty()) {
@@ -335,7 +350,8 @@ object CourseHtmlParser {
 
             // Location: "未来城校区 公教2-403" or "校区 教室"
             if (location.isEmpty() || campus.isEmpty()) {
-                val locResult = extractLocationAndCampus(pText)
+                val locSource = directText.ifEmpty { ownText.ifEmpty { pText } }
+                val locResult = extractLocationAndCampus(locSource)
                 if (locResult != null) {
                     campus = locResult.first
                     location = locResult.second
@@ -345,9 +361,13 @@ object CourseHtmlParser {
 
             // Teacher: "教师：万林"
             if (teacher.isEmpty()) {
-                val teacherMatch = Regex("教师[：:：]\\s*(.+)").find(pText)
+                val teacherMatch = Regex("(?:教师|任课教师)[：:：]?\\s*(.+)").find(pText)
                 if (teacherMatch != null) {
                     teacher = teacherMatch.groupValues[1].trim()
+                    continue
+                }
+                if (label == "教师" && directText.isNotBlank()) {
+                    teacher = directText
                     continue
                 }
             }
@@ -361,13 +381,29 @@ object CourseHtmlParser {
             if (assessMatch != null) {
                 assessment = assessMatch.groupValues[1]
             }
+
+            when (label) {
+                "课程性质简称" -> {
+                    courseType = parseCourseType(pText)
+                }
+                "教学班组成", "选课备注" -> {
+                    if (pText.isNotBlank()) {
+                        notes = pText
+                    }
+                }
+            }
         }
 
         // Fallback: try to extract from full text if paragraphs didn't work
         val fullText = body.text()
         if (teacher.isEmpty()) {
-            val m = Regex("教师[：:：]\\s*([\\u4e00-\\u9fa5/]+)").find(fullText)
+            val m = Regex("(?:教师|任课教师)[：:：]?\\s*([\\u4e00-\\u9fa5A-Za-z·•/]+)").find(fullText)
             if (m != null) teacher = m.groupValues[1].trim()
+        }
+        if (teacher.isEmpty()) {
+            val teacherLine = paragraphs.firstOrNull { it.selectFirst("span[title]")?.attr("title") == "教师" }
+            val teacherText = teacherLine?.let { directTextAfterLabel(it) }.orEmpty()
+            if (teacherText.isNotBlank()) teacher = teacherText
         }
         if (credits == 0f) {
             val m = Regex("学分[：:：]\\s*([\\d.]+)").find(fullText)
@@ -383,8 +419,10 @@ object CourseHtmlParser {
             startSlot = startSlot,
             slotCount = slotCount,
             weekRange = normalizeWeekRange(weekRange),
+            type = courseType,
             credits = credits,
-            assessmentMethod = assessment
+            assessmentMethod = assessment,
+            notes = notes
         )
     }
 
@@ -473,7 +511,7 @@ object CourseHtmlParser {
     private fun parseDivFormat(doc: Document): List<ParsedCourse> {
         val results = mutableListOf<ParsedCourse>()
         val courseElements = doc.select(
-            "[class*=course], [class*=lesson], [class*=kb-item], [class*=course-item], [class*=kbcontent]"
+            "[class*=course], [class*=lesson], [class*=kb-item], [class*=course-item], [class*=kbcontent], .timetable_con"
         )
 
         for (el in courseElements) {
@@ -557,7 +595,7 @@ object CourseHtmlParser {
     }
 
     private fun extractTeacherFromText(text: String): String {
-        val m = Regex("教师[：:：]\\s*([\\u4e00-\\u9fa5/]+)").find(text)
+        val m = Regex("(?:教师|任课教师)[：:：]?\\s*([\\u4e00-\\u9fa5A-Za-z·•/]+)").find(text)
         return m?.groupValues?.get(1)?.trim() ?: ""
     }
 
@@ -569,6 +607,37 @@ object CourseHtmlParser {
     private fun extractWeekSimple(text: String): String {
         val m = Regex("(\\d+[-~,，]\\d+)\\s*周").find(text)
         return m?.value ?: ""
+    }
+
+    private fun parseCourseType(text: String): CourseType {
+        return when {
+            text.contains("实验") || text.contains("实践") || text.contains("上机") || text.contains("课程设计") ->
+                CourseType.LAB
+            text.contains("选修") || text.contains("公选") ->
+                CourseType.ELECTIVE
+            text.contains("必修") || text.contains("必选") ->
+                CourseType.REQUIRED
+            else -> CourseType.CUSTOM
+        }
+    }
+
+    private fun directTextAfterLabel(element: Element): String {
+        return element.textNodes()
+            .map(TextNode::text)
+            .joinToString("")
+            .trim()
+    }
+
+    private fun normalizeScheduleHtml(html: String): String {
+        val trimmed = html.trim()
+        val hasTable = trimmed.contains("<table", ignoreCase = true)
+        val hasTbody = trimmed.contains("<tbody", ignoreCase = true)
+        val hasTr = trimmed.contains("<tr", ignoreCase = true)
+        return when {
+            hasTbody && !hasTable -> "<table>$trimmed</table>"
+            hasTr && !hasTable && !hasTbody -> "<table><tbody>$trimmed</tbody></table>"
+            else -> trimmed
+        }
     }
 
     private fun extractJsonValue(json: String, vararg keys: String): String? {

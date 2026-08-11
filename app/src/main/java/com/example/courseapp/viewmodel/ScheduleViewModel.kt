@@ -31,11 +31,15 @@ class ScheduleViewModel @Inject constructor(
     private val _courses = MutableStateFlow<List<Course>>(emptyList())
     val courses: StateFlow<List<Course>> = _courses.asStateFlow()
 
+    private val _allStoredCourses = MutableStateFlow<List<Course>>(emptyList())
     private val _allCourses = MutableStateFlow<List<Course>>(emptyList())
     val allCourses: StateFlow<List<Course>> = _allCourses.asStateFlow()
 
     private val _currentWeek = MutableStateFlow(1)
     val currentWeek: StateFlow<Int> = _currentWeek.asStateFlow()
+
+    private val _visibleWeek = MutableStateFlow(1)
+    val visibleWeek: StateFlow<Int> = _visibleWeek.asStateFlow()
 
     private val _isDarkMode = MutableStateFlow(preferences.getBoolean(KEY_DARK_MODE, false))
     val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
@@ -107,7 +111,9 @@ class ScheduleViewModel @Inject constructor(
                         val now = Calendar.getInstance()
                         val diffMs = now.timeInMillis - semesterStartDate.timeInMillis
                         val diffWeeks = (diffMs / (7 * 24 * 60 * 60 * 1000L)).toInt() + 1
-                        _currentWeek.value = diffWeeks.coerceIn(1, semester.totalWeeks.coerceAtLeast(1))
+                        val calculatedWeek = diffWeeks.coerceIn(1, semester.totalWeeks.coerceAtLeast(1))
+                        _currentWeek.value = calculatedWeek
+                        _visibleWeek.value = calculatedWeek
                     } catch (_: Exception) {}
                 }
             }
@@ -117,7 +123,18 @@ class ScheduleViewModel @Inject constructor(
     private fun loadCourses() {
         viewModelScope.launch {
             repository.getAllCourses().collect { list ->
-                _allCourses.value = list
+                _allStoredCourses.value = list
+            }
+        }
+        viewModelScope.launch {
+            combine(_allStoredCourses, _activeSemester) { list, semester ->
+                ScheduleCourseFilter.activeSemesterCourses(
+                    courses = list,
+                    activeSemester = semester,
+                    defaultSemesterId = DEFAULT_SEMESTER_ID
+                )
+            }.collect { activeSemesterCourses ->
+                _allCourses.value = activeSemesterCourses
             }
         }
         viewModelScope.launch {
@@ -136,10 +153,18 @@ class ScheduleViewModel @Inject constructor(
                     try {
                         val type = object : TypeToken<List<TimeSlot>>() {}.type
                         val slots: List<TimeSlot> = Gson().fromJson(template.slotsJson, type)
-                        if (slots.isNotEmpty()) {
-                            _timeSlots.value = slots
+                        val normalized = normalizeLoadedTimeSlots(slots)
+                        if (normalized.isNotEmpty()) {
+                            if (normalized != slots) {
+                                repository.updateTimeSlotTemplate(
+                                    template.copy(slotsJson = Gson().toJson(normalized))
+                                )
+                            }
+                            _timeSlots.value = normalized
                         }
                     } catch (_: Exception) {}
+                } else {
+                    _timeSlots.value = defaultTimeSlots()
                 }
             }
         }
@@ -190,7 +215,15 @@ class ScheduleViewModel @Inject constructor(
     fun selectWeek(week: Int) {
         val maxWeek = _activeSemester.value?.totalWeeks?.coerceAtLeast(1)
             ?: DEFAULT_SELECTABLE_WEEK_LIMIT
-        _currentWeek.value = week.coerceIn(1, maxWeek)
+        val boundedWeek = week.coerceIn(1, maxWeek)
+        _currentWeek.value = boundedWeek
+        _visibleWeek.value = boundedWeek
+    }
+
+    fun previewWeek(week: Int) {
+        val maxWeek = _activeSemester.value?.totalWeeks?.coerceAtLeast(1)
+            ?: DEFAULT_SELECTABLE_WEEK_LIMIT
+        _visibleWeek.value = week.coerceIn(1, maxWeek)
     }
 
     fun shiftWeek(delta: Int) {
@@ -351,11 +384,27 @@ class ScheduleViewModel @Inject constructor(
     }
 
     companion object {
+        const val DEFAULT_SEMESTER_ID = "2025-2026-2"
         const val DEFAULT_SELECTABLE_WEEK_LIMIT = 30
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_SHOW_SCHEDULE_GUIDES = "show_schedule_guides"
 
         fun defaultTimeSlots() = listOf(
+            TimeSlot("08:30", "09:15"),
+            TimeSlot("09:20", "10:05"),
+            TimeSlot("10:15", "11:00"),
+            TimeSlot("11:05", "11:50"),
+            TimeSlot("14:00", "14:45"),
+            TimeSlot("14:50", "15:35"),
+            TimeSlot("15:45", "16:30"),
+            TimeSlot("16:35", "17:20"),
+            TimeSlot("18:30", "19:15"),
+            TimeSlot("19:20", "20:05"),
+            TimeSlot("20:15", "21:00"),
+            TimeSlot("21:05", "21:50"),
+        )
+
+        fun legacyDefaultTimeSlots() = listOf(
             TimeSlot("08:00", "08:45"),
             TimeSlot("08:55", "09:40"),
             TimeSlot("10:00", "10:45"),
@@ -367,6 +416,11 @@ class ScheduleViewModel @Inject constructor(
             TimeSlot("19:00", "19:45"),
             TimeSlot("19:55", "20:40"),
         )
+
+        fun normalizeLoadedTimeSlots(slots: List<TimeSlot>): List<TimeSlot> {
+            if (slots.isEmpty()) return defaultTimeSlots()
+            return if (slots == legacyDefaultTimeSlots()) defaultTimeSlots() else slots
+        }
 
         /**
          * Check if a given week number falls within a weekRange string.

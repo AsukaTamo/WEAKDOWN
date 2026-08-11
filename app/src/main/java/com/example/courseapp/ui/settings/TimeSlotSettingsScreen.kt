@@ -108,7 +108,7 @@ fun TimeSlotSettingsScreen(
                 Spacer(modifier = Modifier.height(8.dp))
                 OutlinedButton(
                     onClick = {
-                        val lastEnd = editingSlots.lastOrNull()?.end ?: "08:00"
+                        val lastEnd = editingSlots.lastOrNull()?.end ?: "08:30"
                         val newStart = lastEnd
                         val parts = newStart.split(":")
                         val totalMin = parts[0].toInt() * 60 + parts[1].toInt() + 45

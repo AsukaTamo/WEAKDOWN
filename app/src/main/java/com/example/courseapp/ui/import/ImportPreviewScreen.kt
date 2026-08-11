@@ -1,24 +1,22 @@
 package com.example.courseapp.ui.import
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.courseapp.data.model.Course
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ImportViewModel
 
@@ -31,17 +29,13 @@ fun ImportPreviewScreen(
     onImportComplete: () -> Unit
 ) {
     val parsedCourses by viewModel.parsedCourses.collectAsStateWithLifecycle()
-    val conflicts by viewModel.conflicts.collectAsStateWithLifecycle()
-    val selectedIds by viewModel.selectedIds.collectAsStateWithLifecycle()
+    val currentSemesterCourseCount by viewModel.currentSemesterCourseCount.collectAsStateWithLifecycle()
     val importComplete by viewModel.importComplete.collectAsStateWithLifecycle()
 
     val bgColor = if (isDarkMode) BgDark else BgLight
-    val cardColor = if (isDarkMode) CardDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
     val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
 
-    var showConflictDialog by remember { mutableStateOf(false) }
-    var showReplaceAllDialog by remember { mutableStateOf(false) }
+    var showOverwriteDialog by remember { mutableStateOf(false) }
 
     LaunchedEffect(importComplete) {
         if (importComplete) onImportComplete()
@@ -53,17 +47,9 @@ fun ImportPreviewScreen(
                 title = { Text("导入预览", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
-                },
-                actions = {
-                    TextButton(onClick = { viewModel.selectAll() }) {
-                        Text("全选", color = Primary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDarkMode) CardDark else Color.White
-                )
+                }
             )
         },
         containerColor = bgColor,
@@ -72,48 +58,28 @@ fun ImportPreviewScreen(
                 color = if (isDarkMode) CardDark else Color.White,
                 shadowElevation = 8.dp
             ) {
-                Column(
+                Row(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(horizontal = 16.dp, vertical = 12.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    // Full replace — primary action
                     Button(
-                        onClick = { showReplaceAllDialog = true },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        onClick = {
+                            if (viewModel.currentImportAction() == com.example.courseapp.viewmodel.ImportOverwriteAction.ConfirmOverwrite) {
+                                showOverwriteDialog = true
+                            } else {
+                                viewModel.importCurrentSemester(overwriteExisting = currentSemesterCourseCount > 0)
+                            }
+                        },
+                        enabled = parsedCourses.isNotEmpty(),
+                        modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = Primary)
                     ) {
-                        Icon(Icons.Default.Refresh, null, modifier = Modifier.size(18.dp))
+                        Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
-                        Text("全部替换当前课表", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
-                    }
-                    // Add selected / add all
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        OutlinedButton(
-                            onClick = { viewModel.importSelected(replaceConflicts = false) },
-                            modifier = Modifier.weight(1f).height(44.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("全部追加")
-                        }
-                        OutlinedButton(
-                            onClick = {
-                                if (conflicts.isNotEmpty()) {
-                                    showConflictDialog = true
-                                } else {
-                                    viewModel.importSelected(replaceConflicts = false)
-                                }
-                            },
-                            modifier = Modifier.weight(1f).height(44.dp),
-                            shape = RoundedCornerShape(12.dp)
-                        ) {
-                            Text("追加选中 (${selectedIds.size})")
-                        }
+                        Text("导入当前课表", fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
                     }
                 }
             }
@@ -158,32 +124,22 @@ fun ImportPreviewScreen(
                     )
                 }
 
-                itemsIndexed(parsedCourses) { index, course ->
-                    val isSelected = selectedIds.contains(index.toLong())
-                    val isConflict = conflicts.any { it.newCourse == course }
+                items(parsedCourses) { course ->
                     val days = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .clip(RoundedCornerShape(12.dp))
-                            .background(cardColor)
-                            .clickable { viewModel.toggleSelection(index.toLong()) }
+                            .background(if (isDarkMode) CardDark else Color.White, RoundedCornerShape(12.dp))
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Checkbox(
-                            checked = isSelected,
-                            onCheckedChange = { viewModel.toggleSelection(index.toLong()) },
-                            colors = CheckboxDefaults.colors(checkedColor = Primary)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
                         Column(modifier = Modifier.weight(1f)) {
                             Text(
                                 text = course.name,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = textColor
+                                color = if (isDarkMode) Color.White else TextPrimary
                             )
                             Text(
                                 text = "${days[course.dayOfWeek]} 第${course.startSlot + 1}-${course.startSlot + course.slotCount}节  ${course.weekRange}",
@@ -217,66 +173,32 @@ fun ImportPreviewScreen(
                                 )
                             }
                         }
-                        if (isConflict) {
-                            Icon(
-                                Icons.Default.Warning,
-                                contentDescription = "冲突",
-                                tint = Warning,
-                                modifier = Modifier.size(20.dp)
-                            )
-                        }
                     }
                 }
             }
         }
     }
 
-    // Conflict resolution dialog
-    if (showConflictDialog) {
+    if (showOverwriteDialog) {
         AlertDialog(
-            onDismissRequest = { showConflictDialog = false },
-            title = { Text("时间冲突") },
+            onDismissRequest = { showOverwriteDialog = false },
+            title = { Text("覆盖当前课表") },
             text = {
-                Text("有 ${conflicts.size} 门课程与现有课程时间冲突。是否替换现有课程？")
+                Text("当前学期已经有课程。继续后将直接覆盖当前课表，不进行冲突检测。")
             },
             confirmButton = {
                 TextButton(onClick = {
-                    viewModel.importSelected(replaceConflicts = true)
-                    showConflictDialog = false
+                    viewModel.importCurrentSemester(overwriteExisting = true)
+                    showOverwriteDialog = false
                 }) {
-                    Text("替换并导入")
+                    Text("继续覆盖")
                 }
             },
             dismissButton = {
                 TextButton(onClick = {
-                    viewModel.importSelected(replaceConflicts = false)
-                    showConflictDialog = false
+                    showOverwriteDialog = false
                 }) {
-                    Text("保留两者")
-                }
-            }
-        )
-    }
-
-    // Replace all confirmation dialog
-    if (showReplaceAllDialog) {
-        AlertDialog(
-            onDismissRequest = { showReplaceAllDialog = false },
-            title = { Text("全部替换") },
-            text = {
-                Text("将删除当前学期的所有课程，然后导入 ${selectedIds.size} 门新课程。此操作不可撤销。")
-            },
-            confirmButton = {
-                TextButton(onClick = {
-                    viewModel.importSelected(replaceAll = true)
-                    showReplaceAllDialog = false
-                }) {
-                    Text("确认替换", color = Error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showReplaceAllDialog = false }) {
-                    Text("取消")
+                    Text("再想想")
                 }
             }
         )

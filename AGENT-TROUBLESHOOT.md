@@ -1,0 +1,160 @@
+# AGENT Troubleshooting Playbook
+
+本文件记录本仓库中可复用的排障线路。每次读取 `AGENT.md` 后也要读取本文件；遇到相同错误时优先按这里执行，避免重复猜测。
+
+## Gradle Wrapper 启动失败
+
+### 典型现象
+
+运行 `.\gradlew.bat ...` 时出现以下任一错误：
+
+- `找不到或无法加载主类 org.gradle.wrapper.GradleWrapperMain`
+- `java.lang.ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain`
+- `endlocal was unexpected at this time`
+- wrapper jar 存在，但 Gradle wrapper 无法启动
+
+### 已知根因
+
+本仓库曾出现过 `gradle/wrapper/gradle-wrapper.jar` 不是标准 Gradle wrapper jar 的情况。脚本 `gradlew.bat` 会尝试启动 `org.gradle.wrapper.GradleWrapperMain`，但 jar 内没有这个类，所以 wrapper 启动失败。
+
+一次排查中，`jar tf gradle\wrapper\gradle-wrapper.jar` 显示 jar 内含有 `org/gradle/launcher/...` 类；`META-INF/MANIFEST.MF` 中的入口是 `org.gradle.launcher.GradleMain`，这说明它更像 Gradle launcher jar，而不是 wrapper jar。
+
+### 排障步骤
+
+1. 先确认工作区状态，避免把排障和业务改动混在一起：
+
+```powershell
+git status --short --branch
+```
+
+2. 检查 wrapper jar 是否存在：
+
+```powershell
+Get-Item gradle\wrapper\gradle-wrapper.jar | Format-List FullName,Length
+```
+
+3. 检查 jar 内是否有标准 wrapper 入口：
+
+```powershell
+jar tf gradle\wrapper\gradle-wrapper.jar | Select-String 'GradleWrapperMain'
+```
+
+4. 如果没有 `GradleWrapperMain`，检查 manifest 和 jar 内容，确认是否是 launcher jar：
+
+```powershell
+jar tf gradle\wrapper\gradle-wrapper.jar | Select-Object -First 40
+```
+
+不要为了查看 manifest 把 `META-INF/` 解压到仓库根目录；如果必须解压，结束前必须删除临时文件，并确认 `git status` 没有留下它。
+
+5. 检查 wrapper 配置的 Gradle 版本：
+
+```powershell
+Get-Content -Raw gradle\wrapper\gradle-wrapper.properties
+```
+
+本仓库目前使用 Gradle `8.7`。
+
+6. 如果系统没有全局 `gradle`，先查本机 Gradle wrapper 缓存：
+
+```powershell
+Get-ChildItem 'C:\Users\HP\.gradle\wrapper\dists' -Recurse -Directory -ErrorAction SilentlyContinue |
+    Where-Object { $_.FullName -match 'gradle-8\.7' } |
+    Select-Object -First 20 FullName
+```
+
+7. 如果找到 `gradle-8.7\bin\gradle.bat`，可用它作为验证命令入口。例如：
+
+```powershell
+& 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat' :app:testDebugUnitTest
+```
+
+```powershell
+& 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat' :app:assembleDebug
+```
+
+8. 在最终回复中明确说明：`.\gradlew.bat` 当前因 wrapper jar 入口异常失败，验证改用了本机缓存的 Gradle 8.7 分发包。
+
+### 不要做的事
+
+- 不要在没有确认 jar 内容前反复修改业务代码。
+- 不要随意替换 `gradle-wrapper.jar` 或升级 Gradle/Kotlin/Android 插件，除非用户明确要求或任务就是修 wrapper。
+- 不要把解压出的 `META-INF/`、Gradle 缓存、构建产物、APK、class、dex 等加入版本控制。
+- 不要把本机绝对路径写进生产代码或构建配置；本机 Gradle 路径只能作为当前机器上的命令行 fallback。
+
+## 通用 Bug 处理线路
+
+1. 完整读取错误输出：保留关键报错、异常类型、文件路径、行号和命令退出码。
+2. 先复现再修复：确认同一命令能稳定触发问题；如果不能稳定复现，先收集更多证据。
+3. 检查最近状态：运行 `git status --short --branch`，必要时看相关 diff，区分用户已有改动和本次改动。
+4. 缩小根因：优先检查直接失败边界，例如脚本入口、配置文件、依赖缓存、DAO 查询、ViewModel 状态、Compose 状态读取。
+5. 对比可工作的路径：例如 wrapper 失败时尝试已缓存的 Gradle 分发包；UI 行为异常时找同项目中相似弹框、按钮和状态流写法。
+6. 先写可验证条件：有测试框架时优先补单测；没有合适测试时写清手动验收步骤。
+7. 修复只针对根因：不要把无关重构、格式化、依赖升级混入同一次 bugfix。
+8. 修复后必须重新运行验证命令，不能用“应该可以”代替证据。
+
+## 修改文件注意事项
+
+- 开始前读取 `AGENT.md` 和本文件；再运行 `git status --short --branch`。
+- 如果工作区已有未提交改动，默认认为是用户改动；只读必要上下文，不回滚、不覆盖、不格式化无关文件。
+- 使用 `apply_patch` 做手工编辑，保持 diff 小而清晰。
+- 中文文件使用 UTF-8 读取，例如：
+
+```powershell
+[Console]::OutputEncoding=[System.Text.Encoding]::UTF8; Get-Content -Raw -Encoding UTF8 <path>
+```
+
+- 修改 Compose UI 时检查：
+  - 是否有完整的返回/取消路径。
+  - destructive 或覆盖类操作是否有确认弹框。
+  - 按钮是否在无数据时禁用或给出清晰反馈。
+  - 深色/浅色主题是否仍使用项目现有 token。
+  - 触控目标是否保持约 48dp 或以上。
+
+- 修改导入、删除、覆盖类逻辑时检查：
+  - 是否明确作用于当前学期或目标学期。
+  - 是否避免误删其他学期数据。
+  - 覆盖操作是否先确认再执行。
+  - 用户取消时是否不写库、不改变导入状态。
+  - 完成后是否有成功或失败反馈。
+
+- 结束前检查：
+
+```powershell
+git status --short --branch
+git diff --name-only
+```
+
+确认没有临时文件、构建产物或无关文件混入本次改动。
+## KSP 增量编译生成文件缺失
+
+- 典型现象：`kspDebugKotlin`、`kspDebugUnitTestKotlin` 或 `assembleDebug` 报 `java.nio.file.NoSuchFileException`，路径指向 `app/build/generated/ksp/.../hilt_aggregated_deps/...`，看起来像生成文件突然丢了。
+- 处理顺序：先跑一次 `:app:clean`，再重跑原来的验证命令；如果清理后恢复正常，就按缓存/增量产物异常处理，不要先怀疑业务代码。
+- 如果问题在 clean 之后仍复现，再检查是否有人手工动过 `build/generated/ksp`、是否有并发构建残留，以及是否有旧的增量缓存被别的任务污染。
+
+## KSP 并发写入冲突
+
+- 典型现象：同时跑两个 Gradle 任务时，KSP 报 `FileAlreadyExistsException`，路径通常落在 `app/build/generated/ksp/...`。
+- 处理顺序：把验证改成串行，一次只跑一个 Gradle 命令；必要时先 `:app:clean` 再执行。
+- 如果同一轮里同时启动了 `assembleDebug` 和 `testDebugUnitTest`，先别把它当成业务编译错误，优先怀疑生成目录被并发写坏了。
+## 截取的课表片段解析失败
+
+### 典型现象
+
+- `data.html` 只是网页源代码里的 `tbody` 或 `tr` 片段，不是完整的 `table` 页面。
+- 直接 `Jsoup.parse(html)` 后，表格语义可能被打散，`table/tbody/tr` 查找不到，导致导入结果为空。
+- 即使单元格里有 `span title="教师"`，只要整张表没被识别，教师、地点、课程名都会一起丢失。
+
+### 处理线路
+
+1. 先确认输入是不是被裁剪过的片段，尤其是只保留了 `<tbody>`、`<tr>`、`<td>` 的情况。
+2. 在进入表格解析前先做正规化：如果只有 `tbody`，外层补一层 `table`；如果只有 `tr`，补 `table > tbody`。
+3. 再跑表格解析，而不是直接跳到 div/JSON 兜底。
+4. 如果教师仍然为空，再检查 `教师` / `任课教师` 这一行是否是带空格而不是带冒号，解析正则要允许两种写法。
+5. 修完以后必须用真实片段样本重新跑单测，不能只看示例 HTML 通过。
+
+### 这次会话里的通用提醒
+
+- 遇到“明明页面里有字段，但解析结果为空”时，优先查输入结构，而不是先怪展示层。
+- 片段类 HTML 尤其要注意 `tbody` 和 `table` 的边界，`body` 级解析和 `table` 级解析不是一回事。
+- 只改正则不一定够，必要时先把 HTML 结构补回去，再让原有解析逻辑工作。

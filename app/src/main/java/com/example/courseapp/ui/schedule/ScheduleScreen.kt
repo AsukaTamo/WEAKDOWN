@@ -142,6 +142,13 @@ fun ScheduleScreen(
             val gridScrollState = rememberScrollState()
             val maxSelectableWeek = activeSemester?.totalWeeks?.coerceAtLeast(1)
                 ?: ScheduleViewModel.DEFAULT_SELECTABLE_WEEK_LIMIT
+            val weekPages = remember(maxSelectableWeek, allCourses, activeSemester) {
+                buildScheduleWeekPages(
+                    maxWeek = maxSelectableWeek,
+                    allCourses = allCourses,
+                    getWeekDates = viewModel::getWeekDates
+                )
+            }
             val pagerState = rememberPagerState(
                 initialPage = (currentWeek - 1).coerceIn(0, maxSelectableWeek - 1),
                 pageCount = { maxSelectableWeek }
@@ -158,6 +165,18 @@ fun ScheduleScreen(
                 if (pagerState.currentPage != targetPage) {
                     pagerState.animateScrollToPage(targetPage)
                 }
+            }
+
+            LaunchedEffect(pagerState, maxSelectableWeek) {
+                snapshotFlow { pagerState.currentPage to pagerState.targetPage }
+                    .collect { (currentPage, targetPage) ->
+                        val previewPage = if (targetPage != currentPage) {
+                            targetPage
+                        } else {
+                            currentPage
+                        }
+                        viewModel.previewWeek(previewPage + 1)
+                    }
             }
 
             LaunchedEffect(pagerState) {
@@ -177,12 +196,10 @@ fun ScheduleScreen(
                 key = { it }
             ) { pageIndex ->
                 val week = pageIndex + 1
-                val page = remember(week, allCourses, activeSemester) {
-                    buildScheduleWeekPage(week, allCourses, viewModel.getWeekDates(week))
-                }
+                val page = weekPages[week] ?: emptyScheduleWeekPage(week, viewModel.getWeekDates(week))
 
                 ScheduleGrid(
-                    courses = page.courses,
+                    coursesByDay = page.coursesByDay,
                     todayIndex = viewModel.todayIndex,
                     isDarkMode = isDarkMode,
                     hasBackground = hasBackground,
@@ -288,6 +305,7 @@ fun ScheduleScreen(
     CourseMoveSheet(
         course = moveSheetCourse,
         isDarkMode = isDarkMode,
+        periodCount = timeSlots.size,
         onDismiss = { moveSheetCourse = null },
         onMove = { course, day, slot ->
             pendingMove = Triple(course, day, slot)
@@ -348,25 +366,55 @@ private data class SnackbarState(
 )
 
 private data class ScheduleWeekPage(
-    val courses: List<Course>,
+    val week: Int,
+    val coursesByDay: List<List<Course>>,
     val weekDates: List<String>
 )
 
-private fun buildScheduleWeekPage(
+private fun emptyScheduleWeekPage(
     week: Int,
-    allCourses: List<Course>,
     weekDates: List<String>
 ): ScheduleWeekPage {
-    val filteredCourses = allCourses.filter { ScheduleViewModel.isWeekInRange(week, it.weekRange) }
     return ScheduleWeekPage(
-        courses = filteredCourses,
+        week = week,
+        coursesByDay = List(7) { emptyList() },
         weekDates = weekDates
     )
 }
 
+private fun buildScheduleWeekPages(
+    maxWeek: Int,
+    allCourses: List<Course>,
+    getWeekDates: (Int) -> List<String>
+): Map<Int, ScheduleWeekPage> {
+    if (maxWeek <= 0) return emptyMap()
+
+    val groupedByWeekAndDay = List(maxWeek + 1) {
+        List(7) { mutableListOf<Course>() }
+    }
+
+    for (course in allCourses) {
+        val day = course.dayOfWeek
+        if (day !in 0..6) continue
+        for (week in 1..maxWeek) {
+            if (ScheduleViewModel.isWeekInRange(week, course.weekRange)) {
+                groupedByWeekAndDay[week][day].add(course)
+            }
+        }
+    }
+
+    return (1..maxWeek).associateWith { week ->
+        ScheduleWeekPage(
+            week = week,
+            coursesByDay = groupedByWeekAndDay[week].map { it.toList() },
+            weekDates = getWeekDates(week)
+        )
+    }
+}
+
 @Composable
 private fun ScheduleGrid(
-    courses: List<Course>,
+    coursesByDay: List<List<Course>>,
     todayIndex: Int,
     isDarkMode: Boolean,
     hasBackground: Boolean = false,
@@ -472,7 +520,7 @@ private fun ScheduleGrid(
                 .then(Modifier.verticalScroll(scrollState))
         ) {
             for (day in 0..6) {
-                val dayCourses = courses.filter { it.dayOfWeek == day }
+                val dayCourses = coursesByDay.getOrElse(day) { emptyList() }
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -535,25 +583,27 @@ private fun ScheduleGrid(
                             val active = isCourseActive(course)
                             val upcoming = isCourseUpcoming(course)
 
-                            CourseCard(
-                                course = course,
-                                isDarkMode = isDarkMode,
-                                isActive = active,
-                                isUpcoming = upcoming,
-                                progress = if (active) getCourseProgress(course) else 0f,
-                                minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
-                                hasWallpaperBackground = hasBackground,
-                                onClick = { onCourseClick(course) },
-                                onLongClick = { onCourseLongClick(course) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(cardHeight)
-                                    .padding(
-                                        horizontal = ScheduleDimensions.CourseInset,
-                                        vertical = 2.dp
-                                    )
-                                    .offset(y = SLOT_HEIGHT * course.startSlot)
-                            )
+                            key(course.id, course.dayOfWeek, course.startSlot, course.name) {
+                                CourseCard(
+                                    course = course,
+                                    isDarkMode = isDarkMode,
+                                    isActive = active,
+                                    isUpcoming = upcoming,
+                                    progress = if (active) getCourseProgress(course) else 0f,
+                                    minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
+                                    hasWallpaperBackground = hasBackground,
+                                    onClick = { onCourseClick(course) },
+                                    onLongClick = { onCourseLongClick(course) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(cardHeight)
+                                        .padding(
+                                            horizontal = ScheduleDimensions.CourseInset,
+                                            vertical = 2.dp
+                                        )
+                                        .offset(y = SLOT_HEIGHT * course.startSlot)
+                                )
+                            }
                         }
                     }
                 }

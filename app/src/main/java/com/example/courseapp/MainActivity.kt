@@ -114,7 +114,7 @@ fun CourseApp(
     val manageViewModel: ManageViewModel = hiltViewModel()
     val importViewModel: ImportViewModel = hiltViewModel()
 
-    val currentWeek by scheduleViewModel.currentWeek.collectAsStateWithLifecycle()
+    val visibleWeek by scheduleViewModel.visibleWeek.collectAsStateWithLifecycle()
     val backgroundUri by scheduleViewModel.backgroundUri.collectAsStateWithLifecycle()
     val scrimAlpha by scheduleViewModel.scrimAlpha.collectAsStateWithLifecycle()
     val showScheduleGuides by scheduleViewModel.showScheduleGuides.collectAsStateWithLifecycle()
@@ -270,7 +270,7 @@ fun CourseApp(
                                     .padding(horizontal = 18.dp)
                             ) {
                                 Text(
-                                    text = "第${currentWeek}周",
+                                    text = "第${visibleWeek}周",
                                     fontSize = 18.sp,
                                     fontWeight = FontWeight.Bold,
                                     color = palette.weekChipContent,
@@ -488,7 +488,7 @@ fun CourseApp(
                     )
                     Box(modifier = Modifier.align(Alignment.TopCenter)) {
                         WeekSelectorDialog(
-                            currentWeek = currentWeek,
+                            currentWeek = visibleWeek,
                             isDarkMode = isDarkMode,
                             onWeekSelected = {
                                 scheduleViewModel.selectWeek(it)
