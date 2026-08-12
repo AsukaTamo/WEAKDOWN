@@ -2,9 +2,12 @@ package com.example.courseapp.ui.schedule
 
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -19,12 +22,9 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
-import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.zIndex
-import androidx.compose.ui.platform.LocalDensity
-import androidx.compose.ui.input.pointer.pointerInput
 import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -41,10 +41,6 @@ import com.example.courseapp.ui.components.WeekSelectorDialog
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
-import kotlinx.coroutines.Job
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import kotlinx.coroutines.launch
 
 private val dayLabels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
 private val SLOT_HEIGHT = ScheduleDimensions.SlotHeight
@@ -52,6 +48,7 @@ private val HEADER_HEIGHT = ScheduleDimensions.HeaderHeight
 private val TIME_AXIS_WIDTH = ScheduleDimensions.TimeAxisWidth
 
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun ScheduleScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
     onNavigateToAdd: () -> Unit = {},
@@ -65,6 +62,7 @@ fun ScheduleScreen(
     val isFabOpen by viewModel.isFabOpen.collectAsStateWithLifecycle()
     val selectedCourse by viewModel.selectedCourse.collectAsStateWithLifecycle()
     val timeSlots by viewModel.timeSlots.collectAsStateWithLifecycle()
+    val activeSemester by viewModel.activeSemester.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
     val backgroundUri by viewModel.backgroundUri.collectAsStateWithLifecycle()
     val scrimAlpha by viewModel.scrimAlpha.collectAsStateWithLifecycle()
@@ -76,7 +74,6 @@ fun ScheduleScreen(
     var moveSheetCourse by remember { mutableStateOf<Course?>(null) }
     var pendingMove by remember { mutableStateOf<Triple<Course, Int, Int>?>(null) }
 
-    val weekDates = remember(currentWeek) { viewModel.getWeekDates(currentWeek) }
     val timeSlotLabels = remember(timeSlots) { viewModel.timeSlotLabels() }
 
     LaunchedEffect(snackbarFlow.value.first) {
@@ -137,196 +134,87 @@ fun ScheduleScreen(
             }
         }
 
-        BoxWithConstraints(
+        Box(
             modifier = Modifier
                 .fillMaxSize()
                 .clipToBounds()
         ) {
             val gridScrollState = rememberScrollState()
-            val coroutineScope = rememberCoroutineScope()
-            val pageWidth = maxWidth
-            val pageWidthPx = with(LocalDensity.current) { maxWidth.toPx() }
-            var swipeJob by remember { mutableStateOf<Job?>(null) }
-            val swipeOffset = remember { Animatable(0f) }
-            var dragBaseWeek by remember { mutableIntStateOf(currentWeek) }
-            val maxSelectableWeek = ScheduleViewModel.DEFAULT_SELECTABLE_WEEK_LIMIT
+            val maxSelectableWeek = activeSemester?.totalWeeks?.coerceAtLeast(1)
+                ?: ScheduleViewModel.DEFAULT_SELECTABLE_WEEK_LIMIT
+            val weekPages = remember(maxSelectableWeek, allCourses, activeSemester) {
+                buildScheduleWeekPages(
+                    maxWeek = maxSelectableWeek,
+                    allCourses = allCourses,
+                    getWeekDates = viewModel::getWeekDates
+                )
+            }
+            val pagerState = rememberPagerState(
+                initialPage = (currentWeek - 1).coerceIn(0, maxSelectableWeek - 1),
+                pageCount = { maxSelectableWeek }
+            )
+            val latestCurrentWeek by rememberUpdatedState(currentWeek)
 
             LaunchedEffect(Unit) {
                 snapshotFlow { gridScrollState.value }
                     .collect { onScrollOffsetChanged?.invoke(it.toFloat()) }
             }
 
-            LaunchedEffect(currentWeek) {
-                swipeJob?.cancel()
-                swipeOffset.snapTo(0f)
-                dragBaseWeek = currentWeek
+            LaunchedEffect(currentWeek, maxSelectableWeek) {
+                val targetPage = (currentWeek - 1).coerceIn(0, maxSelectableWeek - 1)
+                if (pagerState.currentPage != targetPage) {
+                    pagerState.animateScrollToPage(targetPage)
+                }
             }
 
-            val currentPage = remember(currentWeek, allCourses, weekDates) {
-                buildScheduleWeekPage(currentWeek, allCourses, weekDates)
-            }
-            val previousWeek = (currentWeek - 1).coerceAtLeast(1)
-            val nextWeek = (currentWeek + 1).coerceAtMost(maxSelectableWeek)
-            val previousPage = remember(previousWeek, allCourses) {
-                buildScheduleWeekPage(previousWeek, allCourses, viewModel.getWeekDates(previousWeek))
-            }
-            val nextPage = remember(nextWeek, allCourses) {
-                buildScheduleWeekPage(nextWeek, allCourses, viewModel.getWeekDates(nextWeek))
-            }
-
-            val offsetPx = swipeOffset.value
-            val isDraggingPrev = offsetPx > 0f
-            val isDraggingNext = offsetPx < 0f
-            val showTransition = offsetPx != 0f
-            val activeLeftPage = when {
-                isDraggingPrev -> previousPage
-                isDraggingNext -> currentPage
-                else -> currentPage
-            }
-            val activeRightPage = when {
-                isDraggingPrev -> currentPage
-                isDraggingNext -> nextPage
-                else -> currentPage
-            }
-            val rowTranslationPx = when {
-                isDraggingPrev -> offsetPx - pageWidthPx
-                isDraggingNext -> offsetPx
-                else -> 0f
-            }
-
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .pointerInput(currentWeek, pageWidthPx) {
-                        detectHorizontalDragGestures(
-                            onDragStart = {
-                                dragBaseWeek = currentWeek
-                                swipeJob?.cancel()
-                            },
-                            onDragCancel = {
-                                swipeJob?.cancel()
-                                coroutineScope.launch {
-                                    swipeOffset.snapTo(0f)
-                                }
-                            },
-                            onHorizontalDrag = { _, dragAmount ->
-                                if (pageWidthPx <= 0f) return@detectHorizontalDragGestures
-                                val canDragLeft = dragBaseWeek < maxSelectableWeek
-                                val canDragRight = dragBaseWeek > 1
-                                val allowedDelta = when {
-                                    dragAmount < 0f && canDragLeft -> dragAmount
-                                    dragAmount > 0f && canDragRight -> dragAmount
-                                    else -> 0f
-                                }
-                                if (allowedDelta == 0f) return@detectHorizontalDragGestures
-                                swipeJob?.cancel()
-                                swipeJob = coroutineScope.launch {
-                                    val nextOffset = (swipeOffset.value + allowedDelta).coerceIn(-pageWidthPx, pageWidthPx)
-                                    swipeOffset.snapTo(nextOffset)
-                                }
-                            },
-                            onDragEnd = {
-                                if (pageWidthPx <= 0f) return@detectHorizontalDragGestures
-                                val currentOffset = swipeOffset.value
-                                val shouldAdvance = kotlin.math.abs(currentOffset) >= pageWidthPx / 2f
-                                val targetOffset = when {
-                                    shouldAdvance && currentOffset < 0f -> -pageWidthPx
-                                    shouldAdvance && currentOffset > 0f -> pageWidthPx
-                                    else -> 0f
-                                }
-                                swipeJob?.cancel()
-                                swipeJob = coroutineScope.launch {
-                                    swipeOffset.animateTo(
-                                        targetValue = targetOffset,
-                                        animationSpec = tween(
-                                            durationMillis = ScheduleMotion.StandardMillis,
-                                            easing = ScheduleMotion.StandardEasing
-                                        )
-                                    )
-                                    if (targetOffset == 0f) {
-                                        swipeOffset.snapTo(0f)
-                                        return@launch
-                                    }
-                                    val targetWeek = if (targetOffset < 0f) {
-                                        dragBaseWeek + 1
-                                    } else {
-                                        dragBaseWeek - 1
-                                    }
-                                    viewModel.selectWeek(targetWeek)
-                                    swipeOffset.snapTo(0f)
-                                }
-                            }
-                        )
+            LaunchedEffect(pagerState, maxSelectableWeek) {
+                snapshotFlow { pagerState.currentPage to pagerState.targetPage }
+                    .collect { (currentPage, targetPage) ->
+                        val previewPage = if (targetPage != currentPage) {
+                            targetPage
+                        } else {
+                            currentPage
+                        }
+                        viewModel.previewWeek(previewPage + 1)
                     }
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    if (!showTransition) {
-                        ScheduleGrid(
-                            courses = currentPage.courses,
-                            todayIndex = viewModel.todayIndex,
-                            isDarkMode = isDarkMode,
-                            hasBackground = hasBackground,
-                            showGuides = showScheduleGuides,
-                            weekDates = currentPage.weekDates,
-                            timeSlots = timeSlots,
-                            onCourseClick = { viewModel.onCourseClick(it) },
-                            onCourseLongClick = { contextMenuCourse = it },
-                            isCourseActive = { viewModel.isCourseActive(it) },
-                            isCourseUpcoming = { viewModel.isCourseUpcoming(it) },
-                            getCourseProgress = { viewModel.getCourseProgress(it) },
-                            getMinutesUntil = { viewModel.getMinutesUntilCourse(it) },
-                            scrollState = gridScrollState,
-                            modifier = Modifier.fillMaxSize()
-                        )
-                    } else {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .graphicsLayer {
-                                    translationX = rowTranslationPx
-                                }
-                        ) {
-                            ScheduleGrid(
-                                courses = activeLeftPage.courses,
-                                todayIndex = viewModel.todayIndex,
-                                isDarkMode = isDarkMode,
-                                hasBackground = hasBackground,
-                                showGuides = showScheduleGuides,
-                                weekDates = activeLeftPage.weekDates,
-                                timeSlots = timeSlots,
-                                onCourseClick = { viewModel.onCourseClick(it) },
-                                onCourseLongClick = { contextMenuCourse = it },
-                                isCourseActive = { viewModel.isCourseActive(it) },
-                                isCourseUpcoming = { viewModel.isCourseUpcoming(it) },
-                                getCourseProgress = { viewModel.getCourseProgress(it) },
-                                getMinutesUntil = { viewModel.getMinutesUntilCourse(it) },
-                                scrollState = gridScrollState,
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(pageWidth)
-                            )
-                            ScheduleGrid(
-                                courses = activeRightPage.courses,
-                                todayIndex = viewModel.todayIndex,
-                                isDarkMode = isDarkMode,
-                                hasBackground = hasBackground,
-                                showGuides = showScheduleGuides,
-                                weekDates = activeRightPage.weekDates,
-                                timeSlots = timeSlots,
-                                onCourseClick = { viewModel.onCourseClick(it) },
-                                onCourseLongClick = { contextMenuCourse = it },
-                                isCourseActive = { viewModel.isCourseActive(it) },
-                                isCourseUpcoming = { viewModel.isCourseUpcoming(it) },
-                                getCourseProgress = { viewModel.getCourseProgress(it) },
-                                getMinutesUntil = { viewModel.getMinutesUntilCourse(it) },
-                                scrollState = gridScrollState,
-                                modifier = Modifier
-                                    .fillMaxHeight()
-                                    .width(pageWidth)
-                            )
+            }
+
+            LaunchedEffect(pagerState) {
+                snapshotFlow { pagerState.settledPage }
+                    .collect { settledPage ->
+                        val settledWeek = settledPage + 1
+                        if (settledWeek != latestCurrentWeek) {
+                            viewModel.selectWeek(settledWeek)
                         }
                     }
-                }
+            }
+
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize(),
+                beyondBoundsPageCount = 1,
+                key = { it }
+            ) { pageIndex ->
+                val week = pageIndex + 1
+                val page = weekPages[week] ?: emptyScheduleWeekPage(week, viewModel.getWeekDates(week))
+
+                ScheduleGrid(
+                    coursesByDay = page.coursesByDay,
+                    todayIndex = viewModel.todayIndex,
+                    isDarkMode = isDarkMode,
+                    hasBackground = hasBackground,
+                    showGuides = showScheduleGuides,
+                    weekDates = page.weekDates,
+                    timeSlots = timeSlots,
+                    onCourseClick = { viewModel.onCourseClick(it) },
+                    onCourseLongClick = { contextMenuCourse = it },
+                    isCourseActive = { viewModel.isCourseActive(it) },
+                    isCourseUpcoming = { viewModel.isCourseUpcoming(it) },
+                    getCourseProgress = { viewModel.getCourseProgress(it) },
+                    getMinutesUntil = { viewModel.getMinutesUntilCourse(it) },
+                    scrollState = gridScrollState,
+                    modifier = Modifier.fillMaxSize()
+                )
             }
         }
 
@@ -417,6 +305,7 @@ fun ScheduleScreen(
     CourseMoveSheet(
         course = moveSheetCourse,
         isDarkMode = isDarkMode,
+        periodCount = timeSlots.size,
         onDismiss = { moveSheetCourse = null },
         onMove = { course, day, slot ->
             pendingMove = Triple(course, day, slot)
@@ -477,25 +366,55 @@ private data class SnackbarState(
 )
 
 private data class ScheduleWeekPage(
-    val courses: List<Course>,
+    val week: Int,
+    val coursesByDay: List<List<Course>>,
     val weekDates: List<String>
 )
 
-private fun buildScheduleWeekPage(
+private fun emptyScheduleWeekPage(
     week: Int,
-    allCourses: List<Course>,
     weekDates: List<String>
 ): ScheduleWeekPage {
-    val filteredCourses = allCourses.filter { ScheduleViewModel.isWeekInRange(week, it.weekRange) }
     return ScheduleWeekPage(
-        courses = filteredCourses,
+        week = week,
+        coursesByDay = List(7) { emptyList() },
         weekDates = weekDates
     )
 }
 
+private fun buildScheduleWeekPages(
+    maxWeek: Int,
+    allCourses: List<Course>,
+    getWeekDates: (Int) -> List<String>
+): Map<Int, ScheduleWeekPage> {
+    if (maxWeek <= 0) return emptyMap()
+
+    val groupedByWeekAndDay = List(maxWeek + 1) {
+        List(7) { mutableListOf<Course>() }
+    }
+
+    for (course in allCourses) {
+        val day = course.dayOfWeek
+        if (day !in 0..6) continue
+        for (week in 1..maxWeek) {
+            if (ScheduleViewModel.isWeekInRange(week, course.weekRange)) {
+                groupedByWeekAndDay[week][day].add(course)
+            }
+        }
+    }
+
+    return (1..maxWeek).associateWith { week ->
+        ScheduleWeekPage(
+            week = week,
+            coursesByDay = groupedByWeekAndDay[week].map { it.toList() },
+            weekDates = getWeekDates(week)
+        )
+    }
+}
+
 @Composable
 private fun ScheduleGrid(
-    courses: List<Course>,
+    coursesByDay: List<List<Course>>,
     todayIndex: Int,
     isDarkMode: Boolean,
     hasBackground: Boolean = false,
@@ -601,7 +520,7 @@ private fun ScheduleGrid(
                 .then(Modifier.verticalScroll(scrollState))
         ) {
             for (day in 0..6) {
-                val dayCourses = courses.filter { it.dayOfWeek == day }
+                val dayCourses = coursesByDay.getOrElse(day) { emptyList() }
                 Column(
                     modifier = Modifier
                         .weight(1f)
@@ -664,25 +583,27 @@ private fun ScheduleGrid(
                             val active = isCourseActive(course)
                             val upcoming = isCourseUpcoming(course)
 
-                            CourseCard(
-                                course = course,
-                                isDarkMode = isDarkMode,
-                                isActive = active,
-                                isUpcoming = upcoming,
-                                progress = if (active) getCourseProgress(course) else 0f,
-                                minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
-                                hasWallpaperBackground = hasBackground,
-                                onClick = { onCourseClick(course) },
-                                onLongClick = { onCourseLongClick(course) },
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .height(cardHeight)
-                                    .padding(
-                                        horizontal = ScheduleDimensions.CourseInset,
-                                        vertical = 2.dp
-                                    )
-                                    .offset(y = SLOT_HEIGHT * course.startSlot)
-                            )
+                            key(course.id, course.dayOfWeek, course.startSlot, course.name) {
+                                CourseCard(
+                                    course = course,
+                                    isDarkMode = isDarkMode,
+                                    isActive = active,
+                                    isUpcoming = upcoming,
+                                    progress = if (active) getCourseProgress(course) else 0f,
+                                    minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
+                                    hasWallpaperBackground = hasBackground,
+                                    onClick = { onCourseClick(course) },
+                                    onLongClick = { onCourseLongClick(course) },
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .height(cardHeight)
+                                        .padding(
+                                            horizontal = ScheduleDimensions.CourseInset,
+                                            vertical = 2.dp
+                                        )
+                                        .offset(y = SLOT_HEIGHT * course.startSlot)
+                                )
+                            }
                         }
                     }
                 }

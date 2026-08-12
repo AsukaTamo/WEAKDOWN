@@ -9,7 +9,7 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.TimeSlotTemplate
 
-@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class], version = 4, exportSchema = false)
+@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class], version = 5, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun courseDao(): CourseDao
@@ -47,7 +47,7 @@ abstract class AppDatabase : RoomDatabase() {
                     )
                 """.trimIndent())
                 // Insert default template
-                val defaultSlots = """[{"start":"08:00","end":"08:45"},{"start":"08:55","end":"09:40"},{"start":"10:00","end":"10:45"},{"start":"10:55","end":"11:40"},{"start":"14:00","end":"14:45"},{"start":"14:55","end":"15:40"},{"start":"16:00","end":"16:45"},{"start":"16:55","end":"17:40"},{"start":"19:00","end":"19:45"},{"start":"19:55","end":"20:40"}]"""
+                val defaultSlots = """[{"start":"08:30","end":"09:15"},{"start":"09:20","end":"10:05"},{"start":"10:15","end":"11:00"},{"start":"11:05","end":"11:50"},{"start":"14:00","end":"14:45"},{"start":"14:50","end":"15:35"},{"start":"15:45","end":"16:30"},{"start":"16:35","end":"17:20"},{"start":"18:30","end":"19:15"},{"start":"19:20","end":"20:05"},{"start":"20:15","end":"21:00"},{"start":"21:05","end":"21:50"}]"""
                 db.execSQL("INSERT INTO time_slot_templates (name, slotsJson, isActive) VALUES ('默认作息表', '$defaultSlots', 1)")
             }
         }
@@ -56,6 +56,19 @@ abstract class AppDatabase : RoomDatabase() {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE semesters ADD COLUMN backgroundUri TEXT NOT NULL DEFAULT ''")
                 db.execSQL("ALTER TABLE semesters ADD COLUMN scrimAlpha REAL NOT NULL DEFAULT 0.4")
+            }
+        }
+
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                val defaultSlots = """[{"start":"08:30","end":"09:15"},{"start":"09:20","end":"10:05"},{"start":"10:15","end":"11:00"},{"start":"11:05","end":"11:50"},{"start":"14:00","end":"14:45"},{"start":"14:50","end":"15:35"},{"start":"15:45","end":"16:30"},{"start":"16:35","end":"17:20"},{"start":"18:30","end":"19:15"},{"start":"19:20","end":"20:05"},{"start":"20:15","end":"21:00"},{"start":"21:05","end":"21:50"}]"""
+                db.execSQL(
+                    """
+                        UPDATE time_slot_templates
+                        SET slotsJson = '$defaultSlots'
+                        WHERE name = '默认作息表'
+                    """.trimIndent()
+                )
             }
         }
     }

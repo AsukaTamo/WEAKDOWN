@@ -450,7 +450,7 @@ private fun AddCoursePanel(
 
     val days = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
     val types = CourseType.entries.toList()
-    val slotOptions = (1..10).map { "第${it}节" }
+    val slotOptions = (1..12).map { "第${it}节" }
     val countOptions = (1..6).map { "${it}节" }
 
     LazyColumn(

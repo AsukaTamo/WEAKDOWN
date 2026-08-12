@@ -50,7 +50,7 @@ fun CourseAppScaffold(
     val manageViewModel: ManageViewModel = hiltViewModel()
     val importViewModel: ImportViewModel = hiltViewModel()
 
-    val currentWeek by scheduleViewModel.currentWeek.collectAsStateWithLifecycle()
+    val visibleWeek by scheduleViewModel.visibleWeek.collectAsStateWithLifecycle()
     val backgroundUri by scheduleViewModel.backgroundUri.collectAsStateWithLifecycle()
     var showWeekDialog by remember { mutableStateOf(false) }
     var showTimeSlotSettings by remember { mutableStateOf(false) }
@@ -100,7 +100,7 @@ fun CourseAppScaffold(
         topBar = {
             CourseTopBar(
                 title = topBarTitle,
-                currentWeek = currentWeek,
+                currentWeek = visibleWeek,
                 showWeekSelector = showWeekSelector,
                 hasBackground = hasBackground,
                 isDarkMode = isDarkMode,
@@ -204,7 +204,7 @@ fun CourseAppScaffold(
                     )
                     Box(modifier = Modifier.align(Alignment.TopCenter)) {
                         WeekSelectorDialog(
-                            currentWeek = currentWeek,
+                            currentWeek = visibleWeek,
                             isDarkMode = isDarkMode,
                             onWeekSelected = {
                                 scheduleViewModel.selectWeek(it)

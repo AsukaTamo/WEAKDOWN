@@ -12,7 +12,6 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -145,7 +144,13 @@ fun CourseCard(
         ),
         label = "courseCardPressScale"
     )
-    val compact = course.slotCount <= 1
+    val teacherLine = remember(course.teacher) { course.teacher.trim() }
+    val locationLine = remember(course.location) { course.location.trim() }
+    val titleFontSize = if (course.slotCount <= 1) 10.sp else 11.sp
+    val bodyFontSize = if (course.slotCount <= 1) 8.sp else 9.sp
+    val titleMaxLines = if (course.slotCount <= 1) 2 else 3
+    val bodyMaxLines = if (course.slotCount <= 1) 1 else 2
+    val lineSpacing = if (course.slotCount <= 1) 1.dp else 2.dp
 
     Box(
         modifier = modifier
@@ -189,85 +194,46 @@ fun CourseCard(
                 onClick = onClick,
                 onLongClick = { onLongClick?.invoke() }
             )
-            .padding(horizontal = 7.dp, vertical = 6.dp)
+            .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
         Column(
-            verticalArrangement = Arrangement.spacedBy(if (compact) 0.dp else 2.dp),
+            verticalArrangement = Arrangement.spacedBy(lineSpacing),
             modifier = Modifier.fillMaxSize()
         ) {
             Text(
                 text = course.name,
                 color = Color.White,
-                fontSize = if (compact) 10.sp else 11.sp,
-                fontWeight = FontWeight.SemiBold,
-                lineHeight = if (compact) 12.sp else 13.sp,
-                maxLines = if (compact) 2 else 3,
-                overflow = TextOverflow.Ellipsis,
+                fontSize = titleFontSize,
+                fontWeight = FontWeight.Bold,
+                lineHeight = if (course.slotCount <= 1) 11.sp else 12.sp,
+                maxLines = titleMaxLines,
+                overflow = TextOverflow.Clip,
                 modifier = Modifier.fillMaxWidth()
             )
 
-            if (course.location.isNotEmpty()) {
+            if (teacherLine.isNotBlank()) {
                 Text(
-                    text = course.location,
-                    color = Color.White.copy(alpha = 0.86f),
-                    fontSize = if (compact) 8.sp else 9.sp,
+                    text = teacherLine,
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = bodyFontSize,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
+                    maxLines = bodyMaxLines,
+                    overflow = TextOverflow.Clip,
                     modifier = Modifier.fillMaxWidth()
                 )
             }
 
-            if (!compact) {
+            if (locationLine.isNotBlank()) {
                 Text(
-                    text = "第${course.startSlot + 1}-${course.startSlot + course.slotCount}节 · ${course.weekRange}",
-                    color = Color.White.copy(alpha = 0.68f),
-                    fontSize = 8.sp,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.fillMaxWidth()
-                )
-
-                if (course.teacher.isNotEmpty()) {
-                    Text(
-                        text = course.teacher,
-                        color = Color.White.copy(alpha = 0.72f),
-                        fontSize = 8.sp,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
-            }
-
-            Spacer(modifier = Modifier.weight(1f))
-
-            if (isActive && progress > 0f) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(3.dp)
-                        .background(Color.White.copy(alpha = 0.24f), RoundedCornerShape(2.dp))
-                ) {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxHeight()
-                            .fillMaxWidth(fraction = progress.coerceIn(0f, 1f))
-                            .background(Color.White, RoundedCornerShape(2.dp))
-                    )
-                }
-            } else if (isUpcoming && minutesUntil > 0 && !compact) {
-                Text(
-                    text = if (minutesUntil < 60) {
-                        "${minutesUntil}分钟后开始"
-                    } else {
-                        "${minutesUntil / 60}小时${minutesUntil % 60}分钟后开始"
-                    },
-                    color = Color.White.copy(alpha = 0.86f),
-                    fontSize = 8.sp,
+                    text = "@$locationLine",
+                    color = Color.White.copy(alpha = 0.88f),
+                    fontSize = bodyFontSize,
                     fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
+                    lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
+                    maxLines = bodyMaxLines,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
