@@ -22,8 +22,31 @@ class ManageViewModel @Inject constructor(
     private val repository: CourseRepository
 ) : ViewModel() {
 
-    val courses: StateFlow<List<Course>> = repository.getAllCourses()
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+    private val allCourses: Flow<List<Course>> = repository.getAllCourses()
+
+    /** 管理页只展示当前学期的课，和首页保持同一口径，避免"管理里有、首页没有"。 */
+    val courses: StateFlow<List<Course>> = combine(
+        allCourses,
+        repository.getActiveSemester()
+    ) { list, semester ->
+        ScheduleCourseFilter.activeSemesterCourses(
+            courses = list,
+            activeSemester = semester,
+            defaultSemesterId = ScheduleViewModel.DEFAULT_SEMESTER_ID
+        )
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
+
+    /**
+     * 所属学期已被删除的课程：首页和课程管理都不会显示，只能在管理页显式清理。
+     * 正常删除学期走 [CourseRepository.deleteSemesterWithCourses]，不会再产生这种数据。
+     */
+    val orphanCourseCount: StateFlow<Int> = combine(
+        allCourses,
+        repository.getAllSemesters()
+    ) { list, semesters ->
+        val validSemesterIds = semesters.map { it.id }.toSet()
+        list.count { it.semester !in validSemesterIds }
+    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
     var selectedTab by mutableIntStateOf(0)
         private set
@@ -108,6 +131,9 @@ class ManageViewModel @Inject constructor(
             return
         }
         viewModelScope.launch {
+            // 课程必须归属当前学期，否则首页（按学期过滤）看不到，只会在"全部课程"里出现。
+            val semesterId = repository.getActiveSemesterSync()?.id
+                ?: ScheduleViewModel.DEFAULT_SEMESTER_ID
             val course = Course(
                 name = courseName,
                 teacher = teacher,
@@ -117,6 +143,7 @@ class ManageViewModel @Inject constructor(
                 slotCount = selectedSlotCount,
                 type = selectedType,
                 weekRange = weekRange,
+                semester = semesterId,
                 credits = credits.toFloatOrNull() ?: 0f,
                 notes = notes,
                 customColor = selectedColor?.let { color ->
@@ -133,6 +160,18 @@ class ManageViewModel @Inject constructor(
         viewModelScope.launch {
             repository.deleteCourse(course)
             _snackbarMessage.emit("已删除「${course.name}」" to "success")
+        }
+    }
+
+    /** 清理所属学期已不存在的课程，这些课在任何课表视图里都不会再出现。 */
+    fun clearOrphanCourses() {
+        viewModelScope.launch {
+            val validSemesterIds = repository.getAllSemesters().first().map { it.id }.toSet()
+            val orphans = repository.getAllCourses().first()
+                .filter { it.semester !in validSemesterIds }
+            if (orphans.isEmpty()) return@launch
+            repository.deleteCoursesByIds(orphans.map { it.id })
+            _snackbarMessage.emit("已清理 ${orphans.size} 门失效课程" to "success")
         }
     }
 

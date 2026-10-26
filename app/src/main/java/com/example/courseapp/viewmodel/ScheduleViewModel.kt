@@ -12,6 +12,7 @@ import com.google.gson.reflect.TypeToken
 import com.example.courseapp.data.repository.CourseRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
@@ -73,19 +74,48 @@ class ScheduleViewModel @Inject constructor(
     )
     val showScheduleGuides: StateFlow<Boolean> = _showScheduleGuides.asStateFlow()
 
-    val todayIndex: Int
-        get() {
-            val cal = Calendar.getInstance()
-            return (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
-        }
-
-    val semesterText: String
-        get() = _activeSemester.value?.name ?: "2025-2026学年 第二学期"
-
+    /** 学期第一天的 0 点；必须声明在使用它的 StateFlow 之前，否则构造期读到 null。 */
     private var semesterStartDate = Calendar.getInstance().apply {
         set(2025, Calendar.FEBRUARY, 24, 0, 0, 0)
         set(Calendar.MILLISECOND, 0)
     }
+
+    /**
+     * 课表的"此刻"。每 [CLOCK_TICK_MILLIS] 刷新一次，页面订阅时才会跑，离开首页自动停止。
+     * 所有进行中/即将开始/进度判断都以它为准，保证 UI 不依赖其它状态变化才会更新。
+     */
+    val clock: StateFlow<ScheduleClock> = flow {
+        while (true) {
+            emit(ScheduleClock.now())
+            delay(CLOCK_TICK_MILLIS)
+        }
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(CLOCK_SUBSCRIPTION_TIMEOUT_MILLIS),
+        initialValue = ScheduleClock.now()
+    )
+
+    /** 当前学期名，供顶栏使用。 */
+    val semesterText: String
+        get() = _activeSemester.value?.name ?: "2025-2026学年 第二学期"
+
+    /**
+     * 学期里【今天真正属于】的那一周，只跟日期走，不随翻页变化。
+     * 进行中/即将开始的标记只在"正在查看的周 == 日历周"时显示，否则同一节课在每一周都会被点亮。
+     */
+    val calendarWeek: StateFlow<Int> = combine(clock, _activeSemester) { _, _ ->
+        calculateCalendarWeek()
+    }.distinctUntilChanged().stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(CLOCK_SUBSCRIPTION_TIMEOUT_MILLIS),
+        initialValue = calculateCalendarWeek()
+    )
+
+    private fun calculateCalendarWeek(): Int = weekOfSemester(
+        startDateMillis = semesterStartDate.timeInMillis,
+        nowMillis = System.currentTimeMillis(),
+        totalWeeks = _activeSemester.value?.totalWeeks ?: DEFAULT_SELECTABLE_WEEK_LIMIT
+    )
 
     init {
         loadSemester()
@@ -107,11 +137,8 @@ class ScheduleViewModel @Inject constructor(
                             set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
                             set(Calendar.MILLISECOND, 0)
                         }
-                        // Auto-calculate current week
-                        val now = Calendar.getInstance()
-                        val diffMs = now.timeInMillis - semesterStartDate.timeInMillis
-                        val diffWeeks = (diffMs / (7 * 24 * 60 * 60 * 1000L)).toInt() + 1
-                        val calculatedWeek = diffWeeks.coerceIn(1, semester.totalWeeks.coerceAtLeast(1))
+                        // 首次进入停留在"今天属于的那一周"
+                        val calculatedWeek = calculateCalendarWeek()
                         _currentWeek.value = calculatedWeek
                         _visibleWeek.value = calculatedWeek
                     } catch (_: Exception) {}
@@ -171,18 +198,67 @@ class ScheduleViewModel @Inject constructor(
     }
 
     fun saveTimeSlotTemplate(name: String, slots: List<TimeSlot>) {
+        if (slots.isEmpty()) {
+            viewModelScope.launch { _snackbarMessage.emit("至少保留一个时段" to "error") }
+            return
+        }
         viewModelScope.launch {
             val json = Gson().toJson(slots)
-            val template = TimeSlotTemplate(name = name, slotsJson = json, isActive = true)
-            repository.insertTimeSlotTemplate(template)
+            // 新模板必须顶掉旧模板的激活状态，否则重启后可能加载到旧作息。
+            repository.replaceActiveTimeSlotTemplate(name, json)
             _timeSlots.value = slots
             _snackbarMessage.emit("已保存作息表「$name」" to "success")
         }
     }
 
+    /** 已保存的作息表列表（含当前激活项），供作息设置页切换。 */
+    val timeSlotTemplates: StateFlow<List<TimeSlotTemplate>> =
+        repository.getAllTimeSlotTemplates()
+            .stateIn(
+                scope = viewModelScope,
+                started = SharingStarted.WhileSubscribed(CLOCK_SUBSCRIPTION_TIMEOUT_MILLIS),
+                initialValue = emptyList()
+            )
+
+    fun selectTimeSlotTemplate(template: TimeSlotTemplate) {
+        viewModelScope.launch {
+            repository.setActiveTimeSlotTemplate(template.id)
+            _snackbarMessage.emit("已切换到「${template.name}」" to "success")
+        }
+    }
+
+    /** 把当前编辑内容写回正在使用的作息表，不新建记录。 */
+    fun updateActiveTimeSlotTemplate(slots: List<TimeSlot>) {
+        if (slots.isEmpty()) {
+            viewModelScope.launch { _snackbarMessage.emit("至少保留一个时段" to "error") }
+            return
+        }
+        viewModelScope.launch {
+            val active = repository.getActiveTimeSlotTemplateSync()
+            if (active == null) {
+                _snackbarMessage.emit("请先另存为一个作息表" to "error")
+                return@launch
+            }
+            repository.updateTimeSlotTemplate(active.copy(slotsJson = Gson().toJson(slots)))
+            _timeSlots.value = normalizeLoadedTimeSlots(slots)
+            _snackbarMessage.emit("已保存到「${active.name}」" to "success")
+        }
+    }
+
+    fun deleteTimeSlotTemplate(template: TimeSlotTemplate) {
+        viewModelScope.launch {
+            repository.deleteTimeSlotTemplate(template)
+            _snackbarMessage.emit("已删除作息表「${template.name}」" to "success")
+        }
+    }
+
     private fun initSampleData() {
+        // 示例数据只播种一次：清空数据后重启不应该再"复活"示范课程。
+        if (preferences.getBoolean(KEY_SAMPLE_SEEDED, false)) return
         viewModelScope.launch {
             if (repository.getAllCourses().first().isEmpty()) {
+                val semesterId = repository.getActiveSemesterSync()?.id
+                    ?: DEFAULT_SEMESTER_ID
                 val samples = listOf(
                     Course(name = "操作系统", teacher = "张教授", location = "教三楼301", dayOfWeek = 0, startSlot = 0, slotCount = 2, type = CourseType.REQUIRED, weekRange = "1-18周"),
                     Course(name = "计算机网络", teacher = "李教授", location = "教三楼301", dayOfWeek = 0, startSlot = 2, slotCount = 2, type = CourseType.REQUIRED, weekRange = "1-18周"),
@@ -195,9 +271,11 @@ class ScheduleViewModel @Inject constructor(
                     Course(name = "人工智能导论", teacher = "王教授", location = "教五楼502", dayOfWeek = 3, startSlot = 2, slotCount = 2, type = CourseType.ELECTIVE, weekRange = "1-16周"),
                     Course(name = "编译原理", teacher = "赵教授", location = "教三楼205", dayOfWeek = 4, startSlot = 0, slotCount = 2, type = CourseType.REQUIRED, weekRange = "1-18周"),
                     Course(name = "职业规划", teacher = "陈老师", location = "教一楼101", dayOfWeek = 4, startSlot = 4, slotCount = 2, type = CourseType.CUSTOM, weekRange = "6-14周"),
-                )
+                ).map { it.copy(semester = semesterId) }
                 samples.forEach { repository.insertCourse(it) }
             }
+            // 无论本次是否真的插入，都把"示例数据已处理"记下来，避免清空数据后再次播种。
+            preferences.edit().putBoolean(KEY_SAMPLE_SEEDED, true).apply()
         }
     }
 
@@ -333,61 +411,38 @@ class ScheduleViewModel @Inject constructor(
         return _timeSlots.value.flatMap { listOf(it.start, it.end) }
     }
 
-    fun isCourseActive(course: Course): Boolean {
-        val now = Calendar.getInstance()
-        val today = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
-        if (course.dayOfWeek != today) return false
-        val slots = _timeSlots.value
-        if (course.startSlot >= slots.size) return false
-        val startParts = slots[course.startSlot].start.split(":")
-        val endSlot = (course.startSlot + course.slotCount - 1).coerceAtMost(slots.size - 1)
-        val endParts = slots[endSlot].end.split(":")
-        val startMin = startParts[0].toInt() * 60 + startParts[1].toInt()
-        val endMin = endParts[0].toInt() * 60 + endParts[1].toInt()
-        val nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        return nowMin in startMin..endMin
-    }
+    fun isCourseActive(course: Course, clock: ScheduleClock): Boolean =
+        CourseTimeStatus.isActive(course, _timeSlots.value, clock.dayIndex, clock.minuteOfDay)
 
-    fun getCourseProgress(course: Course): Float {
-        val slots = _timeSlots.value
-        if (course.startSlot >= slots.size) return 0f
-        val startParts = slots[course.startSlot].start.split(":")
-        val endSlot = (course.startSlot + course.slotCount - 1).coerceAtMost(slots.size - 1)
-        val endParts = slots[endSlot].end.split(":")
-        val startMin = startParts[0].toInt() * 60 + startParts[1].toInt()
-        val endMin = endParts[0].toInt() * 60 + endParts[1].toInt()
-        val now = Calendar.getInstance()
-        val nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        return ((nowMin - startMin).toFloat() / (endMin - startMin)).coerceIn(0f, 1f)
-    }
+    fun getCourseProgress(course: Course, clock: ScheduleClock): Float =
+        CourseTimeStatus.progress(course, _timeSlots.value, clock.minuteOfDay)
 
-    fun isCourseUpcoming(course: Course): Boolean {
-        val now = Calendar.getInstance()
-        val today = (now.get(Calendar.DAY_OF_WEEK) + 5) % 7
-        if (course.dayOfWeek != today) return false
-        val slots = _timeSlots.value
-        if (course.startSlot >= slots.size) return false
-        val startParts = slots[course.startSlot].start.split(":")
-        val startMin = startParts[0].toInt() * 60 + startParts[1].toInt()
-        val nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        return nowMin < startMin
-    }
+    fun isCourseUpcoming(course: Course, clock: ScheduleClock): Boolean =
+        CourseTimeStatus.isUpcoming(course, _timeSlots.value, clock.dayIndex, clock.minuteOfDay)
 
-    fun getMinutesUntilCourse(course: Course): Int {
-        val slots = _timeSlots.value
-        if (course.startSlot >= slots.size) return 0
-        val startParts = slots[course.startSlot].start.split(":")
-        val startMin = startParts[0].toInt() * 60 + startParts[1].toInt()
-        val now = Calendar.getInstance()
-        val nowMin = now.get(Calendar.HOUR_OF_DAY) * 60 + now.get(Calendar.MINUTE)
-        return (startMin - nowMin).coerceAtLeast(0)
-    }
+    fun getMinutesUntilCourse(course: Course, clock: ScheduleClock): Int =
+        CourseTimeStatus.minutesUntil(course, _timeSlots.value, clock.dayIndex, clock.minuteOfDay)
+
+    fun getCourseRemainingMinutes(course: Course, clock: ScheduleClock): Int =
+        CourseTimeStatus.minutesRemaining(course, _timeSlots.value, clock.minuteOfDay)
 
     companion object {
         const val DEFAULT_SEMESTER_ID = "2025-2026-2"
         const val DEFAULT_SELECTABLE_WEEK_LIMIT = 30
         private const val KEY_DARK_MODE = "dark_mode"
         private const val KEY_SHOW_SCHEDULE_GUIDES = "show_schedule_guides"
+        private const val KEY_SAMPLE_SEEDED = "sample_data_seeded"
+
+        /** 课表"此刻"刷新间隔：15 秒足够让进度条和倒计时看起来是连续的，又不至于频繁重组。 */
+        private const val CLOCK_TICK_MILLIS = 15_000L
+        private const val CLOCK_SUBSCRIPTION_TIMEOUT_MILLIS = 5_000L
+        private const val WEEK_MILLIS = 7L * 24 * 60 * 60 * 1000
+
+        /** 开学日期到 now 属于第几周（1 基），早于开学按第 1 周、超出总周数按最后一周收敛。 */
+        fun weekOfSemester(startDateMillis: Long, nowMillis: Long, totalWeeks: Int): Int {
+            val diffWeeks = ((nowMillis - startDateMillis) / WEEK_MILLIS).toInt() + 1
+            return diffWeeks.coerceIn(1, totalWeeks.coerceAtLeast(1))
+        }
 
         fun defaultTimeSlots() = listOf(
             TimeSlot("08:30", "09:15"),

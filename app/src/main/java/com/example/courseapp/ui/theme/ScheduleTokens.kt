@@ -2,7 +2,13 @@ package com.example.courseapp.ui.theme
 
 import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 
 object ScheduleDimensions {
@@ -121,4 +127,53 @@ fun schedulePalette(isDarkMode: Boolean, hasWallpaper: Boolean): SchedulePalette
         fabContainer = Color(0xFF111827),
         fabMenuSurface = if (hasWallpaper) Color(0xF5FFFFFF) else if (isDarkMode) CardDark else Color.White
     )
+}
+
+/**
+ * 非首页页面（课程管理 / 我的 / 导入 / 作息 / 各类弹层）的统一色板。
+ * 与首页同一套青绿强调色与玻璃卡片质感，避免切换 Tab 时画风跳变。
+ */
+data class ContentPalette(
+    val canvasStart: Color,
+    val canvasEnd: Color,
+    val surface: Color,
+    val surfaceAlt: Color,
+    val surfaceBorder: Color,
+    val accent: Color,
+    val accentSoft: Color,
+    val title: Color,
+    val body: Color,
+    val muted: Color,
+    val divider: Color,
+    val inputSurface: Color,
+    val destructive: Color
+)
+
+fun contentPalette(isDarkMode: Boolean): ContentPalette = ContentPalette(
+    canvasStart = if (isDarkMode) Color(0xFF0B1017) else Color(0xFFF2F6F8),
+    canvasEnd = if (isDarkMode) Color(0xFF111827) else Color(0xFFEAF2F0),
+    surface = if (isDarkMode) Color(0xFF151A23) else Color(0xFFFDFEFE),
+    surfaceAlt = if (isDarkMode) Color(0xFF1B222C) else Color(0xFFF7FAFB),
+    surfaceBorder = if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color(0xFFE1E8EC),
+    accent = if (isDarkMode) Color(0xFF3FC7AE) else Color(0xFF0F8F7B),
+    accentSoft = if (isDarkMode) Color(0xFF3FC7AE).copy(alpha = 0.16f) else Color(0xFF0F8F7B).copy(alpha = 0.10f),
+    title = if (isDarkMode) Color(0xFFE8ECF0) else Color(0xFF102027),
+    body = if (isDarkMode) Color(0xFFC5CED8) else Color(0xFF34414A),
+    muted = if (isDarkMode) Color(0xFF8D97A5) else Color(0xFF6B7885),
+    divider = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0xFFE1E8EC),
+    inputSurface = if (isDarkMode) Color(0xFF0F141D) else Color(0xFFF5F8FA),
+    destructive = Color(0xFFE0524A)
+)
+
+/** 统一卡片外观：圆角 + 实色面 + 细描边。 */
+fun Modifier.contentCard(
+    palette: ContentPalette,
+    radius: Dp = 16.dp,
+    filled: Boolean = true
+): Modifier {
+    val shape = RoundedCornerShape(radius)
+    return this
+        .clip(shape)
+        .then(if (filled) Modifier.background(palette.surface) else Modifier)
+        .border(0.8.dp, palette.surfaceBorder, shape)
 }

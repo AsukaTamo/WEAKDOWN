@@ -3,6 +3,7 @@ package com.example.courseapp.ui.components
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -27,10 +28,12 @@ fun WeekSelectorDialog(
     onWeekSelected: (Int) -> Unit,
     onDismiss: () -> Unit,
     isDarkMode: Boolean = false,
-    maxWeek: Int = 30
+    maxWeek: Int = 30,
+    thisWeek: Int = currentWeek
 ) {
     var selectedWeek by remember { mutableIntStateOf(currentWeek) }
     val rowCount = (maxWeek + 4) / 5
+    val palette = contentPalette(isDarkMode)
 
     Box(
         modifier = Modifier
@@ -42,9 +45,7 @@ fun WeekSelectorDialog(
                 spotColor = Color.Black.copy(alpha = 0.1f)
             )
             .clip(RoundedCornerShape(bottomStart = 20.dp, bottomEnd = 20.dp))
-            .background(
-                if (isDarkMode) GlassDark else GlassWhite
-            )
+            .background(palette.surface.copy(alpha = 0.97f))
     ) {
         // Frosted glass overlay
         Box(
@@ -79,7 +80,7 @@ fun WeekSelectorDialog(
                 text = "选择教学周",
                 fontSize = 16.sp,
                 fontWeight = FontWeight.SemiBold,
-                color = if (isDarkMode) Color.White else TextPrimary,
+                color = palette.title,
                 letterSpacing = 0.3.sp
             )
             Spacer(modifier = Modifier.height(14.dp))
@@ -97,6 +98,7 @@ fun WeekSelectorDialog(
                                 WeekOption(
                                     week = week,
                                     isSelected = week == selectedWeek,
+                                    isThisWeek = week == thisWeek,
                                     isDarkMode = isDarkMode,
                                     onClick = { selectedWeek = week },
                                     modifier = Modifier.weight(1f)
@@ -118,7 +120,7 @@ fun WeekSelectorDialog(
                     .fillMaxWidth()
                     .height(44.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {
                 Text(
                     text = "确认",
@@ -135,20 +137,26 @@ fun WeekSelectorDialog(
 private fun WeekOption(
     week: Int,
     isSelected: Boolean,
+    isThisWeek: Boolean,
     isDarkMode: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val palette = contentPalette(isDarkMode)
+    val shape = CircleShape
     Box(
         modifier = modifier
             .aspectRatio(1f)
-            .clip(CircleShape)
+            .clip(shape)
             .background(
-                if (isSelected) Primary
-                else if (isDarkMode) Color(0xFF2C2C2C) else Color(0xFFFAFAFA)
+                if (isSelected) palette.accent else palette.surfaceAlt
             )
             .then(
-                if (!isSelected) Modifier.shadow(0.dp) else Modifier
+                if (isThisWeek && !isSelected) {
+                    Modifier.border(1.2.dp, palette.accent, shape)
+                } else {
+                    Modifier
+                }
             )
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center
@@ -156,9 +164,8 @@ private fun WeekOption(
         Text(
             text = week.toString(),
             fontSize = 14.sp,
-            fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
-            color = if (isSelected) Color.White
-                   else if (isDarkMode) Color.White else TextPrimary,
+            fontWeight = if (isSelected || isThisWeek) FontWeight.Bold else FontWeight.Medium,
+            color = if (isSelected) Color.White else palette.title,
             textAlign = TextAlign.Center
         )
     }

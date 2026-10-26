@@ -67,6 +67,8 @@ fun ScheduleScreen(
     val backgroundUri by viewModel.backgroundUri.collectAsStateWithLifecycle()
     val scrimAlpha by viewModel.scrimAlpha.collectAsStateWithLifecycle()
     val showScheduleGuides by viewModel.showScheduleGuides.collectAsStateWithLifecycle()
+    val clock by viewModel.clock.collectAsStateWithLifecycle()
+    val calendarWeek by viewModel.calendarWeek.collectAsStateWithLifecycle()
 
     var showWeekDialog by remember { mutableStateOf(false) }
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
@@ -200,7 +202,8 @@ fun ScheduleScreen(
 
                 ScheduleGrid(
                     coursesByDay = page.coursesByDay,
-                    todayIndex = viewModel.todayIndex,
+                    todayIndex = clock.dayIndex,
+                    isCurrentWeek = week == calendarWeek,
                     isDarkMode = isDarkMode,
                     hasBackground = hasBackground,
                     showGuides = showScheduleGuides,
@@ -208,10 +211,11 @@ fun ScheduleScreen(
                     timeSlots = timeSlots,
                     onCourseClick = { viewModel.onCourseClick(it) },
                     onCourseLongClick = { contextMenuCourse = it },
-                    isCourseActive = { viewModel.isCourseActive(it) },
-                    isCourseUpcoming = { viewModel.isCourseUpcoming(it) },
-                    getCourseProgress = { viewModel.getCourseProgress(it) },
-                    getMinutesUntil = { viewModel.getMinutesUntilCourse(it) },
+                    isCourseActive = { viewModel.isCourseActive(it, clock) },
+                    isCourseUpcoming = { viewModel.isCourseUpcoming(it, clock) },
+                    getCourseProgress = { viewModel.getCourseProgress(it, clock) },
+                    getMinutesUntil = { viewModel.getMinutesUntilCourse(it, clock) },
+                    getRemainingMinutes = { viewModel.getCourseRemainingMinutes(it, clock) },
                     scrollState = gridScrollState,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -416,6 +420,7 @@ private fun buildScheduleWeekPages(
 private fun ScheduleGrid(
     coursesByDay: List<List<Course>>,
     todayIndex: Int,
+    isCurrentWeek: Boolean = true,
     isDarkMode: Boolean,
     hasBackground: Boolean = false,
     showGuides: Boolean = true,
@@ -427,6 +432,7 @@ private fun ScheduleGrid(
     isCourseUpcoming: (Course) -> Boolean = { false },
     getCourseProgress: (Course) -> Float = { 0f },
     getMinutesUntil: (Course) -> Int = { 0 },
+    getRemainingMinutes: (Course) -> Int = { 0 },
     scrollState: ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
@@ -526,7 +532,7 @@ private fun ScheduleGrid(
                         .weight(1f)
                 ) {
                     // Day header with date — glass style
-                    val isToday = day == todayIndex
+                    val isToday = isCurrentWeek && day == todayIndex
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -580,8 +586,8 @@ private fun ScheduleGrid(
                         // Course cards
                         for (course in dayCourses) {
                             val cardHeight = SLOT_HEIGHT * course.slotCount - 1.dp
-                            val active = isCourseActive(course)
-                            val upcoming = isCourseUpcoming(course)
+                            val active = isCurrentWeek && isCourseActive(course)
+                            val upcoming = isCurrentWeek && isCourseUpcoming(course)
 
                             key(course.id, course.dayOfWeek, course.startSlot, course.name) {
                                 CourseCard(
@@ -591,6 +597,7 @@ private fun ScheduleGrid(
                                     isUpcoming = upcoming,
                                     progress = if (active) getCourseProgress(course) else 0f,
                                     minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
+                                    remainingMinutes = if (active) getRemainingMinutes(course) else 0,
                                     hasWallpaperBackground = hasBackground,
                                     onClick = { onCourseClick(course) },
                                     onLongClick = { onCourseLongClick(course) },
@@ -727,7 +734,7 @@ private fun FabMenuItem(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (hasBackground) Color(0xFF0F766E) else Primary,
+            tint = if (hasBackground) Color(0xFF0F766E) else Color(0xFF0F8F7B),
             modifier = Modifier.size(20.dp)
         )
         Text(
