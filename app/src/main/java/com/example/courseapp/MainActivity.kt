@@ -10,9 +10,11 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.border
 import androidx.compose.foundation.background
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -23,11 +25,15 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
@@ -57,6 +63,7 @@ import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ImportViewModel
 import com.example.courseapp.viewmodel.ManageViewModel
 import com.example.courseapp.viewmodel.ScheduleViewModel
+import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 
 sealed class Screen {
@@ -82,7 +89,8 @@ private fun ThemeMorphIcon(
     isSun: Boolean,
     tint: Color,
     rotation: Float,
-    iconDescription: String
+    iconDescription: String,
+    scale: Float = 1f
 ) {
     val sunProgress by animateFloatAsState(
         targetValue = if (isSun) 1f else 0f,
@@ -96,6 +104,8 @@ private fun ThemeMorphIcon(
             .semantics { contentDescription = iconDescription }
             .graphicsLayer {
                 rotationZ = rotation
+                scaleX = scale
+                scaleY = scale
                 compositingStrategy = CompositingStrategy.Offscreen
             },
     ) {
@@ -150,6 +160,11 @@ class MainActivity : ComponentActivity() {
         setContent {
             val scheduleViewModel: ScheduleViewModel = hiltViewModel()
             val isDarkMode by scheduleViewModel.isDarkMode.collectAsStateWithLifecycle()
+    // 冷启动跟随系统；用户点了太阳/月亮按钮后，本次进程内以手动选择为准
+    val systemDarkMode = isSystemInDarkTheme()
+    LaunchedEffect(systemDarkMode) {
+        scheduleViewModel.updateSystemDarkMode(systemDarkMode)
+    }
 
             SideEffect {
                 WindowCompat.getInsetsController(window, window.decorView).apply {
@@ -201,6 +216,12 @@ fun CourseApp(
     val weekMorphProgress = remember { Animatable(0f) }
     var weekChipBounds by remember { mutableStateOf(Rect.Zero) }
     var weekArrowBounds by remember { mutableStateOf(Rect.Zero) }
+    // 主题切换：圆形揭示 + 图标缩放
+    val themeReveal = remember { Animatable(1f) }
+    val themeIconScale = remember { Animatable(1f) }
+    var themeRevealCenter by remember { mutableStateOf(Offset.Zero) }
+    var themeRevealColor by remember { mutableStateOf(Color.Transparent) }
+    val themeScope = rememberCoroutineScope()
 
     val navItems = listOf(
         NavItem(Screen.Schedule, "首页", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth),
@@ -245,7 +266,8 @@ fun CourseApp(
         if (hasBackground) {
             ImmersiveScheduleBackground(
                 backgroundUri = backgroundUri,
-                scrimAlpha = scrimAlpha
+                scrimAlpha = scrimAlpha,
+                isDarkMode = isDarkMode
             )
         }
 
@@ -256,7 +278,7 @@ fun CourseApp(
             var themeIconRotation by remember { mutableFloatStateOf(0f) }
             val animatedThemeIconRotation by animateFloatAsState(
                 targetValue = themeIconRotation,
-                animationSpec = tween(520, easing = FastOutSlowInEasing),
+                animationSpec = tween(300, easing = FastOutSlowInEasing),
                 label = "themeIconRotation"
             )
 
@@ -300,25 +322,40 @@ fun CourseApp(
                         onClick = {
                             // 每次累计 180°，让太阳/月亮始终沿同一方向旋转。
                             themeIconRotation += 180f
-                            scheduleViewModel.toggleDarkMode()
+                            themeRevealColor = appColors(isDarkMode).canvas
+                            themeScope.launch {
+                                themeIconScale.animateTo(0f, tween(150, easing = FastOutSlowInEasing))
+                                themeIconScale.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
+                            }
+                            themeScope.launch {
+                                themeReveal.snapTo(0f)
+                                scheduleViewModel.toggleDarkMode()
+                                ThemeTransition.trigger()
+                                themeReveal.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = tween(450, easing = FastOutSlowInEasing)
+                                )
+                            }
                         },
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
                             // 靠右一点点：与顶栏内容右边缘留 6dp，视觉上更贴近圆角外壳
                             .padding(end = 6.dp)
                             .size(40.dp)
+                            .onGloballyPositioned { themeRevealCenter = it.boundsInRoot().center }
                     ) {
                         Box(
                             modifier = Modifier
                                 .size(38.dp)
                                 .clip(RoundedCornerShape(19.dp))
-                                .background(palette.weekChip.copy(alpha = if (hasBackground) 0.36f else 0.10f)),
+                                .background(palette.topContent.copy(alpha = if (hasBackground) 0.16f else 0.08f)),
                             contentAlignment = Alignment.Center
                         ) {
                             ThemeMorphIcon(
                                 isSun = isDarkMode,
                                 tint = palette.topContent,
                                 rotation = animatedThemeIconRotation,
+                                scale = themeIconScale.value,
                                 iconDescription = if (isDarkMode) "切换为浅色模式" else "切换为深色模式"
                             )
                         }
@@ -485,10 +522,15 @@ fun CourseApp(
                                         }
                                         .clip(RoundedCornerShape(22.dp))
                                         .background(
-                                            if (isSelected) Color.Black.copy(alpha = 0.92f)
-                                            else Color.Transparent
+                                            if (isSelected) palette.weekChip else Color.Transparent
                                         )
-                                        .clickable { currentScreen = item.screen }
+                                        .clickable {
+                                            currentScreen = item.screen
+                                            // 底部「+」直接进添加表单，补上首页 FAB 移除后的添加入口
+                                            if (item.screen == Screen.Manage) {
+                                                manageViewModel.switchTab(1)
+                                            }
+                                        }
                                         .padding(
                                             horizontal = if (isSelected) 18.dp else 10.dp,
                                             vertical = 6.dp
@@ -503,7 +545,7 @@ fun CourseApp(
                                         Icon(
                                             imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
                                             contentDescription = item.label,
-                                            tint = if (isSelected) palette.navSelected else palette.navInactive,
+                                            tint = if (isSelected) palette.weekChipContent else palette.navInactive,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -512,7 +554,7 @@ fun CourseApp(
                                         text = item.label,
                                         fontSize = 10.sp,
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                        color = if (isSelected) palette.navSelected else palette.navInactive,
+                                        color = if (isSelected) palette.weekChipContent else palette.navInactive,
                                         letterSpacing = 0.2.sp
                                     )
                                 }
@@ -544,7 +586,11 @@ fun CourseApp(
             }
 
             if (currentScreen == Screen.Manage) {
-                ManageScreen(viewModel = manageViewModel, isDarkMode = isDarkMode)
+                ManageScreen(
+                    viewModel = manageViewModel,
+                    isDarkMode = isDarkMode,
+                    onNavigateToImport = { currentScreen = Screen.WebImport }
+                )
             }
 
             if (currentScreen == Screen.Profile) {
@@ -617,6 +663,24 @@ fun CourseApp(
         onDismiss = { showWeekDialog = false }
     )
 
+    // 主题切换的圆形揭示：用旧底色盖住全屏，只挖出从按钮扩散的圆洞
+    if (themeReveal.value < 1f) {
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            val maxRadius = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat()
+            val path = Path().apply {
+                fillType = PathFillType.EvenOdd
+                addRect(Rect(0f, 0f, size.width, size.height))
+                addOval(
+                    Rect(
+                        center = themeRevealCenter,
+                        radius = maxRadius * themeReveal.value
+                    )
+                )
+            }
+            drawPath(path, themeRevealColor)
+        }
+    }
+
     // 课程详情抽屉：放在根布局，遮罩才能覆盖顶栏与底部导航
     CourseDetailSheet(
         course = selectedCourse,
@@ -634,7 +698,8 @@ fun CourseApp(
 @Composable
 private fun ImmersiveScheduleBackground(
     backgroundUri: String,
-    scrimAlpha: Float
+    scrimAlpha: Float,
+    isDarkMode: Boolean
 ) {
     val file = remember(backgroundUri) { java.io.File(backgroundUri) }
     if (!file.exists()) return
@@ -649,10 +714,12 @@ private fun ImmersiveScheduleBackground(
         modifier = Modifier.fillMaxSize(),
         contentScale = ContentScale.Crop
     )
+    // 遮罩跟着主题走：浅色用流光白、深色用藏蓝，不再一律压黑
+    val maskColor = appColors(isDarkMode).canvas
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color.Black.copy(alpha = scrimAlpha))
+            .background(maskColor.copy(alpha = scrimAlpha))
     )
     Box(
         Modifier
@@ -660,10 +727,10 @@ private fun ImmersiveScheduleBackground(
             .background(
                 Brush.verticalGradient(
                     colorStops = arrayOf(
-                        0f to Color.Black.copy(alpha = 0.12f),
+                        0f to maskColor.copy(alpha = 0.12f),
                         0.18f to Color.Transparent,
                         0.78f to Color.Transparent,
-                        1f to Color.Black.copy(alpha = 0.18f)
+                        1f to maskColor.copy(alpha = 0.18f)
                     )
                 )
             )

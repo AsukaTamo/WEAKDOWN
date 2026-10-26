@@ -6,6 +6,7 @@ import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -91,6 +92,7 @@ fun ProfileScreen(
             // User header
             item {
                 UserHeader(
+                    isDarkMode = isDarkMode,
                     name = viewModel.userName,
                     subtitle = viewModel.userSubtitle
                 )
@@ -198,10 +200,12 @@ fun ProfileScreen(
                                 checked = showScheduleGuides,
                                 onCheckedChange = onScheduleGuidesChange,
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
+                                    checkedThumbColor = if (isDarkMode) Color(0xFF000035) else Color.White,
                                     checkedTrackColor = palette.accent,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color(0xFFE0E0E0)
+                                    checkedBorderColor = Color.Transparent,
+                                    uncheckedThumbColor = if (isDarkMode) Color(0xFF8E92B2) else Color.White,
+                                    uncheckedTrackColor = if (isDarkMode) Color(0xFF161852) else Color(0xFFE0E0E0),
+                                    uncheckedBorderColor = if (isDarkMode) Color(0xFF3A3F7A) else Color.Transparent
                                 )
                             )
                         }
@@ -221,10 +225,12 @@ fun ProfileScreen(
                                 checked = isDarkMode,
                                 onCheckedChange = onDarkModeChange,
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
+                                    checkedThumbColor = if (isDarkMode) Color(0xFF000035) else Color.White,
                                     checkedTrackColor = palette.accent,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color(0xFFE0E0E0)
+                                    checkedBorderColor = Color.Transparent,
+                                    uncheckedThumbColor = if (isDarkMode) Color(0xFF8E92B2) else Color.White,
+                                    uncheckedTrackColor = if (isDarkMode) Color(0xFF161852) else Color(0xFFE0E0E0),
+                                    uncheckedBorderColor = if (isDarkMode) Color(0xFF3A3F7A) else Color.Transparent
                                 )
                             )
                         }
@@ -238,10 +244,12 @@ fun ProfileScreen(
                                 checked = notificationsEnabled,
                                 onCheckedChange = { viewModel.toggleNotifications() },
                                 colors = SwitchDefaults.colors(
-                                    checkedThumbColor = Color.White,
+                                    checkedThumbColor = if (isDarkMode) Color(0xFF000035) else Color.White,
                                     checkedTrackColor = palette.accent,
-                                    uncheckedThumbColor = Color.White,
-                                    uncheckedTrackColor = Color(0xFFE0E0E0)
+                                    checkedBorderColor = Color.Transparent,
+                                    uncheckedThumbColor = if (isDarkMode) Color(0xFF8E92B2) else Color.White,
+                                    uncheckedTrackColor = if (isDarkMode) Color(0xFF161852) else Color(0xFFE0E0E0),
+                                    uncheckedBorderColor = if (isDarkMode) Color(0xFF3A3F7A) else Color.Transparent
                                 )
                             )
                         }
@@ -278,7 +286,7 @@ fun ProfileScreen(
                         isDarkMode = isDarkMode,
                         trailing = {
                             Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(viewModel.appVersion, fontSize = 12.sp, color = Success)
+                                Text(viewModel.appVersion, fontSize = 12.sp, color = palette.success)
                                 Spacer(modifier = Modifier.width(4.dp))
                                 Icon(Icons.Default.ChevronRight, null, tint = Color(0xFFBDBDBD), modifier = Modifier.size(16.dp))
                             }
@@ -644,18 +652,41 @@ private fun SemesterDialog(
 @Composable
 private fun UserHeader(
     name: String,
-    subtitle: String
+    subtitle: String,
+    isDarkMode: Boolean
 ) {
+    // 浅色：鸢尾蓝 135° 渐变；深色：藏蓝 → 紫 → 火山橙微光，并加一圈橙色描边
+    val brush = if (isDarkMode) {
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            colorStops = arrayOf(
+                0.0f to Color(0xFF121552),
+                0.55f to Color(0xFF2A1B4E),
+                1.0f to Color(0x80FF6047)
+            )
+        )
+    } else {
+        androidx.compose.ui.graphics.Brush.linearGradient(
+            colors = listOf(Color(0xFF0F64B5), Color(0xFF1E88E5))
+        )
+    }
+    val avatarBg = if (isDarkMode) Color(0xFFFF6047) else Color(0xFFFFFBEA)
+    val avatarInk = if (isDarkMode) Color(0xFF000035) else Color(0xFF0F64B5)
+    val nameColor = if (isDarkMode) Color(0xFFF5F6FA) else Color(0xFFFFFBEA)
+    val subColor = if (isDarkMode) Color(0xFF8E92B2) else Color(0xFFD6E6F7)
+
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
             .shadow(6.dp, RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
-            .background(
-                brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(Color(0xFF12A48C), Color(0xFF0B6B5C))
-                )
+            .background(brush = brush)
+            .then(
+                if (isDarkMode) {
+                    Modifier.border(1.dp, Color(0x66FF6047), RoundedCornerShape(18.dp))
+                } else {
+                    Modifier
+                }
             )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -665,21 +696,21 @@ private fun UserHeader(
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(Color.White.copy(alpha = 0.92f)),
+                .background(avatarBg),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = name.first().toString(),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF0B6B5C)
+                color = avatarInk
             )
         }
         Column(modifier = Modifier.weight(1f)) {
-            Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = Color.White, letterSpacing = 0.4.sp)
-            Text(subtitle, fontSize = 12.sp, color = Color.White.copy(alpha = 0.85f), letterSpacing = 0.3.sp)
+            Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = nameColor, letterSpacing = 0.4.sp)
+            Text(subtitle, fontSize = 12.sp, color = subColor, letterSpacing = 0.3.sp)
         }
-        Icon(Icons.Default.ChevronRight, null, tint = Color.White.copy(alpha = 0.7f), modifier = Modifier.size(20.dp))
+        Icon(Icons.Default.ChevronRight, null, tint = subColor, modifier = Modifier.size(20.dp))
     }
 }
 

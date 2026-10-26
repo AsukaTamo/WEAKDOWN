@@ -12,6 +12,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
+import androidx.compose.material.icons.filled.CloudDownload
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -28,13 +29,15 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.ColorPickerRow
+import com.example.courseapp.ui.components.courseGradientColors
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ManageViewModel
 
 @Composable
 fun ManageScreen(
     viewModel: ManageViewModel = hiltViewModel(),
-    isDarkMode: Boolean = false
+    isDarkMode: Boolean = false,
+    onNavigateToImport: () -> Unit = {}
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val orphanCourseCount by viewModel.orphanCourseCount.collectAsStateWithLifecycle()
@@ -77,7 +80,8 @@ fun ManageScreen(
                     onSelectAll = { viewModel.selectAll() },
                     onDeleteSelected = { viewModel.deleteSelected() },
                     onDeleteCourse = { viewModel.deleteCourse(it) },
-                    onDuplicateCourse = { viewModel.duplicateCourse(it) }
+                    onDuplicateCourse = { viewModel.duplicateCourse(it) },
+                    onNavigateToImport = onNavigateToImport
                 )
                 1 -> AddCoursePanel(
                     viewModel = viewModel,
@@ -166,7 +170,8 @@ private fun AllCoursesPanel(
     onSelectAll: () -> Unit,
     onDeleteSelected: () -> Unit,
     onDeleteCourse: (Course) -> Unit,
-    onDuplicateCourse: (Course) -> Unit
+    onDuplicateCourse: (Course) -> Unit,
+    onNavigateToImport: () -> Unit
 ) {
     val palette = contentPalette(isDarkMode)
     var showDeleteDialog by remember { mutableStateOf<Course?>(null) }
@@ -174,6 +179,37 @@ private fun AllCoursesPanel(
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
     Column(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
+        // 教务导入入口（原先挂在首页 FAB 上，FAB 移除后收进课程管理）
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .padding(top = 10.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(palette.surface)
+                .clickable(onClick = onNavigateToImport)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.CloudDownload,
+                contentDescription = null,
+                tint = palette.accent,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(modifier = Modifier.width(10.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text("从教务系统导入", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = palette.title)
+                Text("打开学校教务页面，自动解析整张课表", fontSize = 11.sp, color = palette.muted)
+            }
+            Icon(
+                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                contentDescription = null,
+                tint = palette.muted,
+                modifier = Modifier.size(20.dp)
+            )
+        }
+
         // Action bar
         Row(
             modifier = Modifier
@@ -413,15 +449,7 @@ private fun CourseListItem(
     val textColor = palette.title
     val detailColor = palette.muted
 
-    val indicatorColor: Color = if (course.customColor.isNotEmpty()) {
-        try { Color(android.graphics.Color.parseColor(course.customColor)) }
-        catch (_: Exception) { CourseRequired }
-    } else when (course.type) {
-        CourseType.REQUIRED -> CourseRequired
-        CourseType.ELECTIVE -> CourseElective
-        CourseType.LAB -> CourseLab
-        CourseType.CUSTOM -> CourseCustom
-    }
+    val indicatorColor: Color = courseGradientColors(course, isDarkMode).first
 
     val dayText = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")[course.dayOfWeek]
     val slotLabels = listOf("第1节", "第2节", "第3节", "第4节", "第5节", "第6节", "第7节", "第8节", "第9节", "第10节")
@@ -434,8 +462,8 @@ private fun CourseListItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .padding(horizontal = 16.dp, vertical = 3.dp)
-            .contentCard(palette)
+            .padding(horizontal = 16.dp, vertical = 4.dp)
+            .contentCard(palette, radius = 12.dp)
             .clickable(onClick = onClick)
             .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

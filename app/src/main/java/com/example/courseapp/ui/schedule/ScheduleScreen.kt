@@ -56,7 +56,6 @@ fun ScheduleScreen(
     val allCourses by viewModel.allCourses.collectAsStateWithLifecycle()
     val currentWeek by viewModel.currentWeek.collectAsStateWithLifecycle()
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
-    val isFabOpen by viewModel.isFabOpen.collectAsStateWithLifecycle()
     val timeSlots by viewModel.timeSlots.collectAsStateWithLifecycle()
     val activeSemester by viewModel.activeSemester.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
@@ -106,10 +105,11 @@ fun ScheduleScreen(
                         modifier = Modifier.fillMaxSize(),
                         contentScale = ContentScale.Crop
                     )
+                    val maskColor = appColors(isDarkMode).canvas
                     Box(
                         Modifier
                             .fillMaxSize()
-                            .background(Color.Black.copy(alpha = scrimAlpha))
+                            .background(maskColor.copy(alpha = scrimAlpha))
                     )
                     Box(
                         Modifier
@@ -117,10 +117,10 @@ fun ScheduleScreen(
                             .background(
                                 Brush.verticalGradient(
                                     colorStops = arrayOf(
-                                        0.00f to Color.Black.copy(alpha = 0.18f),
+                                        0.00f to maskColor.copy(alpha = 0.18f),
                                         0.18f to Color.Transparent,
                                         0.72f to Color.Transparent,
-                                        1.00f to Color.Black.copy(alpha = 0.18f)
+                                        1.00f to maskColor.copy(alpha = 0.18f)
                                     )
                                 )
                             )
@@ -208,46 +208,6 @@ fun ScheduleScreen(
                     modifier = Modifier.fillMaxSize()
                 )
             }
-        }
-
-        // FAB
-        FabMenu(
-            isOpen = isFabOpen,
-            isDarkMode = isDarkMode,
-            hasBackground = hasBackground,
-            onToggle = { viewModel.toggleFab() },
-            onImportSchool = {
-                viewModel.closeFab()
-                onNavigateToImport()
-            },
-            onImportPdf = {
-                viewModel.closeFab()
-                viewModel.showMessage("请选择PDF文件...", "info")
-            },
-            onManualAdd = {
-                viewModel.closeFab()
-                onNavigateToAdd()
-            },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .zIndex(1f)
-                .padding(end = 16.dp, bottom = 80.dp)
-        )
-
-        if (isFabOpen) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(Color.Transparent)
-                    .clickable(
-                        indication = null,
-                        interactionSource = remember {
-                            androidx.compose.foundation.interaction.MutableInteractionSource()
-                        }
-                    ) {
-                        viewModel.closeFab()
-                    }
-            )
         }
 
         if (snackbarState.visible) {
@@ -401,7 +361,7 @@ private fun ScheduleGrid(
 ) {
     val palette = schedulePalette(isDarkMode, hasBackground)
     val bgColor = if (hasBackground) Color.Transparent else palette.pageFallback
-    val headerSurface = if (hasBackground) Color.Black.copy(alpha = 0.10f) else bgColor
+    val headerSurface = palette.headerBackdrop
 
     val periodCount = timeSlots.size
 
@@ -421,7 +381,7 @@ private fun ScheduleGrid(
             modifier = Modifier
                 .width(TIME_AXIS_WIDTH)
                 .verticalScroll(scrollState)
-                .background(if (hasBackground) Color.Black.copy(alpha = 0.08f) else bgColor)
+                .background(palette.headerBackdrop)
         ) {
             // Header spacer
             Box(
@@ -456,8 +416,8 @@ private fun ScheduleGrid(
                         Text(
                             text = "${i + 1}",
                             fontSize = 15.sp,
-                            fontWeight = FontWeight.SemiBold,
-                            color = palette.timeText,
+                            fontWeight = FontWeight.Bold,
+                            color = palette.dayText,
                             lineHeight = 15.sp
                         )
                         Spacer(modifier = Modifier.height(4.dp))
@@ -579,133 +539,5 @@ private fun ScheduleGrid(
                 }
             }
         }
-    }
-}
-
-private data class FabMenuAction(
-    val icon: androidx.compose.ui.graphics.vector.ImageVector,
-    val label: String,
-    val onClick: () -> Unit
-)
-
-@Composable
-private fun FabMenu(
-    isOpen: Boolean,
-    isDarkMode: Boolean,
-    hasBackground: Boolean,
-    onToggle: () -> Unit,
-    onImportSchool: () -> Unit,
-    onImportPdf: () -> Unit,
-    onManualAdd: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    val palette = schedulePalette(isDarkMode, hasBackground)
-    val rotation by animateFloatAsState(
-        targetValue = if (isOpen) 45f else 0f,
-        animationSpec = tween(
-            durationMillis = ScheduleMotion.StandardMillis,
-            easing = ScheduleMotion.EmphasizedEasing
-        ),
-        label = "fabRotation"
-    )
-    val actions = listOf(
-        FabMenuAction(Icons.Default.Share, "学校官网导入", onImportSchool),
-        FabMenuAction(Icons.Default.Star, "PDF文件导入", onImportPdf),
-        FabMenuAction(Icons.Default.Edit, "手动添加课程", onManualAdd)
-    )
-
-    Column(
-        modifier = modifier,
-        horizontalAlignment = Alignment.End,
-        verticalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Column(
-            horizontalAlignment = Alignment.End,
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            actions.forEachIndexed { index, action ->
-                val delay = index * ScheduleMotion.FabStaggerMillis
-                AnimatedVisibility(
-                    visible = isOpen,
-                    enter = fadeIn(
-                        animationSpec = tween(ScheduleMotion.FastMillis, delayMillis = delay)
-                    ) + slideInVertically(
-                        animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
-                        initialOffsetY = { it / 3 }
-                    ) + scaleIn(
-                        animationSpec = tween(ScheduleMotion.StandardMillis, delayMillis = delay),
-                        initialScale = 0.96f
-                    ),
-                    exit = fadeOut(animationSpec = tween(90)) + scaleOut(
-                        animationSpec = tween(90),
-                        targetScale = 0.98f
-                    )
-                ) {
-                    FabMenuItem(
-                        icon = action.icon,
-                        label = action.label,
-                        isDarkMode = isDarkMode,
-                        hasBackground = hasBackground,
-                        onClick = action.onClick
-                    )
-                }
-            }
-        }
-
-        FloatingActionButton(
-            onClick = onToggle,
-            containerColor = if (isOpen) Error else palette.fabContainer,
-            contentColor = Color.White,
-            shape = RoundedCornerShape(20.dp),
-            elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 12.dp,
-                pressedElevation = 16.dp
-            ),
-            modifier = Modifier.size(ScheduleDimensions.FabSize)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = if (isOpen) "关闭" else "添加",
-                modifier = Modifier.size(24.dp).rotate(rotation)
-            )
-        }
-    }
-}
-
-@Composable
-private fun FabMenuItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    isDarkMode: Boolean,
-    hasBackground: Boolean,
-    onClick: () -> Unit
-) {
-    val palette = schedulePalette(isDarkMode, hasBackground)
-    val bgColor = palette.fabMenuSurface
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-
-    Row(
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-        modifier = Modifier
-            .shadow(4.dp, RoundedCornerShape(24.dp))
-            .clip(RoundedCornerShape(24.dp))
-            .background(bgColor)
-            .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp)
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = label,
-            tint = if (hasBackground) Color(0xFF0F766E) else Color(0xFF0F8F7B),
-            modifier = Modifier.size(20.dp)
-        )
-        Text(
-            text = label,
-            fontSize = 13.sp,
-            fontWeight = FontWeight.Medium,
-            color = textColor,
-            maxLines = 1
-        )
     }
 }
