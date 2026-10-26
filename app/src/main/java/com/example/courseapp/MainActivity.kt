@@ -173,25 +173,37 @@ class MainActivity : ComponentActivity() {
         scheduleViewModel.updateSystemDarkMode(systemDarkMode)
     }
 
+            var showWeakdownSplash by rememberSaveable { mutableStateOf(true) }
+            // 0 = 启动页还在，1 = 首次进入课表；首页卡片只在这个 0 -> 1 的瞬间做一次入场
+            var homeEntranceEpoch by rememberSaveable { mutableIntStateOf(0) }
+
             SideEffect {
                 WindowCompat.getInsetsController(window, window.decorView).apply {
-                    isAppearanceLightStatusBars = !isDarkMode
-                    isAppearanceLightNavigationBars = !isDarkMode
+                    // 奶油色启动页期间强制深色系统栏图标；退场后再按主题恢复
+                    val lightSystemBars = showWeakdownSplash || !isDarkMode
+                    isAppearanceLightStatusBars = lightSystemBars
+                    isAppearanceLightNavigationBars = lightSystemBars
                 }
             }
 
             CourseAppTheme(darkTheme = isDarkMode) {
-                var showWeakdownSplash by rememberSaveable { mutableStateOf(true) }
-
                 Box(modifier = Modifier.fillMaxSize()) {
                     CourseApp(
                         scheduleViewModel = scheduleViewModel,
-                        isDarkMode = isDarkMode
+                        isDarkMode = isDarkMode,
+                        homeEntranceEpoch = homeEntranceEpoch
                     )
 
                     if (showWeakdownSplash) {
                         WeakdownSplashOverlay(
-                            onFinished = { showWeakdownSplash = false }
+                            onFinished = {
+                                showWeakdownSplash = false
+                                if (homeEntranceEpoch == 0) homeEntranceEpoch = 1
+                            },
+                            // 启动页开始淡出前就放行首页，让卡片入场和遮罩退场重叠
+                            onRevealStart = {
+                                if (homeEntranceEpoch == 0) homeEntranceEpoch = 1
+                            }
                         )
                     }
                 }
@@ -203,7 +215,8 @@ class MainActivity : ComponentActivity() {
 @Composable
 fun CourseApp(
     scheduleViewModel: ScheduleViewModel,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    homeEntranceEpoch: Int = 1
 ) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Schedule) }
     val manageViewModel: ManageViewModel = hiltViewModel()
@@ -682,7 +695,8 @@ fun CourseApp(
                                     manageViewModel.switchTab(1)
                                 },
                                 onNavigateToImport = { currentScreen = Screen.WebImport },
-                                drawBackground = false
+                                drawBackground = false,
+                                entranceEpoch = homeEntranceEpoch
                             )
                             Screen.Manage -> ManageScreen(
                                 viewModel = manageViewModel,

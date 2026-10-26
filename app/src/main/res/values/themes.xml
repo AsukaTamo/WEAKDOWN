@@ -1,10 +1,18 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.CourseApp" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.CourseApp" parent="android:Theme.Material.Light.NoActionBar">
+        <!-- 与自定义启动页同底色，避免系统启动页退场时闪白/闪黑 -->
+        <item name="android:windowBackground">#FFFBEA</item>
+    </style>
 
     <style name="Theme.CourseApp.Splash" parent="Theme.SplashScreen">
-        <item name="windowSplashScreenBackground">#07111F</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_launcher_foreground</item>
+        <!-- 系统启动阶段：白底 + App 图标；进入 Compose 后再交给自定义的标题 Logo 启动页 -->
+        <item name="windowSplashScreenBackground">#FFFFFF</item>
+        <item name="windowSplashScreenAnimatedIcon">@mipmap/ic_launcher</item>
+        <item name="windowSplashScreenIconBackgroundColor">#FFFFFF</item>
         <item name="postSplashScreenTheme">@style/Theme.CourseApp</item>
+        <item name="android:windowBackground">#FFFFFF</item>
+        <item name="android:windowLightStatusBar">true</item>
+        <item name="android:windowLightNavigationBar">true</item>
     </style>
 </resources>

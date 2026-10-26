@@ -52,7 +52,8 @@ fun ScheduleScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
     onNavigateToAdd: () -> Unit = {},
     onNavigateToImport: () -> Unit = {},
-    drawBackground: Boolean = true
+    drawBackground: Boolean = true,
+    entranceEpoch: Int = 1
 ) {
     val allCourses by viewModel.allCourses.collectAsStateWithLifecycle()
     val currentWeek by viewModel.currentWeek.collectAsStateWithLifecycle()
@@ -205,6 +206,7 @@ fun ScheduleScreen(
                     getMinutesUntil = { viewModel.getMinutesUntilCourse(it, clock) },
                     getRemainingMinutes = { viewModel.getCourseRemainingMinutes(it, clock) },
                     scrollState = gridScrollState,
+                    entranceEpoch = entranceEpoch,
                     modifier = Modifier.fillMaxSize()
                 )
             }
@@ -362,6 +364,7 @@ private fun ScheduleGrid(
     getCourseProgress: (Course) -> Float = { 0f },
     getMinutesUntil: (Course) -> Int = { 0 },
     getRemainingMinutes: (Course) -> Int = { 0 },
+    entranceEpoch: Int = 1,
     scrollState: ScrollState = rememberScrollState(),
     modifier: Modifier = Modifier
 ) {
@@ -528,6 +531,7 @@ private fun ScheduleGrid(
                                     minutesUntil = if (upcoming) getMinutesUntil(course) else 0,
                                     remainingMinutes = if (active) getRemainingMinutes(course) else 0,
                                     hasWallpaperBackground = hasBackground,
+                                    entranceEpoch = entranceEpoch,
                                     onClick = { onCourseClick(course) },
                                     onLongClick = { onCourseLongClick(course) },
                                     modifier = Modifier
