@@ -33,9 +33,10 @@ fun CourseContextMenu(
     if (course == null) return
 
     val sheetState = rememberModalBottomSheetState()
-    val sheetBg = if (isDarkMode) CardDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val sheetBg = palette.surface
+    val textColor = palette.title
+    val subColor = palette.muted
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -87,7 +88,7 @@ fun CourseContextMenu(
                 icon = Icons.Default.Edit,
                 label = "编辑课程",
                 description = "修改课程详细信息",
-                tint = Primary,
+                tint = palette.accent,
                 isDarkMode = isDarkMode,
                 onClick = {
                     onDismiss()
@@ -120,7 +121,7 @@ fun CourseContextMenu(
                 icon = Icons.Default.Delete,
                 label = "删除课程",
                 description = "永久删除此课程",
-                tint = Error,
+                tint = palette.destructive,
                 isDarkMode = isDarkMode,
                 onClick = {
                     onDismiss()
@@ -140,9 +141,10 @@ private fun ContextMenuItem(
     isDarkMode: Boolean,
     onClick: () -> Unit
 ) {
-    val bgColor = if (isDarkMode) BgDark else Color(0xFFF7F8FC)
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val bgColor = palette.surfaceAlt
+    val textColor = palette.title
+    val subColor = palette.muted
 
     Row(
         verticalAlignment = Alignment.CenterVertically,

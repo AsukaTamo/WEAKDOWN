@@ -20,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
+import com.example.courseapp.ui.theme.ContentPalette
 import com.example.courseapp.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -60,11 +61,12 @@ fun CourseDetailSheet(
         CourseType.CUSTOM -> if (isDarkMode) CourseCustomDark else CourseCustom
     }
 
-    val sheetBg = if (isDarkMode) CardDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
-    val inputBg = if (isDarkMode) BgDark else Color(0xFFF5F5F5)
-    val inputBorder = if (isDarkMode) DividerDark else Divider
+    val palette = contentPalette(isDarkMode)
+    val sheetBg = palette.surface
+    val textColor = palette.title
+    val subColor = palette.muted
+    val inputBg = palette.inputSurface
+    val inputBorder = palette.surfaceBorder
 
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -126,7 +128,7 @@ fun CourseDetailSheet(
                     Icon(
                         imageVector = if (isEditing) Icons.Default.Close else Icons.Default.Edit,
                         contentDescription = if (isEditing) "取消" else "编辑",
-                        tint = Primary,
+                        tint = palette.accent,
                         modifier = Modifier.size(20.dp)
                     )
                 }
@@ -172,8 +174,8 @@ fun CourseDetailSheet(
                         onClick = { onCopy(course) },
                         modifier = Modifier.weight(1f).height(44.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Primary),
-                        border = BorderStroke(1.dp, Primary.copy(alpha = 0.5f))
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent),
+                        border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.5f))
                     ) {
                         Icon(Icons.Default.ContentCopy, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -183,8 +185,8 @@ fun CourseDetailSheet(
                         onClick = { onDelete(course) },
                         modifier = Modifier.weight(1f).height(44.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Error),
-                        border = BorderStroke(1.dp, Error)
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.destructive),
+                        border = BorderStroke(1.dp, palette.destructive)
                     ) {
                         Icon(Icons.Default.Delete, contentDescription = null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -193,12 +195,12 @@ fun CourseDetailSheet(
                 }
             } else {
                 // ---- Edit mode ----
-                EditField("课程名称", editName, { editName = it }, inputBg, textColor, subColor)
-                EditField("授课教师", editTeacher, { editTeacher = it }, inputBg, textColor, subColor)
-                EditField("上课地点", editLocation, { editLocation = it }, inputBg, textColor, subColor)
-                EditField("周数范围", editWeekRange, { editWeekRange = it }, inputBg, textColor, subColor)
-                EditField("学分", editCredits, { editCredits = it }, inputBg, textColor, subColor)
-                EditField("备注", editNotes, { editNotes = it }, inputBg, textColor, subColor)
+                EditField("课程名称", editName, { editName = it }, inputBg, textColor, subColor, palette)
+                EditField("授课教师", editTeacher, { editTeacher = it }, inputBg, textColor, subColor, palette)
+                EditField("上课地点", editLocation, { editLocation = it }, inputBg, textColor, subColor, palette)
+                EditField("周数范围", editWeekRange, { editWeekRange = it }, inputBg, textColor, subColor, palette)
+                EditField("学分", editCredits, { editCredits = it }, inputBg, textColor, subColor, palette)
+                EditField("备注", editNotes, { editNotes = it }, inputBg, textColor, subColor, palette)
 
                 // Day selector
                 Text("上课星期", fontSize = 13.sp, fontWeight = FontWeight.Medium, color = subColor)
@@ -213,7 +215,7 @@ fun CourseDetailSheet(
                                 .weight(1f)
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) Primary else inputBg)
+                                .background(if (selected) palette.accent else inputBg)
                                 .clickable { editDay = index },
                             contentAlignment = Alignment.Center
                         ) {
@@ -274,7 +276,7 @@ fun CourseDetailSheet(
                                 .weight(1f)
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) Primary else inputBg)
+                                .background(if (selected) palette.accent else inputBg)
                                 .clickable { editStartSlot = slotIdx },
                             contentAlignment = Alignment.Center
                         ) {
@@ -301,7 +303,7 @@ fun CourseDetailSheet(
                                 .weight(1f)
                                 .height(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (selected) Primary else inputBg)
+                                .background(if (selected) palette.accent else inputBg)
                                 .clickable { editSlotCount = count },
                             contentAlignment = Alignment.Center
                         ) {
@@ -336,7 +338,7 @@ fun CourseDetailSheet(
                     },
                     modifier = Modifier.fillMaxWidth().height(48.dp),
                     shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                 ) {
                     Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(6.dp))
@@ -365,7 +367,8 @@ private fun EditField(
     onValueChange: (String) -> Unit,
     bgColor: Color,
     textColor: Color,
-    labelColor: Color
+    labelColor: Color,
+    palette: ContentPalette
 ) {
     Column {
         Text(text = label, fontSize = 13.sp, fontWeight = FontWeight.Medium, color = labelColor)
@@ -376,7 +379,7 @@ private fun EditField(
             modifier = Modifier.fillMaxWidth().height(48.dp),
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Primary,
+                focusedBorderColor = palette.accent,
                 unfocusedBorderColor = Color(0xFFE0E0E0),
                 focusedContainerColor = bgColor,
                 unfocusedContainerColor = bgColor,

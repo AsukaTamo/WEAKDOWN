@@ -49,6 +49,7 @@ fun ProfileScreen(
 ) {
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
     val semesters by viewModel.semesters.collectAsStateWithLifecycle()
+    val courses by viewModel.courses.collectAsStateWithLifecycle()
     val activeSemester by viewModel.activeSemester.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
 
@@ -78,13 +79,13 @@ fun ProfileScreen(
         }
     }
 
-    val bgColor = if (isDarkMode) BgDark else BgLight
+    val palette = contentPalette(isDarkMode)
 
     Box(modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(bgColor)
+                .background(Color.Transparent)
                 .padding(top = 8.dp)
         ) {
             // User header
@@ -161,7 +162,7 @@ fun ProfileScreen(
                             Text(
                                 text = "背景遮罩 ${(backgroundScrimAlpha * 100).toInt()}%",
                                 fontSize = 12.sp,
-                                color = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+                                color = palette.muted
                             )
                             Slider(
                                 value = backgroundScrimAlpha,
@@ -169,14 +170,19 @@ fun ProfileScreen(
                                 onValueChangeFinished = {
                                     viewModel.updateScrimAlpha(semester, backgroundScrimAlpha)
                                 },
-                                valueRange = 0f..0.9f
+                                valueRange = 0f..0.9f,
+                                colors = SliderDefaults.colors(
+                                    thumbColor = palette.accent,
+                                    activeTrackColor = palette.accent,
+                                    inactiveTrackColor = palette.accentSoft
+                                )
                             )
                         }
 
                         SettingsItem(
                             icon = Icons.Outlined.Delete,
                             title = "清除背景",
-                            titleColor = Error,
+                            titleColor = palette.destructive,
                             isDarkMode = isDarkMode,
                             onClick = { viewModel.clearBackground(semester) }
                         )
@@ -193,7 +199,7 @@ fun ProfileScreen(
                                 onCheckedChange = onScheduleGuidesChange,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = Primary,
+                                    checkedTrackColor = palette.accent,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color(0xFFE0E0E0)
                                 )
@@ -216,7 +222,7 @@ fun ProfileScreen(
                                 onCheckedChange = onDarkModeChange,
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = Primary,
+                                    checkedTrackColor = palette.accent,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color(0xFFE0E0E0)
                                 )
@@ -233,7 +239,7 @@ fun ProfileScreen(
                                 onCheckedChange = { viewModel.toggleNotifications() },
                                 colors = SwitchDefaults.colors(
                                     checkedThumbColor = Color.White,
-                                    checkedTrackColor = Primary,
+                                    checkedTrackColor = palette.accent,
                                     uncheckedThumbColor = Color.White,
                                     uncheckedTrackColor = Color(0xFFE0E0E0)
                                 )
@@ -256,7 +262,7 @@ fun ProfileScreen(
                     SettingsItem(
                         icon = Icons.Outlined.Delete,
                         title = "清空所有数据",
-                        titleColor = Error,
+                        titleColor = palette.destructive,
                         isDarkMode = isDarkMode,
                         onClick = { showClearDialog = true }
                     )
@@ -309,9 +315,11 @@ fun ProfileScreen(
 
     // Semester management dialog
     if (showSemesterDialog) {
+        val courseCounts = remember(courses) { courses.groupingBy { it.semester }.eachCount() }
         SemesterDialog(
             semesters = semesters,
             activeSemester = activeSemester,
+            courseCounts = courseCounts,
             isDarkMode = isDarkMode,
             onSelect = { viewModel.setActiveSemester(it.id) },
             onAdd = { id, name, startDate, weeks -> viewModel.addSemester(id, name, startDate, weeks) },
@@ -351,6 +359,7 @@ private data class SnackbarState(
 private fun SemesterDialog(
     semesters: List<Semester>,
     activeSemester: Semester?,
+    courseCounts: Map<String, Int>,
     isDarkMode: Boolean,
     onSelect: (Semester) -> Unit,
     onAdd: (String, String, String, Int) -> Unit,
@@ -359,6 +368,7 @@ private fun SemesterDialog(
     onDismiss: () -> Unit
 ) {
     var showAddForm by remember { mutableStateOf(false) }
+    var pendingDelete by remember { mutableStateOf<Semester?>(null) }
     var editingSemester by remember { mutableStateOf<Semester?>(null) }
     var newName by remember { mutableStateOf("") }
     var newStartDate by remember { mutableStateOf("2026-02-23") }
@@ -366,8 +376,9 @@ private fun SemesterDialog(
     var showAddDatePicker by remember { mutableStateOf(false) }
     var showEditDatePicker by remember { mutableStateOf(false) }
 
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val textColor = palette.title
+    val subColor = palette.muted
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -387,7 +398,7 @@ private fun SemesterDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(Primary.copy(alpha = 0.08f))
+                                .background(palette.accentSoft)
                                 .padding(12.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
@@ -445,7 +456,7 @@ private fun SemesterDialog(
                                         editingSemester = null
                                     },
                                     modifier = Modifier.weight(1f),
-                                    colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                                 ) { Text("保存") }
                             }
                         }
@@ -482,7 +493,7 @@ private fun SemesterDialog(
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .clip(RoundedCornerShape(8.dp))
-                                .background(if (isActive) Primary.copy(alpha = 0.1f) else Color.Transparent)
+                                .background(if (isActive) palette.accentSoft else Color.Transparent)
                                 .clickable { onSelect(semester) }
                                 .padding(12.dp),
                             verticalAlignment = Alignment.CenterVertically
@@ -492,7 +503,7 @@ private fun SemesterDialog(
                                 Text("起始: ${semester.startDate} · ${semester.totalWeeks}周", fontSize = 12.sp, color = subColor)
                             }
                             if (isActive) {
-                                Icon(Icons.Default.CheckCircle, null, tint = Primary, modifier = Modifier.size(20.dp))
+                                Icon(Icons.Default.CheckCircle, null, tint = palette.accent, modifier = Modifier.size(20.dp))
                             }
                             // Edit button
                             IconButton(
@@ -504,7 +515,7 @@ private fun SemesterDialog(
                             // Delete button (only for non-active)
                             if (!isActive) {
                                 IconButton(
-                                    onClick = { onDelete(semester) },
+                                    onClick = { pendingDelete = semester },
                                     modifier = Modifier.size(24.dp)
                                 ) {
                                     Icon(Icons.Default.Delete, "删除", tint = Error, modifier = Modifier.size(16.dp))
@@ -515,7 +526,7 @@ private fun SemesterDialog(
                 }
 
                 if (showAddForm) {
-                    Divider()
+                    Divider(color = palette.divider)
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },
@@ -559,7 +570,7 @@ private fun SemesterDialog(
                         },
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                     ) { Text("添加学期") }
 
                     // Add date picker dialog
@@ -601,6 +612,33 @@ private fun SemesterDialog(
             TextButton(onClick = onDismiss) { Text("完成") }
         }
     )
+
+    // Deleting a semester also deletes its courses, so confirm with the count first.
+    pendingDelete?.let { semester ->
+        val courseCount = courseCounts[semester.id] ?: 0
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除学期") },
+            text = {
+                Text(
+                    if (courseCount > 0) {
+                        "将删除「${semester.name}」及其 $courseCount 门课程，操作不可恢复。"
+                    } else {
+                        "将删除「${semester.name}」，操作不可恢复。"
+                    }
+                )
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDelete(semester)
+                    pendingDelete = null
+                }) { Text("删除", color = Error) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+            }
+        )
+    }
 }
 
 @Composable
@@ -612,11 +650,11 @@ private fun UserHeader(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
-            .shadow(4.dp, RoundedCornerShape(16.dp))
-            .clip(RoundedCornerShape(16.dp))
+            .shadow(6.dp, RoundedCornerShape(18.dp))
+            .clip(RoundedCornerShape(18.dp))
             .background(
                 brush = androidx.compose.ui.graphics.Brush.linearGradient(
-                    colors = listOf(Primary, Color(0xFF1565C0))
+                    colors = listOf(Color(0xFF12A48C), Color(0xFF0B6B5C))
                 )
             )
             .padding(16.dp),
@@ -627,14 +665,14 @@ private fun UserHeader(
             modifier = Modifier
                 .size(56.dp)
                 .clip(CircleShape)
-                .background(Color(0xFFE3F2FD)),
+                .background(Color.White.copy(alpha = 0.92f)),
             contentAlignment = Alignment.Center
         ) {
             Text(
                 text = name.first().toString(),
                 fontSize = 24.sp,
                 fontWeight = FontWeight.Bold,
-                color = Primary
+                color = Color(0xFF0B6B5C)
             )
         }
         Column(modifier = Modifier.weight(1f)) {
@@ -654,8 +692,7 @@ private fun SettingsGroup(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp)
-            .clip(RoundedCornerShape(12.dp))
-            .background(if (isDarkMode) CardDark else Color.White),
+            .contentCard(contentPalette(isDarkMode), radius = 18.dp),
         content = content
     )
 }
@@ -670,8 +707,9 @@ private fun SettingsItem(
     trailing: @Composable (() -> Unit)? = null,
     onClick: (() -> Unit)? = null
 ) {
-    val textColor = titleColor ?: if (isDarkMode) Color.White else TextPrimary
-    val iconColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val textColor = titleColor ?: palette.title
+    val iconColor = palette.muted
 
     Row(
         modifier = Modifier
@@ -685,13 +723,13 @@ private fun SettingsItem(
         Column(modifier = Modifier.weight(1f)) {
             Text(title, fontSize = 14.sp, color = textColor, letterSpacing = 0.3.sp)
             if (subtitle != null) {
-                Text(subtitle, fontSize = 11.sp, color = if (isDarkMode) Color(0xFF757575) else TextSecondary)
+                Text(subtitle, fontSize = 11.sp, color = palette.muted)
             }
         }
         if (trailing != null) {
             trailing()
         } else {
-            Icon(Icons.Default.ChevronRight, null, tint = Color(0xFFBDBDBD), modifier = Modifier.size(16.dp))
+            Icon(Icons.Default.ChevronRight, null, tint = palette.muted.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
         }
     }
 }

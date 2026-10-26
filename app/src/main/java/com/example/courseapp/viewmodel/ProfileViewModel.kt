@@ -79,8 +79,15 @@ class ProfileViewModel @Inject constructor(
 
     fun deleteSemester(semester: Semester) {
         viewModelScope.launch {
-            repository.deleteSemester(semester)
-            _snackbarMessage.emit("已删除学期「${semester.name}」" to "success")
+            val courseCount = repository.getCourseCount(semester.id)
+            repository.deleteSemesterWithCourses(semester)
+            _snackbarMessage.emit(
+                (if (courseCount > 0) {
+                    "已删除学期「${semester.name}」及 $courseCount 门课程"
+                } else {
+                    "已删除学期「${semester.name}」"
+                }) to "success"
+            )
         }
     }
 

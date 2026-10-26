@@ -1,5 +1,7 @@
 package com.example.courseapp.data.repository
 
+import androidx.room.withTransaction
+import com.example.courseapp.data.db.AppDatabase
 import com.example.courseapp.data.db.CourseDao
 import com.example.courseapp.data.db.SemesterDao
 import com.example.courseapp.data.db.TimeSlotTemplateDao
@@ -14,7 +16,8 @@ import javax.inject.Singleton
 class CourseRepository @Inject constructor(
     private val courseDao: CourseDao,
     private val semesterDao: SemesterDao,
-    private val timeSlotTemplateDao: TimeSlotTemplateDao
+    private val timeSlotTemplateDao: TimeSlotTemplateDao,
+    private val database: AppDatabase
 ) {
     // ── Courses ──
 
@@ -79,6 +82,15 @@ class CourseRepository @Inject constructor(
         semesterDao.activateSemester(id)
     }
 
+    /**
+     * 删除学期并同时删掉它名下的课程。
+     * 只删学期会留下"所属学期已不存在"的孤儿课程，首页按学期过滤后它们永远不会再出现。
+     */
+    suspend fun deleteSemesterWithCourses(semester: Semester) = database.withTransaction {
+        courseDao.deleteAllBySemester(semester.id)
+        semesterDao.deleteSemester(semester)
+    }
+
     // ── Time Slot Templates ──
 
     fun getAllTimeSlotTemplates(): Flow<List<TimeSlotTemplate>> =
@@ -103,4 +115,16 @@ class CourseRepository @Inject constructor(
         timeSlotTemplateDao.deactivateAll()
         timeSlotTemplateDao.activateTemplate(id)
     }
+
+    /**
+     * 保存作息模板并让它成为唯一激活项。
+     * 之前直接插入 isActive=true 的模板、不处理旧模板，导出多条激活记录后重启会随机加载到旧的。
+     */
+    suspend fun replaceActiveTimeSlotTemplate(name: String, slotsJson: String): Long =
+        database.withTransaction {
+            timeSlotTemplateDao.deactivateAll()
+            timeSlotTemplateDao.insertTemplate(
+                TimeSlotTemplate(name = name, slotsJson = slotsJson, isActive = true)
+            )
+        }
 }

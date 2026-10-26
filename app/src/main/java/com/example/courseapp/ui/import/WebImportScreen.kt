@@ -59,12 +59,12 @@ fun WebImportScreen(
         }
     }
 
-    val bgColor = if (isDarkMode) BgDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
-    val cardColor = if (isDarkMode) CardDark else Color(0xFFF5F5F5)
+    val palette = contentPalette(isDarkMode)
+    val textColor = palette.title
+    val subColor = palette.muted
+    val cardColor = palette.surfaceAlt
 
-    Column(modifier = Modifier.fillMaxSize().background(bgColor)) {
+    Column(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -97,7 +97,7 @@ fun WebImportScreen(
                 Icons.Default.Person,
                 contentDescription = null,
                 modifier = Modifier.size(64.dp),
-                tint = Primary
+                tint = palette.accent
             )
 
             Spacer(modifier = Modifier.height(16.dp))
@@ -145,7 +145,7 @@ fun WebImportScreen(
                             onClick = { selectedSchool = school; showSchoolDropdown = false },
                             trailingIcon = {
                                 if (school == selectedSchool) {
-                                    Icon(Icons.Default.Check, null, tint = Primary, modifier = Modifier.size(18.dp))
+                                    Icon(Icons.Default.Check, null, tint = palette.accent, modifier = Modifier.size(18.dp))
                                 }
                             }
                         )
@@ -167,7 +167,7 @@ fun WebImportScreen(
                 },
                 modifier = Modifier.fillMaxWidth().height(52.dp),
                 shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {
                 Icon(Icons.Default.OpenInBrowser, null, modifier = Modifier.size(20.dp))
                 Spacer(modifier = Modifier.width(8.dp))
@@ -179,10 +179,10 @@ fun WebImportScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = Primary.copy(alpha = 0.08f))
+                colors = CardDefaults.cardColors(containerColor = palette.accentSoft)
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
-                    Text("使用说明", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = Primary)
+                    Text("使用说明", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = palette.accent)
                     Spacer(modifier = Modifier.height(8.dp))
                     Text("1. 点击上方按钮打开学校官网", fontSize = 13.sp, color = subColor)
                     Text("2. 登录教务系统并进入课表页面", fontSize = 13.sp, color = subColor)

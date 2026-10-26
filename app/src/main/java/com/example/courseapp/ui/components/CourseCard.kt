@@ -1,5 +1,6 @@
 package com.example.courseapp.ui.components
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
@@ -17,11 +18,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
@@ -124,6 +128,7 @@ fun CourseCard(
     isUpcoming: Boolean = false,
     progress: Float = 0f,
     minutesUntil: Int = 0,
+    remainingMinutes: Int = 0,
     hasWallpaperBackground: Boolean = false,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
@@ -151,6 +156,20 @@ fun CourseCard(
     val titleMaxLines = if (course.slotCount <= 1) 2 else 3
     val bodyMaxLines = if (course.slotCount <= 1) 1 else 2
     val lineSpacing = if (course.slotCount <= 1) 1.dp else 2.dp
+
+    // 卡片只有 ~45dp 宽，状态文案必须短："剩23分" / "15分后"。
+    val statusText = when {
+        isActive && remainingMinutes > 0 -> "剩${remainingMinutes}分"
+        isActive -> "快下课"
+        isUpcoming && minutesUntil > 0 -> "${minutesUntil}分后"
+        else -> ""
+    }
+    val showStatusLine = statusText.isNotEmpty() && course.slotCount >= 2
+    val animatedProgress by animateFloatAsState(
+        targetValue = if (isActive) progress.coerceIn(0f, 1f) else 0f,
+        animationSpec = tween(durationMillis = 1200, easing = LinearEasing),
+        label = "courseProgress"
+    )
 
     Box(
         modifier = modifier
@@ -194,11 +213,38 @@ fun CourseCard(
                 onClick = onClick,
                 onLongClick = { onLongClick?.invoke() }
             )
-            .padding(horizontal = 6.dp, vertical = 4.dp)
     ) {
+        // 进行中：底部内嵌胶囊进度条。必须离描边留出间距，否则白色进度会被白色高亮描边"吃掉"。
+        if (isActive) {
+            Box(
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .fillMaxWidth()
+                    .padding(start = 5.dp, end = 5.dp, bottom = 5.dp)
+                    .height(3.dp)
+                    .clip(RoundedCornerShape(1.5.dp))
+                    .background(Color.Black.copy(alpha = 0.22f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth(animatedProgress)
+                        .fillMaxHeight()
+                        .background(Color.White)
+                        .progressSemantics(animatedProgress)
+                )
+            }
+        }
+
         Column(
             verticalArrangement = Arrangement.spacedBy(lineSpacing),
-            modifier = Modifier.fillMaxSize()
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(
+                    start = 6.dp,
+                    end = 6.dp,
+                    top = 4.dp,
+                    bottom = if (isActive) 11.dp else 4.dp
+                )
         ) {
             Text(
                 text = course.name,
@@ -232,6 +278,21 @@ fun CourseCard(
                     fontWeight = FontWeight.Medium,
                     lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
                     maxLines = bodyMaxLines,
+                    overflow = TextOverflow.Clip,
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+
+            if (showStatusLine) {
+                Spacer(modifier = Modifier.weight(1f))
+                Text(
+                    text = statusText,
+                    color = Color.White.copy(alpha = 0.92f),
+                    fontSize = 8.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    lineHeight = 9.sp,
+                    maxLines = 1,
+                    softWrap = false,
                     overflow = TextOverflow.Clip,
                     modifier = Modifier.fillMaxWidth()
                 )

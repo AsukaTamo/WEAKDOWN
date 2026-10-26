@@ -32,8 +32,9 @@ fun ImportPreviewScreen(
     val currentSemesterCourseCount by viewModel.currentSemesterCourseCount.collectAsStateWithLifecycle()
     val importComplete by viewModel.importComplete.collectAsStateWithLifecycle()
 
-    val bgColor = if (isDarkMode) BgDark else BgLight
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val bgColor = Color.Transparent
+    val subColor = palette.muted
 
     var showOverwriteDialog by remember { mutableStateOf(false) }
 
@@ -49,13 +50,18 @@ fun ImportPreviewScreen(
                     IconButton(onClick = onBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
-                }
+                },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = Color.Transparent,
+                    titleContentColor = palette.title,
+                    navigationIconContentColor = palette.title
+                )
             )
         },
         containerColor = bgColor,
         bottomBar = {
             Surface(
-                color = if (isDarkMode) CardDark else Color.White,
+                color = palette.surface,
                 shadowElevation = 8.dp
             ) {
                 Row(
@@ -75,7 +81,7 @@ fun ImportPreviewScreen(
                         enabled = parsedCourses.isNotEmpty(),
                         modifier = Modifier.weight(1f).height(48.dp),
                         shape = RoundedCornerShape(12.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                     ) {
                         Icon(Icons.Default.FileDownload, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(6.dp))
@@ -130,7 +136,7 @@ fun ImportPreviewScreen(
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
-                            .background(if (isDarkMode) CardDark else Color.White, RoundedCornerShape(12.dp))
+                            .contentCard(palette, radius = 14.dp)
                             .padding(12.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
@@ -139,7 +145,7 @@ fun ImportPreviewScreen(
                                 text = course.name,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (isDarkMode) Color.White else TextPrimary
+                                color = palette.title
                             )
                             Text(
                                 text = "${days[course.dayOfWeek]} 第${course.startSlot + 1}-${course.startSlot + course.slotCount}节  ${course.weekRange}",

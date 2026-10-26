@@ -31,10 +31,11 @@ fun CourseMoveSheet(
     if (course == null) return
 
     val sheetState = rememberModalBottomSheetState()
-    val sheetBg = if (isDarkMode) CardDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
-    val inputBg = if (isDarkMode) BgDark else Color(0xFFF5F5F5)
+    val palette = contentPalette(isDarkMode)
+    val sheetBg = palette.surface
+    val textColor = palette.title
+    val subColor = palette.muted
+    val inputBg = palette.inputSurface
 
     var selectedDay by remember(course) { mutableIntStateOf(course.dayOfWeek) }
     var selectedSlot by remember(course) { mutableIntStateOf(course.startSlot) }
@@ -95,7 +96,7 @@ fun CourseMoveSheet(
                             .weight(1f)
                             .height(36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) Primary else inputBg)
+                            .background(if (selected) palette.accent else inputBg)
                             .clickable { selectedDay = index },
                         contentAlignment = Alignment.Center
                     ) {
@@ -122,7 +123,7 @@ fun CourseMoveSheet(
                             .weight(1f)
                             .height(36.dp)
                             .clip(RoundedCornerShape(8.dp))
-                            .background(if (selected) Primary else inputBg)
+                            .background(if (selected) palette.accent else inputBg)
                             .clickable { selectedSlot = slotIdx },
                         contentAlignment = Alignment.Center
                     ) {
@@ -143,7 +144,7 @@ fun CourseMoveSheet(
                 onClick = { onMove(course, selectedDay, selectedSlot) },
                 modifier = Modifier.fillMaxWidth().height(48.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {
                 Icon(Icons.Default.Check, contentDescription = null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))

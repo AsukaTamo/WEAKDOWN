@@ -1,9 +1,12 @@
 package com.example.courseapp.ui.settings
 
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -12,13 +15,21 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.courseapp.ui.theme.*
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.courseapp.data.model.TimeSlotTemplate
+import com.example.courseapp.ui.components.AppSnackbar
+import com.example.courseapp.ui.theme.ContentPalette
+import com.example.courseapp.ui.theme.contentCard
+import com.example.courseapp.ui.theme.contentPalette
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
+import com.google.gson.Gson
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -27,148 +38,327 @@ fun TimeSlotSettingsScreen(
     isDarkMode: Boolean,
     onBack: () -> Unit
 ) {
-    val timeSlots by viewModel.timeSlots.collectAsState()
-    var editingSlots by remember { mutableStateOf(timeSlots.toList()) }
-    var templateName by remember { mutableStateOf("自定义作息表") }
-    var showSaveDialog by remember { mutableStateOf(false) }
+    val timeSlots by viewModel.timeSlots.collectAsStateWithLifecycle()
+    val templates by viewModel.timeSlotTemplates.collectAsStateWithLifecycle()
+    val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
 
-    val bgColor = if (isDarkMode) BgDark else BgLight
-    val cardColor = if (isDarkMode) CardDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val activeTemplate = templates.firstOrNull { it.isActive }
+
+    var editingSlots by remember { mutableStateOf(timeSlots.toList()) }
+    var showSaveAsDialog by remember { mutableStateOf(false) }
+    var newTemplateName by remember { mutableStateOf("") }
+    var pendingDelete by remember { mutableStateOf<TimeSlotTemplate?>(null) }
+    var snackbarMessage by remember { mutableStateOf("") }
+    var snackbarType by remember { mutableStateOf("info") }
+
+    // 这是覆盖在主壳之上的全屏面板，没有导航栈；不拦返回键会直接退出 App。
+    BackHandler { onBack() }
 
     LaunchedEffect(timeSlots) {
         editingSlots = timeSlots.toList()
     }
+    LaunchedEffect(snackbarFlow.value.first) {
+        val (msg, type) = snackbarFlow.value
+        if (msg.isNotEmpty()) {
+            snackbarMessage = msg
+            snackbarType = type
+        }
+    }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("作息时间设置", fontWeight = FontWeight.SemiBold) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "返回")
-                    }
-                },
-                actions = {
-                    TextButton(onClick = { showSaveDialog = true }) {
-                        Text("保存", color = Primary)
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = if (isDarkMode) CardDark else Color.White
-                )
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(
+                Brush.verticalGradient(listOf(palette.canvasStart, palette.canvasEnd))
             )
-        },
-        containerColor = bgColor
-    ) { padding ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .padding(horizontal = 16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(vertical = 16.dp)
-        ) {
-            item {
-                Text(
-                    text = "当前作息表（共 ${editingSlots.size} 节课）",
-                    fontSize = 14.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = subColor,
-                    modifier = Modifier.padding(bottom = 8.dp)
+    ) {
+        Scaffold(
+            containerColor = Color.Transparent,
+            topBar = {
+                TopAppBar(
+                    title = { Text("作息时间设置", fontWeight = FontWeight.SemiBold) },
+                    navigationIcon = {
+                        IconButton(onClick = onBack) {
+                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                        }
+                    },
+                    actions = {
+                        TextButton(
+                            onClick = {
+                                if (activeTemplate == null) {
+                                    newTemplateName = defaultTemplateName(templates.size)
+                                    showSaveAsDialog = true
+                                } else {
+                                    viewModel.updateActiveTimeSlotTemplate(editingSlots)
+                                }
+                            }
+                        ) {
+                            Text("保存", color = palette.accent, fontWeight = FontWeight.SemiBold)
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = Color.Transparent,
+                        titleContentColor = palette.title,
+                        navigationIconContentColor = palette.title
+                    )
                 )
             }
+        ) { padding ->
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(padding)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+                contentPadding = PaddingValues(vertical = 12.dp)
+            ) {
+                item {
+                    SectionTitle("我的作息表", palette)
+                }
 
-            items(editingSlots.size) { index ->
-                val slot = editingSlots[index]
-                TimeSlotEditItem(
-                    index = index,
-                    slot = slot,
-                    isDarkMode = isDarkMode,
-                    onStartTimeChange = { newStart ->
-                        editingSlots = editingSlots.toMutableList().also {
-                            it[index] = it[index].copy(start = newStart)
-                        }
-                    },
-                    onEndTimeChange = { newEnd ->
-                        editingSlots = editingSlots.toMutableList().also {
-                            it[index] = it[index].copy(end = newEnd)
-                        }
-                    },
-                    onDelete = {
-                        editingSlots = editingSlots.toMutableList().also {
-                            it.removeAt(index)
-                        }
+                items(templates, key = { it.id }) { template ->
+                    TemplateRow(
+                        template = template,
+                        isActive = template.isActive,
+                        palette = palette,
+                        onSelect = { viewModel.selectTimeSlotTemplate(template) },
+                        onDelete = { pendingDelete = template }
+                    )
+                }
+
+                item {
+                    TextButton(
+                        onClick = {
+                            newTemplateName = defaultTemplateName(templates.size)
+                            showSaveAsDialog = true
+                        },
+                        contentPadding = PaddingValues(horizontal = 4.dp)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, tint = palette.accent, modifier = Modifier.size(16.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("另存为新作息表", color = palette.accent, fontSize = 13.sp)
                     }
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Divider(color = palette.divider, thickness = 0.8.dp)
+                    Spacer(modifier = Modifier.height(12.dp))
+                    Text(
+                        text = "当前编辑：${activeTemplate?.name ?: "未命名"}",
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = palette.title
+                    )
+                    Text(
+                        text = "共 ${editingSlots.size} 节 · 改完点右上角「保存」",
+                        fontSize = 12.sp,
+                        color = palette.muted,
+                        modifier = Modifier.padding(top = 2.dp)
+                    )
+                }
+
+                items(editingSlots.size) { index ->
+                    TimeSlotEditItem(
+                        index = index,
+                        slot = editingSlots[index],
+                        isDarkMode = isDarkMode,
+                        palette = palette,
+                        onStartTimeChange = { newStart ->
+                            editingSlots = editingSlots.toMutableList().also {
+                                it[index] = it[index].copy(start = newStart)
+                            }
+                        },
+                        onEndTimeChange = { newEnd ->
+                            editingSlots = editingSlots.toMutableList().also {
+                                it[index] = it[index].copy(end = newEnd)
+                            }
+                        },
+                        onDelete = {
+                            editingSlots = editingSlots.toMutableList().also {
+                                it.removeAt(index)
+                            }
+                        }
+                    )
+                }
+
+                item {
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedButton(
+                        onClick = {
+                            val lastEnd = editingSlots.lastOrNull()?.end ?: "08:30"
+                            val parts = lastEnd.split(":")
+                            val totalMin = parts[0].toInt() * 60 + parts[1].toInt() + 45
+                            val newEnd = "${(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}"
+                            editingSlots = editingSlots + TimeSlot(lastEnd, newEnd)
+                        },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, palette.surfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent)
+                    ) {
+                        Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("添加时段", fontSize = 14.sp)
+                    }
+                }
+
+                item {
+                    OutlinedButton(
+                        onClick = { editingSlots = ScheduleViewModel.defaultTimeSlots() },
+                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        border = androidx.compose.foundation.BorderStroke(1.dp, palette.surfaceBorder),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.body)
+                    ) {
+                        Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text("恢复默认时间", fontSize = 14.sp)
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+        }
+
+        if (snackbarMessage.isNotEmpty()) {
+            Box(modifier = Modifier.align(Alignment.BottomCenter)) {
+                AppSnackbar(
+                    message = snackbarMessage,
+                    type = snackbarType,
+                    onDismiss = { snackbarMessage = "" }
                 )
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(8.dp))
-                OutlinedButton(
-                    onClick = {
-                        val lastEnd = editingSlots.lastOrNull()?.end ?: "08:30"
-                        val newStart = lastEnd
-                        val parts = newStart.split(":")
-                        val totalMin = parts[0].toInt() * 60 + parts[1].toInt() + 45
-                        val newEnd = "${(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}"
-                        editingSlots = editingSlots + TimeSlot(newStart, newEnd)
-                    },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Add, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("添加时段")
-                }
-            }
-
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                OutlinedButton(
-                    onClick = { editingSlots = ScheduleViewModel.defaultTimeSlots() },
-                    modifier = Modifier.fillMaxWidth().height(48.dp),
-                    shape = RoundedCornerShape(12.dp)
-                ) {
-                    Icon(Icons.Default.Refresh, contentDescription = null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text("恢复默认")
-                }
             }
         }
     }
 
-    if (showSaveDialog) {
+    if (showSaveAsDialog) {
         AlertDialog(
-            onDismissRequest = { showSaveDialog = false },
-            title = { Text("保存作息表") },
+            onDismissRequest = { showSaveAsDialog = false },
+            title = { Text("另存为作息表") },
             text = {
-                OutlinedTextField(
-                    value = templateName,
-                    onValueChange = { templateName = it },
-                    label = { Text("作息表名称") },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth()
-                )
+                Column {
+                    Text(
+                        text = "当前 ${editingSlots.size} 节会保存成一张新作息表，并立即切换使用。",
+                        fontSize = 13.sp,
+                        color = palette.muted
+                    )
+                    Spacer(modifier = Modifier.height(8.dp))
+                    OutlinedTextField(
+                        value = newTemplateName,
+                        onValueChange = { newTemplateName = it },
+                        label = { Text("作息表名称") },
+                        singleLine = true,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.saveTimeSlotTemplate(templateName, editingSlots)
-                    showSaveDialog = false
-                    onBack()
-                }) {
-                    Text("保存")
-                }
+                TextButton(
+                    onClick = {
+                        val name = newTemplateName.trim()
+                        if (name.isNotEmpty()) {
+                            viewModel.saveTimeSlotTemplate(name, editingSlots)
+                            showSaveAsDialog = false
+                        }
+                    }
+                ) { Text("保存", color = palette.accent) }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveDialog = false }) {
-                    Text("取消")
-                }
+                TextButton(onClick = { showSaveAsDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    pendingDelete?.let { template ->
+        AlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text("删除作息表") },
+            text = { Text("确定删除「${template.name}」吗？删除后无法恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.deleteTimeSlotTemplate(template)
+                    pendingDelete = null
+                }) { Text("删除", color = palette.destructive) }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
             }
         )
     }
 }
+
+private fun defaultTemplateName(existingCount: Int): String = "作息表 ${existingCount + 1}"
+
+@Composable
+private fun SectionTitle(text: String, palette: ContentPalette) {
+    Text(
+        text = text,
+        fontSize = 13.sp,
+        fontWeight = FontWeight.SemiBold,
+        color = palette.muted,
+        modifier = Modifier.padding(top = 4.dp, bottom = 2.dp)
+    )
+}
+
+@Composable
+private fun TemplateRow(
+    template: TimeSlotTemplate,
+    isActive: Boolean,
+    palette: ContentPalette,
+    onSelect: () -> Unit,
+    onDelete: () -> Unit
+) {
+    val shape = RoundedCornerShape(16.dp)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(shape)
+            .background(if (isActive) palette.accentSoft else palette.surface)
+            .border(0.8.dp, if (isActive) palette.accent.copy(alpha = 0.45f) else palette.surfaceBorder, shape)
+            .clickable(enabled = !isActive, onClick = onSelect)
+            .padding(start = 14.dp, end = 6.dp, top = 10.dp, bottom = 10.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = if (isActive) Icons.Default.CheckCircle else Icons.Default.Schedule,
+            contentDescription = null,
+            tint = if (isActive) palette.accent else palette.muted,
+            modifier = Modifier.size(18.dp)
+        )
+        Spacer(modifier = Modifier.width(10.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = template.name,
+                fontSize = 14.sp,
+                fontWeight = if (isActive) FontWeight.SemiBold else FontWeight.Medium,
+                color = palette.title,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Text(
+                text = "${template.periodCount()} 节 · ${if (isActive) "使用中" else "点击切换"}",
+                fontSize = 11.sp,
+                color = if (isActive) palette.accent else palette.muted,
+                modifier = Modifier.padding(top = 1.dp)
+            )
+        }
+        if (!isActive) {
+            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+                Icon(
+                    Icons.Default.Delete,
+                    contentDescription = "删除作息表",
+                    tint = palette.destructive,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+        }
+    }
+}
+
+private fun TimeSlotTemplate.periodCount(): Int = runCatching {
+    Gson().fromJson(slotsJson, Array<TimeSlot>::class.java)?.size ?: 0
+}.getOrDefault(0)
 
 private fun parseTimeToMinutes(time: String): Int {
     val parts = time.split(":")
@@ -187,14 +377,11 @@ private fun TimeSlotEditItem(
     index: Int,
     slot: TimeSlot,
     isDarkMode: Boolean,
+    palette: ContentPalette,
     onStartTimeChange: (String) -> Unit,
     onEndTimeChange: (String) -> Unit,
     onDelete: () -> Unit
 ) {
-    val cardColor = if (isDarkMode) CardDark else Color.White
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val subColor = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
-
     var showStartPicker by remember { mutableStateOf(false) }
     var showEndPicker by remember { mutableStateOf(false) }
     var showDurationMenu by remember { mutableStateOf(false) }
@@ -204,61 +391,56 @@ private fun TimeSlotEditItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(cardColor)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .contentCard(palette)
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        // Period number
         Text(
             text = "第${index + 1}节",
-            fontSize = 14.sp,
+            fontSize = 13.sp,
             fontWeight = FontWeight.SemiBold,
-            color = Primary,
-            modifier = Modifier.width(50.dp)
+            color = palette.accent,
+            modifier = Modifier.width(48.dp)
         )
 
-        // Start time — clickable
         Text(
             text = slot.start,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
-            color = textColor,
+            color = palette.title,
             modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .clickable { showStartPicker = true }
-                .background(if (isDarkMode) Color(0xFF2A2D3E) else Color(0xFFF5F5F5))
+                .background(palette.inputSurface)
                 .padding(horizontal = 10.dp, vertical = 6.dp)
         )
 
-        Text("~", fontSize = 14.sp, color = subColor, modifier = Modifier.padding(horizontal = 6.dp))
+        Text("~", fontSize = 14.sp, color = palette.muted, modifier = Modifier.padding(horizontal = 6.dp))
 
-        // End time — clickable
         Text(
             text = slot.end,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
-            color = textColor,
+            color = palette.title,
             modifier = Modifier
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RoundedCornerShape(8.dp))
                 .clickable { showEndPicker = true }
-                .background(if (isDarkMode) Color(0xFF2A2D3E) else Color(0xFFF5F5F5))
+                .background(palette.inputSurface)
                 .padding(horizontal = 10.dp, vertical = 6.dp)
         )
 
         Spacer(modifier = Modifier.width(8.dp))
 
-        // Duration — clickable for quick presets
         Box {
             Text(
                 text = "${durationMin}分钟",
-                fontSize = 12.sp,
-                color = Primary,
+                fontSize = 11.sp,
+                color = palette.accent,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
                     .clip(RoundedCornerShape(6.dp))
                     .clickable { showDurationMenu = true }
-                    .background(Primary.copy(alpha = 0.1f))
+                    .background(palette.accentSoft)
                     .padding(horizontal = 8.dp, vertical = 4.dp)
             )
             DropdownMenu(
@@ -280,21 +462,16 @@ private fun TimeSlotEditItem(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        // Delete button
-        IconButton(
-            onClick = onDelete,
-            modifier = Modifier.size(32.dp)
-        ) {
+        IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
             Icon(
                 Icons.Default.Close,
                 contentDescription = "删除",
-                tint = Error,
+                tint = palette.destructive,
                 modifier = Modifier.size(16.dp)
             )
         }
     }
 
-    // Start time picker dialog
     if (showStartPicker) {
         val parts = slot.start.split(":")
         val state = rememberTimePickerState(
@@ -310,7 +487,7 @@ private fun TimeSlotEditItem(
                         "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
                     )
                     showStartPicker = false
-                }) { Text("确定") }
+                }) { Text("确定", color = palette.accent) }
             },
             dismissButton = {
                 TextButton(onClick = { showStartPicker = false }) { Text("取消") }
@@ -319,7 +496,6 @@ private fun TimeSlotEditItem(
         )
     }
 
-    // End time picker dialog
     if (showEndPicker) {
         val parts = slot.end.split(":")
         val state = rememberTimePickerState(
@@ -335,7 +511,7 @@ private fun TimeSlotEditItem(
                         "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
                     )
                     showEndPicker = false
-                }) { Text("确定") }
+                }) { Text("确定", color = palette.accent) }
             },
             dismissButton = {
                 TextButton(onClick = { showEndPicker = false }) { Text("取消") }

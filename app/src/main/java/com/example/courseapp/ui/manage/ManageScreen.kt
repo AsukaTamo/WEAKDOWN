@@ -35,6 +35,7 @@ fun ManageScreen(
     isDarkMode: Boolean = false
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
+    val orphanCourseCount by viewModel.orphanCourseCount.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
 
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
@@ -53,6 +54,7 @@ fun ManageScreen(
             onTabSelected = { viewModel.switchTab(it) },
             isDarkMode = isDarkMode
         )
+        Divider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
 
         // Content
         AnimatedContent(
@@ -66,6 +68,8 @@ fun ManageScreen(
                     isDarkMode = isDarkMode,
                     isBatchMode = viewModel.isBatchMode,
                     selectedIds = viewModel.selectedIds,
+                    orphanCourseCount = orphanCourseCount,
+                    onClearOrphans = { viewModel.clearOrphanCourses() },
                     onToggleBatch = { viewModel.toggleBatchMode() },
                     onToggleSelection = { viewModel.toggleSelection(it) },
                     onSelectAll = { viewModel.selectAll() },
@@ -105,17 +109,15 @@ private fun TabBar(
     onTabSelected: (Int) -> Unit,
     isDarkMode: Boolean
 ) {
-    val tabs = listOf("全部课程", "添加课程")
-    val bgColor = if (isDarkMode) BgDark else BgLight
-    val borderColor = if (isDarkMode) DividerDark else Divider
-    val inactiveColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val tabs = listOf("本学期课程", "添加课程")
+    val palette = contentPalette(isDarkMode)
+    val inactiveColor = palette.muted
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .background(bgColor)
-            .border(1.dp, borderColor)
+            .background(Color.Transparent)
     ) {
         tabs.forEachIndexed { index, title ->
             Column(
@@ -130,7 +132,7 @@ private fun TabBar(
                     text = title,
                     fontSize = 15.sp,
                     fontWeight = FontWeight.Medium,
-                    color = if (selectedTab == index) Primary else inactiveColor,
+                    color = if (selectedTab == index) palette.accent else inactiveColor,
                     letterSpacing = 0.3.sp
                 )
                 Spacer(modifier = Modifier.height(4.dp))
@@ -139,7 +141,7 @@ private fun TabBar(
                         modifier = Modifier
                             .width(32.dp)
                             .height(3.dp)
-                            .background(Primary, RoundedCornerShape(2.dp))
+                            .background(palette.accent, RoundedCornerShape(2.dp))
                     )
                 } else {
                     Spacer(modifier = Modifier.height(3.dp))
@@ -155,6 +157,8 @@ private fun AllCoursesPanel(
     isDarkMode: Boolean,
     isBatchMode: Boolean,
     selectedIds: List<Long>,
+    orphanCourseCount: Int,
+    onClearOrphans: () -> Unit,
     onToggleBatch: () -> Unit,
     onToggleSelection: (Long) -> Unit,
     onSelectAll: () -> Unit,
@@ -162,10 +166,12 @@ private fun AllCoursesPanel(
     onDeleteCourse: (Course) -> Unit,
     onDuplicateCourse: (Course) -> Unit
 ) {
-    val bgColor = if (isDarkMode) BgDark else BgLight
+    val palette = contentPalette(isDarkMode)
     var showDeleteDialog by remember { mutableStateOf<Course?>(null) }
+    var showCleanupDialog by remember { mutableStateOf(false) }
+    var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().background(bgColor)) {
+    Column(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
         // Action bar
         Row(
             modifier = Modifier
@@ -177,25 +183,33 @@ private fun AllCoursesPanel(
             Text(
                 text = if (isBatchMode) "已选 ${selectedIds.size} 项" else "共 ${courses.size} 门课程",
                 fontSize = 13.sp,
-                color = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
+                color = palette.muted
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isBatchMode) {
                     TextButton(onClick = onSelectAll) {
-                        Text("全选", fontSize = 13.sp, color = Primary)
+                        Text("全选", fontSize = 13.sp, color = palette.accent)
                     }
-                    TextButton(onClick = onDeleteSelected) {
-                        Text("删除", fontSize = 13.sp, color = Error)
+                    TextButton(onClick = { showBatchDeleteDialog = true }) {
+                        Text("删除", fontSize = 13.sp, color = palette.destructive)
                     }
                 }
                 TextButton(onClick = onToggleBatch) {
                     Text(
                         if (isBatchMode) "取消" else "批量管理",
                         fontSize = 13.sp,
-                        color = Primary
+                        color = palette.accent
                     )
                 }
             }
+        }
+
+        if (orphanCourseCount > 0) {
+            OrphanCoursesBanner(
+                count = orphanCourseCount,
+                isDarkMode = isDarkMode,
+                onClean = { showCleanupDialog = true }
+            )
         }
 
         if (courses.isEmpty()) {
@@ -209,20 +223,20 @@ private fun AllCoursesPanel(
                         imageVector = Icons.Default.MenuBook,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
-                        tint = if (isDarkMode) Color(0xFF3A3D48) else Color(0xFFD0D4E0)
+                        tint = palette.surfaceBorder
                     )
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "暂无课程",
                         fontSize = 16.sp,
                         fontWeight = FontWeight.Medium,
-                        color = if (isDarkMode) Color(0xFF6B7080) else TextSecondary
+                        color = palette.muted
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
                         text = "点击「添加课程」标签页开始添加",
                         fontSize = 13.sp,
-                        color = if (isDarkMode) Color(0xFF555555) else Color(0xFFBDBDBD)
+                        color = palette.muted.copy(alpha = 0.7f)
                     )
                 }
             }
@@ -249,20 +263,20 @@ private fun AllCoursesPanel(
                                 if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
-                                tint = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
+                                tint = palette.muted
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
                                 text = name,
                                 fontSize = 14.sp,
                                 fontWeight = FontWeight.SemiBold,
-                                color = if (isDarkMode) Color.White else TextPrimary,
+                                color = palette.title,
                                 modifier = Modifier.weight(1f)
                             )
                             Text(
-                                text = "${groupCourses.size}节",
+                                text = "${groupCourses.sumOf { it.slotCount }} 节/周",
                                 fontSize = 12.sp,
-                                color = if (isDarkMode) Color(0xFF8E93A6) else TextSecondary
+                                color = palette.muted
                             )
                         }
                     }
@@ -299,12 +313,87 @@ private fun AllCoursesPanel(
                 TextButton(onClick = {
                     onDeleteCourse(course)
                     showDeleteDialog = null
-                }) { Text("删除", color = Error) }
+                }) { Text("删除", color = palette.destructive) }
             },
             dismissButton = {
                 TextButton(onClick = { showDeleteDialog = null }) { Text("取消") }
             }
         )
+    }
+
+    // 批量删除同样要二次确认，避免误删整学期
+    if (showBatchDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showBatchDeleteDialog = false },
+            title = { Text("删除所选课程") },
+            text = { Text("将删除已选中的 ${selectedIds.size} 门课程，操作不可恢复。") },
+            confirmButton = {
+                TextButton(onClick = {
+                    onDeleteSelected()
+                    showBatchDeleteDialog = false
+                }) { Text("删除", color = palette.destructive) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showBatchDeleteDialog = false }) { Text("取消") }
+            }
+        )
+    }
+
+    // Cleanup dialog for courses whose semester no longer exists
+    if (showCleanupDialog) {
+        AlertDialog(
+            onDismissRequest = { showCleanupDialog = false },
+            title = { Text("清理失效课程") },
+            text = {
+                Text("这 $orphanCourseCount 门课程所属的学期已被删除，清理后无法恢复。")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    onClearOrphans()
+                    showCleanupDialog = false
+                }) { Text("清理", color = palette.destructive) }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCleanupDialog = false }) { Text("取消") }
+            }
+        )
+    }
+}
+
+@Composable
+private fun OrphanCoursesBanner(
+    count: Int,
+    isDarkMode: Boolean,
+    onClean: () -> Unit
+) {
+    val bannerBg = if (isDarkMode) Color(0xFF33281A) else Color(0xFFFFF3E0)
+    val bannerText = if (isDarkMode) Color(0xFFFFCC80) else Color(0xFF8A5A00)
+
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 2.dp)
+            .clip(RoundedCornerShape(10.dp))
+            .background(bannerBg)
+            .padding(start = 12.dp, end = 4.dp, top = 6.dp, bottom = 6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = Icons.Default.WarningAmber,
+            contentDescription = null,
+            tint = bannerText,
+            modifier = Modifier.size(16.dp)
+        )
+        Spacer(modifier = Modifier.width(8.dp))
+        Text(
+            text = "$count 门课程所属学期已删除，不会显示在课表",
+            fontSize = 12.sp,
+            color = bannerText,
+            modifier = Modifier.weight(1f)
+        )
+        TextButton(onClick = onClean) {
+            Text("清理", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = contentPalette(isDarkMode).destructive)
+        }
     }
 }
 
@@ -318,10 +407,9 @@ private fun CourseListItem(
     onDelete: () -> Unit,
     onDuplicate: () -> Unit
 ) {
-    val itemBg = if (isDarkMode) CardDark else Color.White
-    val borderColor = if (isDarkMode) Color(0xFF333333) else Color(0xFFF0F0F0)
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val detailColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val textColor = palette.title
+    val detailColor = palette.muted
 
     val indicatorColor: Color = if (course.customColor.isNotEmpty()) {
         try { Color(android.graphics.Color.parseColor(course.customColor)) }
@@ -344,10 +432,10 @@ private fun CourseListItem(
         modifier = Modifier
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
-            .background(itemBg)
-            .border(0.5.dp, borderColor)
+            .padding(horizontal = 16.dp, vertical = 3.dp)
+            .contentCard(palette)
             .clickable(onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {
@@ -356,7 +444,7 @@ private fun CourseListItem(
             Checkbox(
                 checked = isSelected,
                 onCheckedChange = { onClick() },
-                colors = CheckboxDefaults.colors(checkedColor = Primary)
+                colors = CheckboxDefaults.colors(checkedColor = palette.accent)
             )
         } else {
             Box(
@@ -444,9 +532,9 @@ private fun AddCoursePanel(
     viewModel: ManageViewModel,
     isDarkMode: Boolean
 ) {
-    val bgColor = if (isDarkMode) BgDark else BgLight
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val labelColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val textColor = palette.title
+    val labelColor = palette.muted
 
     val days = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
     val types = CourseType.entries.toList()
@@ -456,7 +544,7 @@ private fun AddCoursePanel(
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
-            .background(bgColor)
+            .background(Color.Transparent)
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
@@ -505,7 +593,7 @@ private fun AddCoursePanel(
                     .height(48.dp)
                     .padding(top = 4.dp),
                 shape = RoundedCornerShape(12.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = Primary)
+                colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {
                 Icon(Icons.Default.Check, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(6.dp))
@@ -525,10 +613,11 @@ private fun FormField(
     isDarkMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val inputBg = if (isDarkMode) CardDark else Color.White
-    val inputBorder = if (isDarkMode) DividerDark else Divider
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val labelColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val inputBg = palette.inputSurface
+    val inputBorder = palette.surfaceBorder
+    val textColor = palette.title
+    val labelColor = palette.muted
 
     Column(modifier = modifier) {
         Text(
@@ -541,13 +630,13 @@ private fun FormField(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            placeholder = { Text(placeholder, color = Color(0xFFBDBDBD), fontSize = 13.sp) },
+            placeholder = { Text(placeholder, color = palette.muted.copy(alpha = 0.6f), fontSize = 13.sp) },
             modifier = Modifier
                 .fillMaxWidth()
                 .height(46.dp),
             shape = RoundedCornerShape(10.dp),
             colors = OutlinedTextFieldDefaults.colors(
-                focusedBorderColor = Primary,
+                focusedBorderColor = palette.accent,
                 unfocusedBorderColor = inputBorder,
                 focusedContainerColor = inputBg,
                 unfocusedContainerColor = inputBg,
@@ -569,10 +658,11 @@ private fun FormDropdown(
     isDarkMode: Boolean,
     modifier: Modifier = Modifier
 ) {
-    val inputBg = if (isDarkMode) CardDark else Color.White
-    val inputBorder = if (isDarkMode) DividerDark else Divider
-    val textColor = if (isDarkMode) Color.White else TextPrimary
-    val labelColor = if (isDarkMode) Color(0xFFB0B0B0) else TextSecondary
+    val palette = contentPalette(isDarkMode)
+    val inputBg = palette.inputSurface
+    val inputBorder = palette.surfaceBorder
+    val textColor = palette.title
+    val labelColor = palette.muted
 
     var expanded by remember { mutableStateOf(false) }
 
@@ -595,7 +685,7 @@ private fun FormDropdown(
                     .clickable { expanded = true },
                 shape = RoundedCornerShape(10.dp),
                 colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = Primary,
+                    focusedBorderColor = palette.accent,
                     unfocusedBorderColor = inputBorder,
                     focusedContainerColor = inputBg,
                     unfocusedContainerColor = inputBg,

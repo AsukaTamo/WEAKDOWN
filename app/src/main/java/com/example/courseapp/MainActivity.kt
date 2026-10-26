@@ -3,6 +3,7 @@ package com.example.courseapp
 import android.graphics.BitmapFactory
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
@@ -28,9 +29,13 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.BlendMode
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -67,6 +72,70 @@ data class NavItem(
 
 private fun Color.withAlphaMultiplier(multiplier: Float): Color =
     copy(alpha = (alpha * multiplier).coerceIn(0f, 1f))
+
+@Composable
+private fun ThemeMorphIcon(
+    isSun: Boolean,
+    tint: Color,
+    rotation: Float,
+    iconDescription: String
+) {
+    val sunProgress by animateFloatAsState(
+        targetValue = if (isSun) 1f else 0f,
+        animationSpec = tween(560, easing = FastOutSlowInEasing),
+        label = "themeIconMorph"
+    )
+
+    androidx.compose.foundation.Canvas(
+        modifier = Modifier
+            .size(21.dp)
+            .semantics { contentDescription = iconDescription }
+            .graphicsLayer {
+                rotationZ = rotation
+                compositingStrategy = CompositingStrategy.Offscreen
+            },
+    ) {
+        val center = this.center
+        val moonProgress = 1f - sunProgress
+        val centerRadius = size.minDimension * (0.255f + moonProgress * 0.075f)
+        val rayLength = size.minDimension * (0.18f * sunProgress)
+        val rayStart = centerRadius + size.minDimension * 0.12f
+        val rayEnd = rayStart + rayLength
+        val rayAlpha = (sunProgress * 1.15f).coerceIn(0f, 1f)
+
+        // 光芒随太阳出现而向外展开，变成月亮时向圆心收缩。
+        if (rayLength > 0.01f) {
+            repeat(8) { index ->
+                val angle = Math.toRadians(index * 45.0)
+                val cos = kotlin.math.cos(angle).toFloat()
+                val sin = kotlin.math.sin(angle).toFloat()
+                drawLine(
+                    color = tint.copy(alpha = rayAlpha),
+                    start = center + androidx.compose.ui.geometry.Offset(cos * rayStart, sin * rayStart),
+                    end = center + androidx.compose.ui.geometry.Offset(cos * rayEnd, sin * rayEnd),
+                    strokeWidth = size.minDimension * 0.075f,
+                    cap = androidx.compose.ui.graphics.StrokeCap.Round
+                )
+            }
+        }
+
+        drawCircle(tint, radius = centerRadius, center = center)
+
+        // 月牙缺口从右侧逐渐收起；Offscreen + Clear 让底层背景自然透出。
+        val cutoutRadius = size.minDimension * (0.30f * moonProgress)
+        if (cutoutRadius > 0.01f) {
+            drawCircle(
+                color = Color.Transparent,
+                radius = cutoutRadius,
+                center = center + androidx.compose.ui.geometry.Offset(
+                    size.minDimension * 0.14f,
+                    -size.minDimension * 0.10f
+                ),
+                blendMode = BlendMode.Clear
+            )
+        }
+    }
+}
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
@@ -115,6 +184,8 @@ fun CourseApp(
     val importViewModel: ImportViewModel = hiltViewModel()
 
     val visibleWeek by scheduleViewModel.visibleWeek.collectAsStateWithLifecycle()
+    val activeSemester by scheduleViewModel.activeSemester.collectAsStateWithLifecycle()
+    val calendarWeek by scheduleViewModel.calendarWeek.collectAsStateWithLifecycle()
     val backgroundUri by scheduleViewModel.backgroundUri.collectAsStateWithLifecycle()
     val scrimAlpha by scheduleViewModel.scrimAlpha.collectAsStateWithLifecycle()
     val showScheduleGuides by scheduleViewModel.showScheduleGuides.collectAsStateWithLifecycle()
@@ -128,7 +199,7 @@ fun CourseApp(
     )
 
     val topBarTitle = when (currentScreen) {
-        Screen.Schedule -> "2025-2026学年 第二学期"
+        Screen.Schedule -> activeSemester?.name ?: "未设置学期"
         Screen.Manage -> "课程管理"
         Screen.Profile -> "我的"
         Screen.WebImport -> "教务系统导入"
@@ -137,6 +208,17 @@ fun CourseApp(
     val showWeekSelector = currentScreen == Screen.Schedule
     val hasBackground = currentScreen == Screen.Schedule && backgroundUri.isNotEmpty()
     val palette = schedulePalette(isDarkMode, hasBackground)
+
+    // 返回键：先关周选择弹层 / 回到首页，最后才交给系统退出。
+    BackHandler(
+        enabled = !showTimeSlotSettings && (showWeekDialog || currentScreen != Screen.Schedule)
+    ) {
+        when {
+            showWeekDialog -> showWeekDialog = false
+            currentScreen == Screen.ImportPreview -> currentScreen = Screen.WebImport
+            else -> currentScreen = Screen.Schedule
+        }
+    }
 
     Box(
         modifier = Modifier
@@ -161,12 +243,11 @@ fun CourseApp(
         modifier = Modifier.fillMaxSize(),
         containerColor = Color.Transparent,
         topBar = {
-            var darkModeAnimating by remember { mutableStateOf(false) }
-            val darkModeRotation by animateFloatAsState(
-                targetValue = if (darkModeAnimating) 360f else 0f,
-                animationSpec = tween(ScheduleMotion.EmphasizedMillis, easing = ScheduleMotion.EmphasizedEasing),
-                label = "darkModeRotation",
-                finishedListener = { darkModeAnimating = false }
+            var themeIconRotation by remember { mutableFloatStateOf(0f) }
+            val animatedThemeIconRotation by animateFloatAsState(
+                targetValue = themeIconRotation,
+                animationSpec = tween(520, easing = FastOutSlowInEasing),
+                label = "themeIconRotation"
             )
             val weekArrowRotation by animateFloatAsState(
                 targetValue = if (showWeekDialog) 180f else 0f,
@@ -212,7 +293,8 @@ fun CourseApp(
                 ) {
                     IconButton(
                         onClick = {
-                            darkModeAnimating = true
+                            // 每次累计 180°，让太阳/月亮始终沿同一方向旋转。
+                            themeIconRotation += 180f
                             scheduleViewModel.toggleDarkMode()
                         },
                         modifier = Modifier
@@ -227,20 +309,11 @@ fun CourseApp(
                                 .background(palette.weekChip.copy(alpha = if (hasBackground) 0.36f else 0.10f)),
                             contentAlignment = Alignment.Center
                         ) {
-                            Icon(
-                                imageVector = if (isDarkMode) Icons.Filled.LightMode else Icons.Filled.DarkMode,
-                                contentDescription = "深色模式",
+                            ThemeMorphIcon(
+                                isSun = isDarkMode,
                                 tint = palette.topContent,
-                                modifier = Modifier
-                                    .size(21.dp)
-                                    .graphicsLayer {
-                                        rotationZ = darkModeRotation
-                                        scaleX = if (darkModeAnimating) {
-                                            val progress = darkModeRotation / 360f
-                                            if (progress < 0.5f) 1f - progress * 0.4f else 0.8f + (progress - 0.5f) * 0.4f
-                                        } else 1f
-                                        scaleY = scaleX
-                                    }
+                                rotation = animatedThemeIconRotation,
+                                iconDescription = if (isDarkMode) "切换为浅色模式" else "切换为深色模式"
                             )
                         }
                     }
@@ -250,43 +323,83 @@ fun CourseApp(
                         modifier = Modifier.align(Alignment.Center)
                     ) {
                         if (showWeekSelector) {
+                            val isBrowsingOtherWeek = visibleWeek != calendarWeek
                             Text(
-                                text = topBarTitle,
+                                text = if (isBrowsingOtherWeek) {
+                                    "$topBarTitle · 本周第 ${calendarWeek} 周"
+                                } else {
+                                    topBarTitle
+                                },
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = palette.topMuted,
                                 letterSpacing = 0.2.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.Center,
-                                modifier = Modifier
-                                    .height(42.dp)
-                                    .widthIn(min = 148.dp)
-                                    .clip(RoundedCornerShape(16.dp))
-                                    .background(palette.weekChip)
-                                    .clickable { showWeekDialog = true }
-                                    .padding(horizontal = 18.dp)
-                            ) {
-                                Text(
-                                    text = "第${visibleWeek}周",
-                                    fontSize = 18.sp,
-                                    fontWeight = FontWeight.Bold,
-                                    color = palette.weekChipContent,
-                                    letterSpacing = 0.1.sp
-                                )
-                                Icon(
-                                    imageVector = Icons.Default.KeyboardArrowDown,
-                                    contentDescription = "选择周数",
-                                    tint = palette.weekChipContent.copy(alpha = 0.78f),
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.Center,
                                     modifier = Modifier
-                                        .padding(start = 8.dp)
-                                        .size(18.dp)
-                                        .graphicsLayer {
-                                            rotationZ = weekArrowRotation
-                                        }
-                                )
+                                        .height(42.dp)
+                                        .widthIn(min = 128.dp)
+                                        .clip(RoundedCornerShape(16.dp))
+                                        .background(palette.weekChip)
+                                        .clickable { showWeekDialog = !showWeekDialog }
+                                        .padding(horizontal = 16.dp)
+                                ) {
+                                    Text(
+                                        text = "第${visibleWeek}周",
+                                        fontSize = 17.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = palette.weekChipContent,
+                                        letterSpacing = 0.1.sp
+                                    )
+                                    Icon(
+                                        imageVector = Icons.Default.KeyboardArrowDown,
+                                        contentDescription = "选择周数",
+                                        tint = palette.weekChipContent.copy(alpha = 0.78f),
+                                        modifier = Modifier
+                                            .padding(start = 8.dp)
+                                            .size(18.dp)
+                                            .graphicsLayer {
+                                                rotationZ = weekArrowRotation
+                                            }
+                                    )
+                                }
+
+                                if (isBrowsingOtherWeek) {
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Row(
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        modifier = Modifier
+                                            .height(42.dp)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                if (hasBackground || isDarkMode) {
+                                                    Color.White.copy(alpha = 0.16f)
+                                                } else {
+                                                    Color(0xFF0F8F7B).copy(alpha = 0.12f)
+                                                }
+                                            )
+                                            .clickable {
+                                                scheduleViewModel.selectWeek(calendarWeek)
+                                                showWeekDialog = false
+                                            }
+                                            .padding(horizontal = 8.dp)
+                                    ) {
+                                        Text(
+                                            text = "回本周",
+                                            fontSize = 12.sp,
+                                            fontWeight = FontWeight.Medium,
+                                            color = if (hasBackground || isDarkMode) {
+                                                Color.White
+                                            } else {
+                                                Color(0xFF0F8F7B)
+                                            }
+                                        )
+                                    }
+                                }
                             }
                         } else {
                             Text(
@@ -490,6 +603,9 @@ fun CourseApp(
                         WeekSelectorDialog(
                             currentWeek = visibleWeek,
                             isDarkMode = isDarkMode,
+                            thisWeek = calendarWeek,
+                            maxWeek = activeSemester?.totalWeeks?.coerceAtLeast(1)
+                                ?: ScheduleViewModel.DEFAULT_SELECTABLE_WEEK_LIMIT,
                             onWeekSelected = {
                                 scheduleViewModel.selectWeek(it)
                                 showWeekDialog = false
