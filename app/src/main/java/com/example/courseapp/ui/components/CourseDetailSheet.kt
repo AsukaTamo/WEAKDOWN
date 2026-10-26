@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
@@ -197,17 +198,23 @@ fun CourseDetailSheet(
             if (!dismissing) offsetY = withResistance(offsetY + delta)
         }
 
-        val expansion = if (peekOffset > 1f) {
-            ((peekOffset - offsetY) / peekOffset).coerceIn(0f, 1f)
-        } else {
-            1f
-        }
+        // 只有"完全展开/贴顶"这一个布尔位会变，用 derivedStateOf 让重组发生在翻越阈值那一刻
+        val contentScrollEnabled by remember { derivedStateOf { offsetY <= 1f } }
 
-        // 遮罩：随展开程度加深
+        // 遮罩：随展开程度加深。
+        // 透明度放在 graphicsLayer 里读 offsetY（draw 阶段），避免每帧重组整个抽屉。
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Black.copy(alpha = 0.30f + 0.22f * expansion))
+                .graphicsLayer {
+                    val expansion = if (peekOffset > 1f) {
+                        ((peekOffset - offsetY) / peekOffset).coerceIn(0f, 1f)
+                    } else {
+                        1f
+                    }
+                    alpha = 0.30f + 0.22f * expansion
+                }
+                .background(Color.Black)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -243,7 +250,7 @@ fun CourseDetailSheet(
                     .heightIn(max = contentMaxHeightDp)
                     // 只有完全展开时才让内容自己滚；peek 状态下整块拖动都交给抽屉，
                     // 否则用户在详情区上拉时会变成"滚动一个本来就滚不动的列表"。
-                    .verticalScroll(scrollState, enabled = offsetY <= 1f)
+                    .verticalScroll(scrollState, enabled = contentScrollEnabled)
                     .padding(horizontal = 20.dp)
                     .padding(top = 14.dp, bottom = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)

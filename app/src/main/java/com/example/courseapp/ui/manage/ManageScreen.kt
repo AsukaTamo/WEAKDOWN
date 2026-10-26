@@ -30,6 +30,7 @@ import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.ColorPickerRow
 import com.example.courseapp.ui.components.courseGradientColors
+import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ManageViewModel
 
@@ -61,14 +62,15 @@ fun ManageScreen(
         )
         Divider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
 
-        // Content
-        AnimatedContent(
-            targetState = viewModel.selectedTab,
-            label = "tabContent",
-            modifier = Modifier.weight(1f)
-        ) { tab ->
-            when (tab) {
-                0 -> AllCoursesPanel(
+        // Content：两个 Tab 都常驻组合，切 Tab 只切摆放。
+        // 之前用 AnimatedContent 时，切到「添加课程」要现场组合整张表单，会先卡一下再出现。
+        Box(modifier = Modifier.weight(1f)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .keepPlacedWhen(viewModel.selectedTab == 0)
+            ) {
+                AllCoursesPanel(
                     courses = courses,
                     isDarkMode = isDarkMode,
                     isBatchMode = viewModel.isBatchMode,
@@ -83,7 +85,13 @@ fun ManageScreen(
                     onDuplicateCourse = { viewModel.duplicateCourse(it) },
                     onNavigateToImport = onNavigateToImport
                 )
-                1 -> AddCoursePanel(
+            }
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .keepPlacedWhen(viewModel.selectedTab == 1)
+            ) {
+                AddCoursePanel(
                     viewModel = viewModel,
                     isDarkMode = isDarkMode
                 )

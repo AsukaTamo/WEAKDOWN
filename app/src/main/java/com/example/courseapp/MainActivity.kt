@@ -7,6 +7,9 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.animation.*
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.*
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
@@ -40,6 +43,7 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.geometry.Rect
@@ -52,6 +56,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.WeekMorphOverlay
+import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
 import com.example.courseapp.ui.manage.ManageScreen
@@ -218,6 +223,17 @@ fun CourseApp(
     var weekArrowBounds by remember { mutableStateOf(Rect.Zero) }
     // 主题切换：圆形揭示 + 图标缩放
     val themeReveal = remember { Animatable(1f) }
+    // 只有开始/结束各变一次，避免在 composition 里每帧读动画值
+    var themeRevealActive by remember { mutableStateOf(false) }
+    // 覆盖层自身的淡入：从 0 到 1 用 90ms，画面先柔和地化到底色，再扩散圆洞
+    val themeCoverAlpha = remember { Animatable(1f) }
+    // 隐藏页面的主题色延迟到揭示结束后再切：主题切换那一帧只重组当前可见页
+    var delayedDarkMode by remember { mutableStateOf(isDarkMode) }
+    LaunchedEffect(isDarkMode) {
+        if (delayedDarkMode == isDarkMode) return@LaunchedEffect
+        kotlinx.coroutines.delay(ThemeRevealDelayMillis)
+        delayedDarkMode = isDarkMode
+    }
     val themeIconScale = remember { Animatable(1f) }
     var themeRevealCenter by remember { mutableStateOf(Offset.Zero) }
     var themeRevealColor by remember { mutableStateOf(Color.Transparent) }
@@ -239,6 +255,17 @@ fun CourseApp(
     val showWeekSelector = currentScreen == Screen.Schedule
     val hasBackground = currentScreen == Screen.Schedule && backgroundUri.isNotEmpty()
     val palette = schedulePalette(isDarkMode, hasBackground)
+            // 大色块做颜色过渡，换主题时顶栏/底栏是"化"过去的，不是直接跳
+            val animatedTopSurface by animateColorAsState(
+                targetValue = palette.topSurface,
+                animationSpec = tween(600, easing = FastOutSlowInEasing),
+                label = "topSurfaceColor"
+            )
+            val animatedBottomSurface by animateColorAsState(
+                targetValue = palette.bottomSurface,
+                animationSpec = tween(600, easing = FastOutSlowInEasing),
+                label = "bottomSurfaceColor"
+            )
 
     // 返回键：先关周选择弹层 / 回到首页，最后才交给系统退出。
     BackHandler(
@@ -302,8 +329,8 @@ fun CourseApp(
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    palette.topSurface,
-                                    palette.topSurface.withAlphaMultiplier(0.82f)
+                                    animatedTopSurface,
+                                    animatedTopSurface.withAlphaMultiplier(0.82f)
                                 )
                             )
                         )
@@ -328,13 +355,30 @@ fun CourseApp(
                                 themeIconScale.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
                             }
                             themeScope.launch {
+                                themeRevealActive = true
                                 themeReveal.snapTo(0f)
+                                // 旧界面先用 90ms 柔和地化到纯底色，再在纯色下面换主题：
+                                // 既没有整屏硬切，也把整树换色那一帧藏住了
+                                themeCoverAlpha.snapTo(0f)
+                                themeCoverAlpha.animateTo(
+                                    targetValue = 1f,
+                                    animationSpec = tween(90, easing = FastOutSlowInEasing)
+                                )
                                 scheduleViewModel.toggleDarkMode()
+                                // 让主题重组先落地，再启动卡片错峰，避免挤在同一帧
+                                kotlinx.coroutines.delay(96)
                                 ThemeTransition.trigger()
+                                // 与周数面板展开同一条高阻尼 spring 曲线
                                 themeReveal.animateTo(
                                     targetValue = 1f,
-                                    animationSpec = tween(450, easing = FastOutSlowInEasing)
+                                    animationSpec = spring(
+                                        dampingRatio = 0.97f,
+                                        stiffness = 170f,
+                                        visibilityThreshold = 0.001f
+                                    )
                                 )
+                                themeReveal.snapTo(1f)
+                                themeRevealActive = true
                             }
                         },
                         modifier = Modifier
@@ -479,7 +523,7 @@ fun CourseApp(
                             spotColor = Color.Black.copy(alpha = if (hasBackground) 0.34f else 0.24f)
                         )
                         .clip(RoundedCornerShape(28.dp))
-                        .background(palette.bottomSurface)
+                        .background(animatedBottomSurface)
                         .border(
                             width = 0.7.dp,
                             color = if (isDarkMode) {
@@ -570,38 +614,45 @@ fun CourseApp(
                 .fillMaxSize()
                 .padding(paddingValues)
         ) {
-            // Always keep ScheduleScreen in composition to avoid removal crashes
-            Box(modifier = Modifier.fillMaxSize()) {
-                if (currentScreen == Screen.Schedule) {
-                    ScheduleScreen(
-                        viewModel = scheduleViewModel,
-                        onNavigateToAdd = {
-                            currentScreen = Screen.Manage
-                            manageViewModel.switchTab(1)
-                        },
-                        onNavigateToImport = { currentScreen = Screen.WebImport },
-                        drawBackground = false
-                    )
+            // 三个主页面常驻组合：切 Tab 只切可见性，不再整屏重建（重建会有 ~200ms 首帧尖峰）。
+            // 隐藏页只 measure 不 place，所以既不绘制也不参与命中测试。
+            listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
+                key(screen) {
+                    val visible = currentScreen == screen
+                    // 可见页立刻跟主题，隐藏页用延迟值，避免一次切换让三整屏同时重组
+                    val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .keepPlacedWhen(visible)
+                    ) {
+                        when (screen) {
+                            Screen.Schedule -> ScheduleScreen(
+                                viewModel = scheduleViewModel,
+                                onNavigateToAdd = {
+                                    currentScreen = Screen.Manage
+                                    manageViewModel.switchTab(1)
+                                },
+                                onNavigateToImport = { currentScreen = Screen.WebImport },
+                                drawBackground = false
+                            )
+                            Screen.Manage -> ManageScreen(
+                                viewModel = manageViewModel,
+                                isDarkMode = screenDarkMode,
+                                onNavigateToImport = { currentScreen = Screen.WebImport }
+                            )
+                            Screen.Profile -> ProfileScreen(
+                                onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
+                                onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
+                                isDarkMode = screenDarkMode,
+                                showScheduleGuides = showScheduleGuides,
+                                onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
+                                onTimeSlotSettings = { showTimeSlotSettings = true }
+                            )
+                            else -> Unit
+                        }
+                    }
                 }
-            }
-
-            if (currentScreen == Screen.Manage) {
-                ManageScreen(
-                    viewModel = manageViewModel,
-                    isDarkMode = isDarkMode,
-                    onNavigateToImport = { currentScreen = Screen.WebImport }
-                )
-            }
-
-            if (currentScreen == Screen.Profile) {
-                ProfileScreen(
-                    onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                    onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
-                    isDarkMode = isDarkMode,
-                    showScheduleGuides = showScheduleGuides,
-                    onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
-                    onTimeSlotSettings = { showTimeSlotSettings = true }
-                )
             }
 
             if (currentScreen == Screen.WebImport) {
@@ -663,23 +714,15 @@ fun CourseApp(
         onDismiss = { showWeekDialog = false }
     )
 
-    // 主题切换的圆形揭示：用旧底色盖住全屏，只挖出从按钮扩散的圆洞
-    if (themeReveal.value < 1f) {
-        Canvas(modifier = Modifier.fillMaxSize()) {
-            val maxRadius = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat()
-            val path = Path().apply {
-                fillType = PathFillType.EvenOdd
-                addRect(Rect(0f, 0f, size.width, size.height))
-                addOval(
-                    Rect(
-                        center = themeRevealCenter,
-                        radius = maxRadius * themeReveal.value
-                    )
-                )
-            }
-            drawPath(path, themeRevealColor)
-        }
-    }
+    // 主题切换的圆形揭示：用旧底色盖住全屏，只挖出从按钮扩散的圆洞。
+    // 进度在 DrawScope 里读，只失效绘制，不触发重组。
+    ThemeRevealOverlay(
+        active = themeRevealActive,
+        progress = themeReveal,
+        coverAlpha = themeCoverAlpha,
+        center = themeRevealCenter,
+        color = themeRevealColor
+    )
 
     // 课程详情抽屉：放在根布局，遮罩才能覆盖顶栏与底部导航
     CourseDetailSheet(
@@ -693,6 +736,30 @@ fun CourseApp(
     )
 }
 
+}
+
+@Composable
+private fun ThemeRevealOverlay(
+    active: Boolean,
+    progress: Animatable<Float, AnimationVector1D>,
+    coverAlpha: Animatable<Float, AnimationVector1D>,
+    center: Offset,
+    color: Color
+) {
+    if (!active) return
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        // DrawScope 里读 Animatable：只让这一层重绘，不带着整棵树重组
+        val raw = progress.value
+        val fraction = raw.coerceIn(0f, 1f)
+        if (fraction >= 1f) return@Canvas
+        val maxRadius = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat()
+        val path = Path().apply {
+            fillType = PathFillType.EvenOdd
+            addRect(Rect(0f, 0f, size.width, size.height))
+            addOval(Rect(center = center, radius = maxRadius * fraction))
+        }
+        drawPath(path, color.copy(alpha = color.alpha * coverAlpha.value.coerceIn(0f, 1f)))
+    }
 }
 
 @Composable
@@ -736,3 +803,19 @@ private fun ImmersiveScheduleBackground(
             )
     )
 }
+
+/**
+ * 常驻组合、条件摆放：visible 为 false 时只 measure 不 place，
+ * 这样页面状态得以保留，又不会占用绘制与触摸。
+ */
+private fun Modifier.keepPlacedWhen(visible: Boolean): Modifier = this.layout { measurable, constraints ->
+    val placeable = measurable.measure(constraints)
+    layout(placeable.width, placeable.height) {
+        if (visible) {
+            placeable.place(0, 0)
+        }
+    }
+}
+
+/** 揭示动画时长（spring 收尾），隐藏页在这之后才跟着换主题。 */
+private const val ThemeRevealDelayMillis = 520L
