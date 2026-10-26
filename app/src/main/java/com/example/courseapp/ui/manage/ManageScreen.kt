@@ -9,6 +9,8 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.automirrored.filled.MenuBook
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -220,7 +222,7 @@ private fun AllCoursesPanel(
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Icon(
-                        imageVector = Icons.Default.MenuBook,
+                        imageVector = Icons.AutoMirrored.Filled.MenuBook,
                         contentDescription = null,
                         modifier = Modifier.size(64.dp),
                         tint = palette.surfaceBorder
@@ -260,7 +262,7 @@ private fun AllCoursesPanel(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Icon(
-                                if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.Default.KeyboardArrowRight,
+                                if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
                                 contentDescription = null,
                                 modifier = Modifier.size(20.dp),
                                 tint = palette.muted
@@ -533,7 +535,6 @@ private fun AddCoursePanel(
     isDarkMode: Boolean
 ) {
     val palette = contentPalette(isDarkMode)
-    val textColor = palette.title
     val labelColor = palette.muted
 
     val days = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")

@@ -29,9 +29,6 @@ class ScheduleViewModel @Inject constructor(
 
     private val preferences = context.getSharedPreferences("schedule_settings", Context.MODE_PRIVATE)
 
-    private val _courses = MutableStateFlow<List<Course>>(emptyList())
-    val courses: StateFlow<List<Course>> = _courses.asStateFlow()
-
     private val _allStoredCourses = MutableStateFlow<List<Course>>(emptyList())
     private val _allCourses = MutableStateFlow<List<Course>>(emptyList())
     val allCourses: StateFlow<List<Course>> = _allCourses.asStateFlow()
@@ -59,9 +56,6 @@ class ScheduleViewModel @Inject constructor(
 
     private val _activeSemester = MutableStateFlow<Semester?>(null)
     val activeSemester: StateFlow<Semester?> = _activeSemester.asStateFlow()
-
-    private val _draggedCourse = MutableStateFlow<Course?>(null)
-    val draggedCourse: StateFlow<Course?> = _draggedCourse.asStateFlow()
 
     private val _backgroundUri = MutableStateFlow("")
     val backgroundUri: StateFlow<String> = _backgroundUri.asStateFlow()
@@ -94,10 +88,6 @@ class ScheduleViewModel @Inject constructor(
         started = SharingStarted.WhileSubscribed(CLOCK_SUBSCRIPTION_TIMEOUT_MILLIS),
         initialValue = ScheduleClock.now()
     )
-
-    /** 当前学期名，供顶栏使用。 */
-    val semesterText: String
-        get() = _activeSemester.value?.name ?: "2025-2026学年 第二学期"
 
     /**
      * 学期里【今天真正属于】的那一周，只跟日期走，不随翻页变化。
@@ -162,13 +152,6 @@ class ScheduleViewModel @Inject constructor(
                 )
             }.collect { activeSemesterCourses ->
                 _allCourses.value = activeSemesterCourses
-            }
-        }
-        viewModelScope.launch {
-            combine(_allCourses, _currentWeek) { list, week ->
-                list.filter { isWeekInRange(week, it.weekRange) }
-            }.collect { filtered ->
-                _courses.value = filtered
             }
         }
     }
@@ -304,11 +287,6 @@ class ScheduleViewModel @Inject constructor(
         _visibleWeek.value = week.coerceIn(1, maxWeek)
     }
 
-    fun shiftWeek(delta: Int) {
-        if (delta == 0) return
-        selectWeek(_currentWeek.value + delta)
-    }
-
     fun toggleDarkMode() {
         setDarkMode(!_isDarkMode.value)
     }
@@ -376,14 +354,6 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
-    fun setDraggedCourse(course: Course) {
-        _draggedCourse.value = course
-    }
-
-    fun clearDraggedCourse() {
-        _draggedCourse.value = null
-    }
-
     suspend fun getConflicts(course: Course, newDay: Int, newStartSlot: Int): List<Course> {
         val endSlot = newStartSlot + course.slotCount
         return repository.getConflictingCourses(course.semester, newDay, newStartSlot, endSlot)
@@ -398,17 +368,8 @@ class ScheduleViewModel @Inject constructor(
             }
             val moved = course.copy(dayOfWeek = newDay, startSlot = newStartSlot)
             repository.updateCourse(moved)
-            _draggedCourse.value = null
             _snackbarMessage.emit("已移动「${course.name}」" to "success")
         }
-    }
-
-    fun updateTimeSlots(slots: List<TimeSlot>) {
-        _timeSlots.value = slots
-    }
-
-    fun timeSlotLabels(): List<String> {
-        return _timeSlots.value.flatMap { listOf(it.start, it.end) }
     }
 
     fun isCourseActive(course: Course, clock: ScheduleClock): Boolean =

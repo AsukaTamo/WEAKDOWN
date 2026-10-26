@@ -9,6 +9,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -41,7 +42,6 @@ private val schoolList = listOf(
 fun WebImportScreen(
     isDarkMode: Boolean = false,
     onBack: () -> Unit = {},
-    onImportSuccess: (String) -> Unit = {},
     onParseHtml: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
@@ -74,7 +74,7 @@ fun WebImportScreen(
             verticalAlignment = Alignment.CenterVertically
         ) {
             IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
-                Icon(Icons.Default.ArrowBack, "返回", tint = textColor, modifier = Modifier.size(20.dp))
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = textColor, modifier = Modifier.size(20.dp))
             }
             Text(
                 text = "教务系统导入",

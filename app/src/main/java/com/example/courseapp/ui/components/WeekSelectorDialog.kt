@@ -26,7 +26,6 @@ import com.example.courseapp.ui.theme.*
 fun WeekSelectorDialog(
     currentWeek: Int,
     onWeekSelected: (Int) -> Unit,
-    onDismiss: () -> Unit,
     isDarkMode: Boolean = false,
     maxWeek: Int = 30,
     thisWeek: Int = currentWeek

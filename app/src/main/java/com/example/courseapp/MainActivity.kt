@@ -556,10 +556,6 @@ fun CourseApp(
                 WebImportScreen(
                     isDarkMode = isDarkMode,
                     onBack = { currentScreen = Screen.Schedule },
-                    onImportSuccess = {
-                        scheduleViewModel.showMessage("检测到课表数据，正在解析...", "info")
-                        currentScreen = Screen.Schedule
-                    },
                     onParseHtml = { html ->
                         importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
                         currentScreen = Screen.ImportPreview
@@ -613,8 +609,7 @@ fun CourseApp(
                             onWeekSelected = {
                                 scheduleViewModel.selectWeek(it)
                                 showWeekDialog = false
-                            },
-                            onDismiss = { showWeekDialog = false }
+                            }
                         )
                     }
                 }
