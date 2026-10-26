@@ -144,7 +144,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 |---|---|
-| `ScheduleScreen.kt` | 首页课表页（约 670 行）。周分页横向滑动、日期表头、时间轴、课程卡片布局、背景图遮罩、FAB 菜单、长按菜单、移动弹层与冲突对话框、Snackbar。 |
+| `ScheduleScreen.kt` | 首页课表页。周分页横向滑动、日期表头（今日实心强调色块）、时间轴底衬、课程卡片布局、主题化壁纸遮罩、长按菜单、移动弹层与冲突对话框、Snackbar。首页 FAB 已移除。 |
 
 ### ui/manage
 
@@ -194,9 +194,10 @@ WebImportScreen
 
 | 文件 | 作用 |
 |---|---|
-| `Color.kt` | 语义色（Accent/Success/Error）、深色卡片底色、课程渐变与类型兜底色。 |
-| `ScheduleTokens.kt` | 尺寸/动效令牌、首页 `schedulePalette`、非首页 `contentPalette` 与 `Modifier.contentCard`。 |
-| `Theme.kt` | Compose `CourseAppTheme`，青绿配色的 Material3 light/dark color scheme。 |
+| `AppColors.kt` | **全应用唯一的颜色源**。约 20 个语义角色（canvas / surface / surfaceRaised / hairline / 文字三档 / accent 四档 / success-warning-danger / glass 五档），`LightAppColors` 与 `DarkAppColors` 两套实例：浅色为鸢尾蓝 + 流光白奶油底，深色为火山橙 + 藏蓝近黑底。 |
+| `Color.kt` | 课程卡配色：4 种课程类型 × 深浅两套基准色（白字全部过 4.5:1），外加 Snackbar/FAB 用的两个状态色常量。 |
+| `ScheduleTokens.kt` | 尺寸/动效令牌；`schedulePalette`（首页，含壁纸玻璃层）与 `contentPalette`（其他页面/弹层）都由 `AppColors` 派生，不再各自写 hex。 |
+| `Theme.kt` | Compose `CourseAppTheme`，Material3 配色方案同样由 `AppColors` 派生，保证对话框/开关/菜单跟页面同色系。 |
 | `Type.kt` | Compose typography。 |
 
 ## res 资源文件
@@ -212,7 +213,7 @@ WebImportScreen
 
 ## 测试
 
-`app/src/test` 下为纯 JVM 单元测试（`junit:junit:4.13.2`），共 6 个类 25 个用例：
+`app/src/test` 下为纯 JVM 单元测试（`junit:junit:4.13.2`），共 7 个类 30 个用例：
 
 | 测试类 | 覆盖 |
 |---|---|
@@ -222,6 +223,7 @@ WebImportScreen
 | `ScheduleTimeSlotsTest` | 默认作息与旧版作息迁移 |
 | `ScheduleCourseFilterTest` | 按当前学期过滤 |
 | `ImportOverwritePolicyTest` | 覆盖导入策略 |
+| `ColorContrastTest` | 浅/深两套 token 的对比度（正文 4.5 / 标题 7 / 按钮文字 4.5 / 课程卡白字 4.5 / 选中态不许明显暗于未选中） |
 
 ## 当前结构评估
 

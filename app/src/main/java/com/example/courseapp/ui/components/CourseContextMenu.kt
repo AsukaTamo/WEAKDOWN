@@ -99,7 +99,7 @@ fun CourseContextMenu(
                 icon = Icons.Default.ContentCopy,
                 label = "复制课程",
                 description = "复制到下一天相同时段",
-                tint = Accent,
+                tint = palette.accent,
                 isDarkMode = isDarkMode,
                 onClick = {
                     onDismiss()
@@ -110,7 +110,7 @@ fun CourseContextMenu(
                 icon = Icons.Default.OpenWith,
                 label = "拖拽移动",
                 description = "长按拖拽到其他时间段",
-                tint = Success,
+                tint = palette.success,
                 isDarkMode = isDarkMode,
                 onClick = {
                     onDismiss()

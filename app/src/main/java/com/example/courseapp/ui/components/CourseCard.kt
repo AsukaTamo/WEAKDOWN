@@ -5,6 +5,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
@@ -29,13 +31,16 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
@@ -43,6 +48,7 @@ import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Shadow
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -54,35 +60,29 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
-import com.example.courseapp.ui.theme.CourseAiEnd
-import com.example.courseapp.ui.theme.CourseAiStart
-import com.example.courseapp.ui.theme.CourseAlgoEnd
-import com.example.courseapp.ui.theme.CourseAlgoStart
-import com.example.courseapp.ui.theme.CourseCareerEnd
-import com.example.courseapp.ui.theme.CourseCareerStart
-import com.example.courseapp.ui.theme.CourseCompilerEnd
-import com.example.courseapp.ui.theme.CourseCompilerStart
-import com.example.courseapp.ui.theme.CourseCustom
-import com.example.courseapp.ui.theme.CourseCustomDark
-import com.example.courseapp.ui.theme.CourseDbEnd
-import com.example.courseapp.ui.theme.CourseDbStart
-import com.example.courseapp.ui.theme.CourseElective
-import com.example.courseapp.ui.theme.CourseElectiveDark
-import com.example.courseapp.ui.theme.CourseLab
-import com.example.courseapp.ui.theme.CourseLabDark
-import com.example.courseapp.ui.theme.CourseNetEnd
-import com.example.courseapp.ui.theme.CourseNetStart
-import com.example.courseapp.ui.theme.CourseOsEnd
-import com.example.courseapp.ui.theme.CourseOsStart
-import com.example.courseapp.ui.theme.CourseRequired
-import com.example.courseapp.ui.theme.CourseRequiredDark
-import com.example.courseapp.ui.theme.CourseSeEnd
-import com.example.courseapp.ui.theme.CourseSeStart
+import com.example.courseapp.ui.theme.CourseCustomEnd
+import com.example.courseapp.ui.theme.CourseCustomEndDark
+import com.example.courseapp.ui.theme.CourseCustomStart
+import com.example.courseapp.ui.theme.CourseCustomStartDark
+import com.example.courseapp.ui.theme.CourseElectiveEnd
+import com.example.courseapp.ui.theme.CourseElectiveEndDark
+import com.example.courseapp.ui.theme.CourseElectiveStart
+import com.example.courseapp.ui.theme.CourseElectiveStartDark
+import com.example.courseapp.ui.theme.CourseLabEnd
+import com.example.courseapp.ui.theme.CourseLabEndDark
+import com.example.courseapp.ui.theme.CourseLabStart
+import com.example.courseapp.ui.theme.CourseLabStartDark
+import com.example.courseapp.ui.theme.CourseRequiredEnd
+import com.example.courseapp.ui.theme.CourseRequiredEndDark
+import com.example.courseapp.ui.theme.CourseRequiredStart
+import com.example.courseapp.ui.theme.CourseRequiredStartDark
+import com.example.courseapp.ui.theme.ThemeTransition
 import com.example.courseapp.ui.theme.ScheduleDimensions
 import com.example.courseapp.ui.theme.ScheduleMotion
 import com.example.courseapp.ui.theme.schedulePalette
 
 fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color> {
+    // 自定义颜色保持用户选择，只按模式微调透明度后直接使用
     if (course.customColor.isNotEmpty()) {
         try {
             val base = Color(android.graphics.Color.parseColor(course.customColor))
@@ -92,47 +92,34 @@ fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color
         }
     }
 
-    val name = course.name
-    return when {
-        name.contains("操作系统") && !name.contains("实验") ->
-            if (isDarkMode) CourseOsStart.copy(alpha = 0.88f) to CourseOsEnd.copy(alpha = 0.84f)
-            else CourseOsStart to CourseOsEnd
-        name.contains("算法") ->
-            if (isDarkMode) CourseAlgoStart.copy(alpha = 0.88f) to CourseAlgoEnd.copy(alpha = 0.84f)
-            else CourseAlgoStart to CourseAlgoEnd
-        name.contains("数据库") ->
-            if (isDarkMode) CourseDbStart.copy(alpha = 0.88f) to CourseDbEnd.copy(alpha = 0.84f)
-            else CourseDbStart to CourseDbEnd
-        name.contains("人工智能") ->
-            if (isDarkMode) CourseAiStart.copy(alpha = 0.88f) to CourseAiEnd.copy(alpha = 0.84f)
-            else CourseAiStart to CourseAiEnd
-        name.contains("网络") || name.contains("实验") ->
-            if (isDarkMode) CourseNetStart.copy(alpha = 0.88f) to CourseNetEnd.copy(alpha = 0.84f)
-            else CourseNetStart to CourseNetEnd
-        name.contains("职业") || name.contains("规划") ->
-            if (isDarkMode) CourseCareerStart.copy(alpha = 0.88f) to CourseCareerEnd.copy(alpha = 0.84f)
-            else CourseCareerStart to CourseCareerEnd
-        name.contains("软件") ->
-            if (isDarkMode) CourseSeStart.copy(alpha = 0.88f) to CourseSeEnd.copy(alpha = 0.84f)
-            else CourseSeStart to CourseSeEnd
-        name.contains("编译") ->
-            if (isDarkMode) CourseCompilerStart.copy(alpha = 0.88f) to CourseCompilerEnd.copy(alpha = 0.84f)
-            else CourseCompilerStart to CourseCompilerEnd
-        else -> when (course.type) {
-            CourseType.REQUIRED ->
-                if (isDarkMode) CourseRequiredDark to CourseOsEnd.copy(alpha = 0.84f)
-                else CourseRequired to CourseOsEnd
-            CourseType.ELECTIVE ->
-                if (isDarkMode) CourseElectiveDark to CourseDbEnd.copy(alpha = 0.84f)
-                else CourseElective to CourseDbEnd
-            CourseType.LAB ->
-                if (isDarkMode) CourseLabDark to CourseNetEnd.copy(alpha = 0.84f)
-                else CourseLab to CourseNetEnd
-            CourseType.CUSTOM ->
-                if (isDarkMode) CourseCustomDark to CourseCareerEnd.copy(alpha = 0.84f)
-                else CourseCustom to CourseCareerEnd
-        }
+    // 先按课程类型取基准色，再按课程名做一点色相漂移：
+    // 同一类型的课不会挤成一片同色，白字对比度也不会掉（亮度只降不升）。
+    val seed = course.name.hashCode()
+    val base = when (course.type) {
+        CourseType.REQUIRED ->
+            if (isDarkMode) CourseRequiredStartDark to CourseRequiredEndDark
+            else CourseRequiredStart to CourseRequiredEnd
+        CourseType.ELECTIVE ->
+            if (isDarkMode) CourseElectiveStartDark to CourseElectiveEndDark
+            else CourseElectiveStart to CourseElectiveEnd
+        CourseType.LAB ->
+            if (isDarkMode) CourseLabStartDark to CourseLabEndDark
+            else CourseLabStart to CourseLabEnd
+        CourseType.CUSTOM ->
+            if (isDarkMode) CourseCustomStartDark to CourseCustomEndDark
+            else CourseCustomStart to CourseCustomEnd
     }
+    return courseVariant(base.first, seed) to courseVariant(base.second, seed)
+}
+
+/** 在类型基准色上做确定性微调：色相 ±10°、饱和度 ±4%、亮度只降不升。 */
+private fun courseVariant(color: Color, seed: Int): Color {
+    val hsv = FloatArray(3)
+    android.graphics.Color.colorToHSV(color.toArgb(), hsv)
+    hsv[0] = (hsv[0] + ((seed % 5) - 2) * 5f + 360f) % 360f
+    hsv[1] = (hsv[1] * (1f + (((seed / 5) % 3) - 1) * 0.04f)).coerceIn(0f, 1f)
+    hsv[2] = (hsv[2] * (1f - ((seed / 15) % 3) * 0.04f)).coerceIn(0f, 1f)
+    return Color(android.graphics.Color.HSVToColor(hsv))
 }
 
 /** 进行中课程专用的动画：描边旋转 + 光晕呼吸。只在 isActive 时才创建。 */
@@ -181,11 +168,36 @@ fun CourseCard(
 ) {
     val palette = schedulePalette(isDarkMode, hasWallpaperBackground)
     val (rawStart, rawEnd) = remember(course, isDarkMode) { courseGradientColors(course, isDarkMode) }
-    val startColor = if (hasWallpaperBackground) rawStart.copy(alpha = 0.90f) else rawStart
-    val endColor = if (hasWallpaperBackground) rawEnd.copy(alpha = 0.82f) else rawEnd
+    // 浅色：蓝/青渐变 @92%，壁纸也挡得住；深色：统一藏蓝底 + 彩色微光 + 彩色描边
+    val startColor = if (isDarkMode) rawStart else rawStart.copy(alpha = 0.92f)
+    val endColor = if (isDarkMode) rawEnd else rawEnd.copy(alpha = 0.92f)
+    val darkBase = Color(0xD914141A)
+    val cardAccent = if (isDarkMode) courseDarkAccent(course) else rawStart
+    val titleColor = if (isDarkMode) Color.White else Color.White
+    val bodyColor = if (isDarkMode) Color(0xFFD1D5F0) else Color.White.copy(alpha = 0.88f)
+    val textShadow = if (isDarkMode) null else Shadow(
+        color = Color(0x33000000),
+        offset = Offset(0f, 1f),
+        blurRadius = 2f
+    )
+    val baseTextStyle = LocalTextStyle.current.copy(shadow = textShadow)
     val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
+    // 主题切换时按行列错峰回弹：0.94 -> 1.0，弹簧收尾
+    val epoch = ThemeTransition.epoch
+    val staggerScale = remember { Animatable(1f) }
+    LaunchedEffect(epoch) {
+        if (epoch > 0) {
+            val delayMs = ((course.startSlot * 2 + course.dayOfWeek) * 15).coerceAtMost(360)
+            kotlinx.coroutines.delay(delayMs.toLong())
+            staggerScale.snapTo(0.94f)
+            staggerScale.animateTo(
+                targetValue = 1f,
+                animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)
+            )
+        }
+    }
     val scale by animateFloatAsState(
         targetValue = if (pressed) ScheduleMotion.PressedScale else 1f,
         animationSpec = tween(
@@ -221,8 +233,8 @@ fun CourseCard(
 
     Box(
         modifier = modifier.graphicsLayer {
-            scaleX = scale
-            scaleY = scale
+            scaleX = scale * staggerScale.value
+            scaleY = scale * staggerScale.value
         }
     ) {
         if (activeAnimation != null) {
@@ -248,17 +260,25 @@ fun CourseCard(
                 )
                 .clip(shape)
                 .background(
-                    brush = Brush.linearGradient(listOf(startColor, endColor)),
+                    brush = if (isDarkMode) Brush.linearGradient(listOf(darkBase, darkBase))
+                    else Brush.linearGradient(listOf(startColor, endColor)),
                     shape = shape
                 )
                 .background(
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(alpha = if (hasWallpaperBackground) 0.18f else 0.12f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = if (hasWallpaperBackground) 0.16f else 0.08f)
+                    brush = if (isDarkMode) {
+                        // 18% 彩色微光：从左上角斜向铺开，让同底色卡片仍能分辨
+                        Brush.linearGradient(
+                            listOf(cardAccent.copy(alpha = 0.18f), Color.Transparent)
                         )
-                    ),
+                    } else {
+                        Brush.verticalGradient(
+                            listOf(
+                                Color.White.copy(alpha = if (hasWallpaperBackground) 0.18f else 0.12f),
+                                Color.Transparent,
+                                Color.Black.copy(alpha = if (hasWallpaperBackground) 0.16f else 0.08f)
+                            )
+                        )
+                    },
                     shape = shape
                 )
                 .then(
@@ -277,6 +297,8 @@ fun CourseCard(
                             width = 2.dp,
                             corner = ScheduleDimensions.CourseCorner
                         )
+                    } else if (isDarkMode) {
+                        Modifier.border(1.5.dp, cardAccent.copy(alpha = 0.85f), shape)
                     } else {
                         Modifier.border(1.dp, palette.courseStroke, shape)
                     }
@@ -334,7 +356,8 @@ fun CourseCard(
                 if (teacherLine.isNotBlank()) {
                     Text(
                         text = teacherLine,
-                        color = Color.White.copy(alpha = 0.88f),
+                        color = bodyColor,
+                        style = baseTextStyle,
                         fontSize = bodyFontSize,
                         fontWeight = FontWeight.Medium,
                         lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
@@ -347,7 +370,8 @@ fun CourseCard(
                 if (locationLine.isNotBlank()) {
                     Text(
                         text = "@$locationLine",
-                        color = Color.White.copy(alpha = 0.88f),
+                        color = bodyColor,
+                        style = baseTextStyle,
                         fontSize = bodyFontSize,
                         fontWeight = FontWeight.Medium,
                         lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
@@ -361,7 +385,8 @@ fun CourseCard(
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
                         text = statusText,
-                        color = Color.White.copy(alpha = 0.92f),
+                        color = bodyColor,
+                        style = baseTextStyle,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 9.sp,
@@ -482,3 +507,14 @@ private fun Modifier.rotatingConicBorder(
         }
     }
 }
+
+// ── 深色模式课程卡彩色描边：4 组循环，按课程名确定性取色 ──
+private val darkCourseAccents = listOf(
+    Color(0xFFE8553D), // 火山橙
+    Color(0xFFFF9F43), // 琥珀金
+    Color(0xFF00D2D3), // 电光青
+    Color(0xFFA29BFE)  // 星云紫
+)
+
+internal fun courseDarkAccent(course: Course): Color =
+    darkCourseAccents[Math.floorMod(course.name.hashCode(), darkCourseAccents.size)]

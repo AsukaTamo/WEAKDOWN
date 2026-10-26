@@ -22,6 +22,16 @@ object ScheduleDimensions {
     val FabSize = 56.dp
 }
 
+/** 主题切换的全局节拍：课表卡片据此错峰做一次缩放回弹。 */
+object ThemeTransition {
+    private val state = androidx.compose.runtime.mutableIntStateOf(0)
+    val epoch: Int get() = state.intValue
+
+    fun trigger() {
+        state.intValue++
+    }
+}
+
 object ScheduleMotion {
     const val FastMillis = 140
     const val StandardMillis = 240
@@ -54,6 +64,7 @@ data class SchedulePalette(
     val mutedText: Color,
     val dayText: Color,
     val headerText: Color,
+    val headerBackdrop: Color,
     val todaySurface: Color,
     val todayText: Color,
     val courseStroke: Color,
@@ -67,65 +78,43 @@ data class SchedulePalette(
 )
 
 fun schedulePalette(isDarkMode: Boolean, hasWallpaper: Boolean): SchedulePalette {
-    val darkCanvas = Color(0xFF0B1017)
-    val lightCanvas = Color(0xFFF2F6F8)
+    val c = appColors(isDarkMode)
+    // 顶栏 / 底栏：surface @ 88%，壁纸只透 12%，不再额外叠黑罩
+    val barSurface = c.surface.copy(alpha = 0.88f)
+    val gridGlass = if (hasWallpaper) Color.Transparent else c.surface
     return SchedulePalette(
-        appCanvas = if (hasWallpaper) Color.Transparent else if (isDarkMode) darkCanvas else lightCanvas,
-        appCanvasEnd = if (hasWallpaper) Color.Transparent else if (isDarkMode) Color(0xFF111827) else Color(0xFFEAF2F0),
-        pageFallback = if (isDarkMode) darkCanvas else lightCanvas,
-        pageScrim = if (hasWallpaper) Color.Black.copy(alpha = 0.18f) else Color.Transparent,
-        topSurface = if (hasWallpaper) {
-            Color.Black.copy(alpha = if (isDarkMode) 0.46f else 0.36f)
-        } else if (isDarkMode) {
-            Color(0xE6141822)
-        } else {
-            Color.White.copy(alpha = 0.88f)
-        },
-        topGlass = if (hasWallpaper) {
-            Color.Black.copy(alpha = if (isDarkMode) 0.46f else 0.36f)
-        } else if (isDarkMode) {
-            Color(0xE6141822)
-        } else {
-            Color.White.copy(alpha = 0.88f)
-        },
-        topGlassEdge = if (hasWallpaper) {
-            Color.White.copy(alpha = 0.18f)
-        } else {
-            Color.White.copy(alpha = if (isDarkMode) 0.06f else 0.42f)
-        },
-        topContent = if (hasWallpaper || isDarkMode) Color.White else Color(0xFF102027),
-        topMuted = if (hasWallpaper || isDarkMode) Color.White.copy(alpha = 0.68f) else Color(0xFF6B7885),
-        weekChip = if (hasWallpaper) Color.Black.copy(alpha = if (isDarkMode) 0.42f else 0.34f) else Color(0xFF102027),
-        weekChipContent = if (hasWallpaper) Color.White else Color.White,
-        gridSurface = if (hasWallpaper) Color.Black.copy(alpha = 0.10f) else if (isDarkMode) Color(0xFF0F141D) else Color(0xFFF7FAFB),
-        gridGlass = if (hasWallpaper) Color.Black.copy(alpha = 0.10f) else if (isDarkMode) Color(0xFF0F141D) else Color(0xFFF7FAFB),
-        gridLine = if (hasWallpaper) Color.White.copy(alpha = 0.16f) else if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0xFFE1E8EC),
-        timeText = if (hasWallpaper) Color.White.copy(alpha = 0.72f) else if (isDarkMode) Color(0xFF9CA7B4) else Color(0xFF83909C),
-        mutedText = if (hasWallpaper) Color.White.copy(alpha = 0.56f) else if (isDarkMode) Color(0xFF768190) else Color(0xFFA4ADB7),
-        dayText = if (hasWallpaper) Color.White.copy(alpha = 0.84f) else if (isDarkMode) Color(0xFFE8ECF0) else Color(0xFF34414A),
-        headerText = if (hasWallpaper) Color.White.copy(alpha = 0.84f) else if (isDarkMode) Color(0xFFE8ECF0) else Color(0xFF34414A),
-        todaySurface = if (hasWallpaper) Color.White.copy(alpha = 0.20f) else Color(0xFFE1F4EF),
-        todayText = if (hasWallpaper) Color.White else Color(0xFF0F8F7B),
-        courseStroke = Color.White.copy(alpha = if (hasWallpaper) 0.34f else 0.30f),
+        appCanvas = if (hasWallpaper) Color.Transparent else c.canvas,
+        appCanvasEnd = if (hasWallpaper) Color.Transparent else c.canvasTint,
+        pageFallback = c.canvas,
+        pageScrim = Color.Transparent,
+        topSurface = barSurface,
+        topGlass = barSurface,
+        topGlassEdge = c.glassEdge,
+        topContent = c.textPrimary,
+        topMuted = c.textMuted,
+        // 胶囊是页面最显眼的主控件：浅色鸢尾蓝，深色火山橙
+        weekChip = c.accent,
+        weekChipContent = c.accentOn,
+        gridSurface = gridGlass,
+        gridGlass = gridGlass,
+        gridLine = c.hairline,
+        timeText = c.textMuted,
+        mutedText = c.textMuted,
+        dayText = c.textPrimary,
+        headerText = c.textPrimary,
+        // 星期栏 / 时间轴底衬：底色 50% 铺一层，壁纸再花也不会吃掉文字
+        headerBackdrop = c.canvas.copy(alpha = 0.5f),
+        // 今日高亮：实心强调色块
+        todaySurface = c.accent,
+        todayText = c.accentOn,
+        courseStroke = Color.White.copy(alpha = if (hasWallpaper) 0.34f else 0.28f),
         courseHighlight = Color.White.copy(alpha = 0.82f),
-        bottomSurface = if (hasWallpaper) {
-            Color.Black.copy(alpha = if (isDarkMode) 0.50f else 0.40f)
-        } else if (isDarkMode) {
-            Color(0xE8181D26)
-        } else {
-            Color.White.copy(alpha = 0.86f)
-        },
-        bottomGlass = if (hasWallpaper) {
-            Color.Black.copy(alpha = if (isDarkMode) 0.50f else 0.40f)
-        } else if (isDarkMode) {
-            Color(0xE8181D26)
-        } else {
-            Color.White.copy(alpha = 0.86f)
-        },
-        navSelected = Color(0xFF0F8F7B),
-        navInactive = if (hasWallpaper) Color.White.copy(alpha = 0.72f) else if (isDarkMode) Color(0xFF8D97A5) else Color(0xFF87919D),
-        fabContainer = Color(0xFF111827),
-        fabMenuSurface = if (hasWallpaper) Color(0xF5FFFFFF) else if (isDarkMode) CardDark else Color.White
+        bottomSurface = barSurface,
+        bottomGlass = barSurface,
+        navSelected = c.accentOn,
+        navInactive = c.textMuted,
+        fabContainer = c.accent,
+        fabMenuSurface = c.surfaceRaised
     )
 }
 
@@ -140,30 +129,39 @@ data class ContentPalette(
     val surfaceAlt: Color,
     val surfaceBorder: Color,
     val accent: Color,
+    val onAccent: Color,
     val accentSoft: Color,
     val title: Color,
     val body: Color,
     val muted: Color,
     val divider: Color,
     val inputSurface: Color,
+    val success: Color,
+    val warning: Color,
     val destructive: Color
 )
 
-fun contentPalette(isDarkMode: Boolean): ContentPalette = ContentPalette(
-    canvasStart = if (isDarkMode) Color(0xFF0B1017) else Color(0xFFF2F6F8),
-    canvasEnd = if (isDarkMode) Color(0xFF111827) else Color(0xFFEAF2F0),
-    surface = if (isDarkMode) Color(0xFF151A23) else Color(0xFFFDFEFE),
-    surfaceAlt = if (isDarkMode) Color(0xFF1B222C) else Color(0xFFF7FAFB),
-    surfaceBorder = if (isDarkMode) Color.White.copy(alpha = 0.07f) else Color(0xFFE1E8EC),
-    accent = if (isDarkMode) Color(0xFF3FC7AE) else Color(0xFF0F8F7B),
-    accentSoft = if (isDarkMode) Color(0xFF3FC7AE).copy(alpha = 0.16f) else Color(0xFF0F8F7B).copy(alpha = 0.10f),
-    title = if (isDarkMode) Color(0xFFE8ECF0) else Color(0xFF102027),
-    body = if (isDarkMode) Color(0xFFC5CED8) else Color(0xFF34414A),
-    muted = if (isDarkMode) Color(0xFF8D97A5) else Color(0xFF6B7885),
-    divider = if (isDarkMode) Color.White.copy(alpha = 0.08f) else Color(0xFFE1E8EC),
-    inputSurface = if (isDarkMode) Color(0xFF0F141D) else Color(0xFFF5F8FA),
-    destructive = Color(0xFFE0524A)
-)
+fun contentPalette(isDarkMode: Boolean): ContentPalette {
+    val c = appColors(isDarkMode)
+    return ContentPalette(
+        canvasStart = c.canvas,
+        canvasEnd = c.canvasTint,
+        surface = c.surface,
+        surfaceAlt = c.surfaceRaised,
+        surfaceBorder = c.outline,
+        accent = c.accent,
+        onAccent = c.accentOn,
+        accentSoft = c.accentSoft,
+        title = c.textPrimary,
+        body = c.textSecondary,
+        muted = c.textMuted,
+        divider = c.hairline,
+        inputSurface = c.surfaceSunken,
+        success = c.success,
+        warning = c.warning,
+        destructive = c.danger
+    )
+}
 
 /** 统一卡片外观：圆角 + 实色面 + 细描边。 */
 fun Modifier.contentCard(

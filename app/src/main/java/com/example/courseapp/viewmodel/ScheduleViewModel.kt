@@ -1,6 +1,7 @@
 package com.example.courseapp.viewmodel
 
 import android.content.Context
+import android.content.res.Configuration
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.courseapp.data.model.Course
@@ -29,6 +30,10 @@ class ScheduleViewModel @Inject constructor(
 
     private val preferences = context.getSharedPreferences("schedule_settings", Context.MODE_PRIVATE)
 
+    private fun isSystemDark(context: Context): Boolean =
+        (context.resources.configuration.uiMode and Configuration.UI_MODE_NIGHT_MASK) ==
+            Configuration.UI_MODE_NIGHT_YES
+
     private val _allStoredCourses = MutableStateFlow<List<Course>>(emptyList())
     private val _allCourses = MutableStateFlow<List<Course>>(emptyList())
     val allCourses: StateFlow<List<Course>> = _allCourses.asStateFlow()
@@ -39,14 +44,15 @@ class ScheduleViewModel @Inject constructor(
     private val _visibleWeek = MutableStateFlow(1)
     val visibleWeek: StateFlow<Int> = _visibleWeek.asStateFlow()
 
-    private val _isDarkMode = MutableStateFlow(preferences.getBoolean(KEY_DARK_MODE, false))
-    val isDarkMode: StateFlow<Boolean> = _isDarkMode.asStateFlow()
+    // 深色模式：冷启动跟随系统，手动开关只对本次进程有效（不落盘）。
+    private val systemDarkMode = MutableStateFlow(isSystemDark(context))
+    private val darkModeOverride = MutableStateFlow<Boolean?>(null)
+    val isDarkMode: StateFlow<Boolean> =
+        combine(darkModeOverride, systemDarkMode) { override, system -> override ?: system }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, systemDarkMode.value)
 
     private val _snackbarMessage = MutableSharedFlow<Pair<String, String>>()
     val snackbarMessage: SharedFlow<Pair<String, String>> = _snackbarMessage.asSharedFlow()
-
-    private val _isFabOpen = MutableStateFlow(false)
-    val isFabOpen: StateFlow<Boolean> = _isFabOpen.asStateFlow()
 
     private val _selectedCourse = MutableStateFlow<Course?>(null)
     val selectedCourse: StateFlow<Course?> = _selectedCourse.asStateFlow()
@@ -287,27 +293,23 @@ class ScheduleViewModel @Inject constructor(
         _visibleWeek.value = week.coerceIn(1, maxWeek)
     }
 
+    /** 系统深浅色变化时由 Activity 同步进来，用户没手动切过就跟着系统走。 */
+    fun updateSystemDarkMode(enabled: Boolean) {
+        systemDarkMode.value = enabled
+    }
+
     fun toggleDarkMode() {
-        setDarkMode(!_isDarkMode.value)
+        setDarkMode(!isDarkMode.value)
     }
 
     fun setDarkMode(enabled: Boolean) {
-        if (_isDarkMode.value == enabled) return
-        _isDarkMode.value = enabled
-        preferences.edit().putBoolean(KEY_DARK_MODE, enabled).apply()
+        if (isDarkMode.value == enabled) return
+        darkModeOverride.value = enabled
         viewModelScope.launch {
             _snackbarMessage.emit(
-                (if (_isDarkMode.value) "深色模式已开启" else "浅色模式已开启") to "info"
+                (if (enabled) "深色模式已开启" else "浅色模式已开启") to "info"
             )
         }
-    }
-
-    fun toggleFab() {
-        _isFabOpen.value = !_isFabOpen.value
-    }
-
-    fun closeFab() {
-        _isFabOpen.value = false
     }
 
     fun setScheduleGuidesEnabled(enabled: Boolean) {
@@ -390,8 +392,7 @@ class ScheduleViewModel @Inject constructor(
     companion object {
         const val DEFAULT_SEMESTER_ID = "2025-2026-2"
         const val DEFAULT_SELECTABLE_WEEK_LIMIT = 30
-        private const val KEY_DARK_MODE = "dark_mode"
-        private const val KEY_SHOW_SCHEDULE_GUIDES = "show_schedule_guides"
+            private const val KEY_SHOW_SCHEDULE_GUIDES = "show_schedule_guides"
         private const val KEY_SAMPLE_SEEDED = "sample_data_seeded"
 
         /** 课表"此刻"刷新间隔：15 秒足够让进度条和倒计时看起来是连续的，又不至于频繁重组。 */

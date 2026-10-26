@@ -5,41 +5,42 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 
-// 与首页同一套青绿强调色，保证 Material 默认组件（对话框 / 按钮 / 开关）不出现第二套蓝。
-private val LightColorScheme = lightColorScheme(
-    primary = Color(0xFF0F8F7B),
-    onPrimary = Color.White,
-    primaryContainer = Color(0xFFB9EDE2),
-    onPrimaryContainer = Color(0xFF062B26),
-    secondary = Color(0xFF0B6B5C),
+// Material 组件（对话框 / 开关 / 菜单 / 时间选择器）的配色由 AppColors 派生，
+// 不再单独维护一套 hex，避免"页面一种青绿、对话框另一种蓝"。
+private fun lightScheme(c: AppColors): ColorScheme = lightColorScheme(
+    primary = c.accent,
+    onPrimary = c.accentOn,
+    primaryContainer = Color(0xFFD3E4FA),
+    onPrimaryContainer = Color(0xFF04203F),
+    secondary = Color(0xFF0B4C8A),
     onSecondary = Color.White,
-    background = Color(0xFFF2F6F8),
-    onBackground = Color(0xFF102027),
-    surface = Color(0xFFFDFEFE),
-    onSurface = Color(0xFF102027),
-    surfaceVariant = Color(0xFFF7FAFB),
-    onSurfaceVariant = Color(0xFF6B7885),
-    outline = Color(0xFFE1E8EC),
-    error = Error,
+    background = c.canvas,
+    onBackground = c.textPrimary,
+    surface = c.surface,
+    onSurface = c.textPrimary,
+    surfaceVariant = c.surfaceRaised,
+    onSurfaceVariant = c.textMuted,
+    outline = c.outline,
+    error = c.danger,
     onError = Color.White
 )
 
-private val DarkColorScheme = darkColorScheme(
-    primary = Color(0xFF3FC7AE),
-    onPrimary = Color(0xFF04231F),
-    primaryContainer = Color(0xFF0B4E44),
-    onPrimaryContainer = Color(0xFFB9EDE2),
-    secondary = Color(0xFF7FDCC8),
-    onSecondary = Color(0xFF04231F),
-    background = Color(0xFF0B1017),
-    onBackground = Color(0xFFE8ECF0),
-    surface = Color(0xFF151A23),
-    onSurface = Color(0xFFE8ECF0),
-    surfaceVariant = Color(0xFF1B222C),
-    onSurfaceVariant = Color(0xFF8D97A5),
-    outline = Color(0xFF2A3240),
-    error = Error,
-    onError = Color.White
+private fun darkScheme(c: AppColors): ColorScheme = darkColorScheme(
+    primary = c.accent,
+    onPrimary = c.accentOn,
+    primaryContainer = Color(0xFF4A1508),
+    onPrimaryContainer = Color(0xFFFFD9D2),
+    secondary = c.accentText,
+    onSecondary = c.accentOn,
+    background = c.canvas,
+    onBackground = c.textPrimary,
+    surface = c.surface,
+    onSurface = c.textPrimary,
+    surfaceVariant = c.surfaceRaised,
+    onSurfaceVariant = c.textMuted,
+    outline = c.outline,
+    error = c.danger,
+    onError = Color(0xFF2A0906)
 )
 
 @Composable
@@ -47,10 +48,9 @@ fun CourseAppTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit
 ) {
-    val colorScheme = if (darkTheme) DarkColorScheme else LightColorScheme
-
+    val colors = appColors(darkTheme)
     MaterialTheme(
-        colorScheme = colorScheme,
+        colorScheme = if (darkTheme) darkScheme(colors) else lightScheme(colors),
         typography = Typography,
         content = content
     )
