@@ -25,8 +25,7 @@ fun CourseMoveSheet(
     isDarkMode: Boolean,
     periodCount: Int,
     onDismiss: () -> Unit,
-    onMove: (Course, Int, Int) -> Unit,
-    onMoveAndReplace: (Course, Int, Int) -> Unit
+    onMove: (Course, Int, Int) -> Unit
 ) {
     if (course == null) return
 

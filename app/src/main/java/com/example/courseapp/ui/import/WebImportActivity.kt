@@ -11,6 +11,7 @@ import android.webkit.WebViewClient
 import android.widget.Button
 import android.widget.Toast
 import androidx.activity.ComponentActivity
+import androidx.activity.OnBackPressedCallback
 import com.example.courseapp.R
 
 private const val TAG = "WebImport"
@@ -37,7 +38,6 @@ class WebImportActivity : ComponentActivity() {
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            databaseEnabled = true
             useWideViewPort = true
             loadWithOverviewMode = true
             
@@ -73,6 +73,18 @@ class WebImportActivity : ComponentActivity() {
                 return true
             }
         }
+
+        // 返回键优先回退 WebView 历史，没有历史时才退出导入页
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                if (webView.canGoBack()) {
+                    webView.goBack()
+                } else {
+                    isEnabled = false
+                    onBackPressedDispatcher.onBackPressed()
+                }
+            }
+        })
 
         // Load school URL
         val schoolUrl = intent.getStringExtra("school_url") ?: ""
@@ -148,15 +160,6 @@ class WebImportActivity : ComponentActivity() {
                     btnImport.text = "导入到课表"
                 }
             }
-        }
-    }
-
-    @Deprecated("Deprecated in Java")
-    override fun onBackPressed() {
-        if (webView.canGoBack()) {
-            webView.goBack()
-        } else {
-            super.onBackPressed()
         }
     }
 

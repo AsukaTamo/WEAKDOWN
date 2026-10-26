@@ -9,6 +9,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -80,7 +81,7 @@ fun TimeSlotSettingsScreen(
                     title = { Text("作息时间设置", fontWeight = FontWeight.SemiBold) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.Default.ArrowBack, contentDescription = "返回")
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                         }
                     },
                     actions = {
@@ -163,7 +164,6 @@ fun TimeSlotSettingsScreen(
                     TimeSlotEditItem(
                         index = index,
                         slot = editingSlots[index],
-                        isDarkMode = isDarkMode,
                         palette = palette,
                         onStartTimeChange = { newStart ->
                             editingSlots = editingSlots.toMutableList().also {
@@ -376,7 +376,6 @@ private fun minutesToTime(totalMin: Int): String {
 private fun TimeSlotEditItem(
     index: Int,
     slot: TimeSlot,
-    isDarkMode: Boolean,
     palette: ContentPalette,
     onStartTimeChange: (String) -> Unit,
     onEndTimeChange: (String) -> Unit,

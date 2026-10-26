@@ -21,12 +21,6 @@ class CourseRepository @Inject constructor(
 ) {
     // ── Courses ──
 
-    fun getCoursesBySemester(semester: String): Flow<List<Course>> =
-        courseDao.getCoursesBySemester(semester)
-
-    fun getCoursesByDay(semester: String, day: Int): Flow<List<Course>> =
-        courseDao.getCoursesByDay(semester, day)
-
     fun getAllCourses(): Flow<List<Course>> =
         courseDao.getAllCourses()
 
@@ -47,9 +41,6 @@ class CourseRepository @Inject constructor(
 
     suspend fun deleteAllBySemester(semester: String) =
         courseDao.deleteAllBySemester(semester)
-
-    suspend fun getCourseById(id: Long): Course? =
-        courseDao.getCourseById(id)
 
     suspend fun getCourseCount(semester: String): Int =
         courseDao.getCourseCount(semester)
@@ -73,9 +64,6 @@ class CourseRepository @Inject constructor(
 
     suspend fun updateSemester(semester: Semester) =
         semesterDao.updateSemester(semester)
-
-    suspend fun deleteSemester(semester: Semester) =
-        semesterDao.deleteSemester(semester)
 
     suspend fun setActiveSemester(id: String) {
         semesterDao.deactivateAll()
@@ -101,9 +89,6 @@ class CourseRepository @Inject constructor(
 
     suspend fun getActiveTimeSlotTemplateSync(): TimeSlotTemplate? =
         timeSlotTemplateDao.getActiveTemplateSync()
-
-    suspend fun insertTimeSlotTemplate(template: TimeSlotTemplate): Long =
-        timeSlotTemplateDao.insertTemplate(template)
 
     suspend fun updateTimeSlotTemplate(template: TimeSlotTemplate) =
         timeSlotTemplateDao.updateTemplate(template)

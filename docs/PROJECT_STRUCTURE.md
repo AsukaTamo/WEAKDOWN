@@ -1,6 +1,6 @@
 # CourseApp 当前代码结构说明
 
-本文档只说明当前仓库中的代码文件职责、包结构和主要依赖关系，不承担 README 的安装、运行或产品介绍职责。
+本文档只说明当前仓库中的代码文件职责、包结构和主要依赖关系，不承担 README 的安装、运行或产品介绍职责。最后更新：2026-10-26。
 
 ## 总体结构
 
@@ -11,18 +11,26 @@ E:\WEAKDOWN
 ├─ build.gradle.kts                 # 根 Gradle 插件版本声明
 ├─ settings.gradle.kts              # 项目名、仓库源与 :app 模块声明
 ├─ gradle.properties                # Gradle/Android 构建属性
-├─ gradlew.bat                      # Windows Gradle Wrapper 入口
-├─ app/
-│  ├─ build.gradle.kts              # :app Android/Kotlin/Compose/Hilt/Room 依赖与编译配置
-│  ├─ proguard-rules.pro            # Release 混淆规则入口
-│  └─ src/main/
-│     ├─ AndroidManifest.xml        # 权限、Application、Activity 注册
-│     ├─ java/com/example/courseapp # Kotlin 源码
-│     └─ res/                       # XML 布局、主题、字符串、启动图标资源
-└─ design/design.html               # 独立设计预览稿，不参与 Android 构建
+├─ gradlew.bat                      # Windows Gradle Wrapper 入口（本机 wrapper jar 异常，见 AGENT-TROUBLESHOOT.md）
+├─ AGENT.md                         # AI 协作规范
+├─ AGENT-TROUBLESHOOT.md            # 可复用的排障线路
+├─ README.md                        # 产品介绍与使用说明
+├─ docs/
+│  ├─ PROJECT_STRUCTURE.md          # 本文档
+│  └─ superpowers/plans/            # 历史实现计划
+├─ design/design.html               # 独立设计预览稿，不参与 Android 构建
+└─ app/
+   ├─ build.gradle.kts              # :app 模块依赖与编译配置
+   ├─ proguard-rules.pro            # Release 混淆规则入口（当前未开启 minify）
+   └─ src/
+      ├─ main/
+      │  ├─ AndroidManifest.xml
+      │  ├─ java/com/example/courseapp
+      │  └─ res/
+      └─ test/                      # JVM 单元测试
 ```
 
-源码整体接近单模块 MVVM + Repository 架构：`Activity/Application` 提供 Android 入口，`ui` 负责 Compose 页面，`viewmodel` 管理页面状态和业务动作，`data` 封装 Room 实体、DAO、Repository 与导入解析，`di` 通过 Hilt 提供数据库和网络对象。
+源码整体是单模块 MVVM + Repository：`MainActivity` 提供 Android 入口与唯一的应用壳，`ui` 负责 Compose 页面，`viewmodel` 管理页面状态和业务动作，`data` 封装 Room 实体、DAO、Repository 与导入解析，`di` 通过 Hilt 提供数据库对象。
 
 ## 主要运行链路
 
@@ -30,7 +38,7 @@ E:\WEAKDOWN
 CourseApp(Application)
   -> MainActivity
      -> CourseAppTheme
-        -> ui.navigation.CourseAppScaffold
+        -> MainActivity.CourseApp（应用壳：顶栏 / 底栏 / 页面切换 / 周选择 / 作息设置 / 课程详情抽屉）
            -> ScheduleScreen / ManageScreen / ProfileScreen / WebImportScreen / ImportPreviewScreen
               -> ScheduleViewModel / ManageViewModel / ProfileViewModel / ImportViewModel
                  -> CourseRepository
@@ -42,10 +50,11 @@ CourseApp(Application)
 
 ```text
 WebImportScreen
-  -> 启动 WebImportActivity 或接收 HTML
+  -> 启动 WebImportActivity（WebView）
+  -> 抓取 outerHTML 通过 Activity result 返回
   -> ImportViewModel.parseHtml()
   -> data.importer.CourseHtmlParser
-  -> CourseRepository.insertCourse()
+  -> CourseRepository.insertCourses()
 ```
 
 ## 根目录与构建文件
@@ -53,34 +62,35 @@ WebImportScreen
 | 文件 | 作用 |
 | --- | --- |
 | `settings.gradle.kts` | 配置插件仓库、依赖仓库、根项目名 `CourseApp`，并声明唯一模块 `:app`。 |
-| `build.gradle.kts` | 根工程插件版本集中声明，包括 Android Gradle Plugin、Kotlin、KSP、Hilt。 |
+| `build.gradle.kts` | 根工程插件版本集中声明：Android Gradle Plugin 8.2.2、Kotlin 1.9.22、KSP 1.9.22-1.0.17、Hilt 2.50。 |
 | `gradle.properties` | Gradle 与 Android 构建属性。 |
-| `gradlew.bat` | Windows 下优先使用的 Gradle Wrapper。 |
-| `skills-lock.json` | Codex/技能相关锁定文件，与 App 运行逻辑无关。 |
-| `AGENTS.md` | AI 协作规范，不参与 Android 编译。 |
-| `README.md` | 项目介绍与使用说明，和本文档职责不同。 |
+| `gradlew.bat` | Windows 下优先使用的 Gradle Wrapper。本机 `gradle-wrapper.jar` 不是标准 wrapper 包，需按 `AGENT-TROUBLESHOOT.md` 用缓存的 Gradle 8.7 分发包代替。 |
+| `AGENT.md` | AI 协作规范，不参与 Android 编译。 |
+| `AGENT-TROUBLESHOOT.md` | Gradle wrapper、KSP、片段化 HTML 解析等排障线路。 |
+| `README.md` | 产品介绍、技术栈、构建与测试说明。 |
 | `design/design.html` | 设计稿/预览文件，不被 `:app` 模块引用。 |
+| `skills-lock.json` | 技能相关锁定文件，与 App 运行逻辑无关。 |
 
 ## app 模块配置
 
 | 文件 | 作用 |
 | --- | --- |
-| `app/build.gradle.kts` | Android 应用模块配置。启用 Compose、KSP、Hilt，配置 SDK 版本、Java/Kotlin 21、Room、Retrofit/OkHttp、Jsoup、Navigation Compose、SplashScreen 等依赖。 |
-| `app/proguard-rules.pro` | Release 构建混淆规则扩展点。当前 release 未开启 minify。 |
-| `app/src/main/AndroidManifest.xml` | 声明网络权限；注册 `.CourseApp`、`.MainActivity` 和 `.ui.import.WebImportActivity`；配置启动页主题、硬件加速、明文流量等。 |
+| `app/build.gradle.kts` | 应用模块配置。启用 Compose、KSP、Hilt；`compileSdk/targetSdk = 36`、`minSdk = 26`、Java/Kotlin 21；依赖包含 Compose BOM 2024.01.00、Material3、Navigation Compose、Hilt 2.50、Room 2.6.1、Jsoup 1.17.2、Gson 2.10.1、Coroutines 1.7.3、SplashScreen 1.0.1。 |
+| `app/proguard-rules.pro` | Release 混淆规则扩展点，当前未开启 minify。 |
+| `app/src/main/AndroidManifest.xml` | 声明网络权限；注册 `.CourseApp`、`.MainActivity`、`.ui.import.WebImportActivity`；配置启动页主题、硬件加速、明文流量等。 |
 
 ## 应用入口
 
 | 文件 | 作用 |
 | --- | --- |
-| `CourseApp.kt` | `@HiltAndroidApp` Application。初始化 Hilt，设置 WebView 数据目录后缀，并注册全局未捕获异常日志。 |
-| `MainActivity.kt` | `@AndroidEntryPoint` Activity，只负责安装 SplashScreen、启用 edge-to-edge、挂载 Compose 根主题与 `CourseAppScaffold`。导航与页面壳已从此文件拆出。 |
+| `CourseApp.kt` | `@HiltAndroidApp` Application。初始化 Hilt，设置 WebView 数据目录后缀，注册全局未捕获异常日志。 |
+| `MainActivity.kt` | `@AndroidEntryPoint` Activity。安装 SplashScreen、启用 edge-to-edge、挂载 Compose 根主题；文件内 `CourseApp()` 是**唯一的应用壳**（顶栏、底栏、页面枚举 `Screen`、周选择弹层、作息设置弹层、课程详情抽屉、根返回键处理）。 |
 
 ## 依赖注入
 
 | 文件 | 作用 |
 | --- | --- |
-| `di/AppModule.kt` | Hilt 单例模块。提供 Room `AppDatabase`、三个 DAO、`OkHttpClient`、`Retrofit`。数据库名为 `course_db`，注册 1->2、2->3、3->4 迁移，同时保留 `fallbackToDestructiveMigration()`。 |
+| `di/AppModule.kt` | Hilt 单例模块。提供 Room `AppDatabase` 与三个 DAO。数据库名 `course_db`，注册 1->2、2->3、3->4、4->5 四段迁移，同时保留 `fallbackToDestructiveMigration()`。 |
 
 ## data 数据层
 
@@ -88,136 +98,147 @@ WebImportScreen
 
 | 文件 | 作用 |
 | --- | --- |
-| `Course.kt` | Room `courses` 表实体。描述课程名称、教师、地点、星期、节次、课程类型、周次、学期、学分、备注、考试时间、自定义颜色等字段；同时定义 `CourseType` 枚举。 |
-| `Semester.kt` | Room `semesters` 表实体。描述学期 id、名称、开始日期、总周数、激活状态、背景图路径和遮罩透明度。 |
-| `TimeSlotTemplate.kt` | Room `time_slot_templates` 表实体。保存作息模板名称、节次 JSON 和激活状态。 |
+| `Course.kt` | Room `courses` 表实体：名称、教师、地点、星期、节次、课程类型、周次范围、学期 id、学分、备注、自定义颜色；同时定义 `CourseType` 枚举。`colorIndex`、`examDate` 为预留字段，当前无读写。 |
+| `Semester.kt` | Room `semesters` 表实体：id、名称、开始日期、总周数、激活状态、背景图路径、遮罩透明度。 |
+| `TimeSlotTemplate.kt` | Room `time_slot_templates` 表实体：模板名称、节次 JSON、激活状态。 |
 
 ### data/db
 
 | 文件 | 作用 |
 | --- | --- |
-| `AppDatabase.kt` | Room 数据库定义，聚合 `Course`、`Semester`、`TimeSlotTemplate` 三类实体，版本号为 4，并内置三段迁移 SQL。 |
-| `Converters.kt` | Room 类型转换器，目前处理 `List<String>` 与逗号分隔字符串之间的转换。 |
-| `CourseDao.kt` | 课程表 DAO。提供按学期、星期、id 查询，插入、更新、删除、批量删除、冲突查询等操作。 |
-| `SemesterDao.kt` | 学期 DAO。提供全部学期、当前激活学期、插入更新删除、取消全部激活、激活指定学期等操作。 |
-| `TimeSlotTemplateDao.kt` | 作息模板 DAO。提供全部模板、当前激活模板、插入更新删除、取消全部激活、激活指定模板等操作。 |
+| `AppDatabase.kt` | Room 数据库定义，版本号 **5**，聚合 `Course`、`Semester`、`TimeSlotTemplate` 三类实体，内置 1->2、2->3、3->4、4->5 四段迁移 SQL。 |
+| `Converters.kt` | `CourseType` 与字符串之间的 TypeConverter。 |
+| `CourseDao.kt` | 课程 DAO：全量查询流、插入/更新/删除、按 id 批量删除、按学期清空、按学期计数、时间冲突查询。 |
+| `SemesterDao.kt` | 学期 DAO：全部学期、当前激活学期（同步/异步）、增删改、取消全部激活、激活指定学期。 |
+| `TimeSlotTemplateDao.kt` | 作息模板 DAO：全部模板、当前激活模板（流/同步）、增删改、取消全部激活、激活指定模板。 |
 
 ### data/repository
 
 | 文件 | 作用 |
 | --- | --- |
-| `CourseRepository.kt` | 应用当前唯一 Repository。把 DAO 操作整理成 ViewModel 可调用的课程、学期、作息模板 API，并封装“切换激活学期/作息模板”这类组合操作。 |
+| `CourseRepository.kt` | 应用唯一 Repository。封装课程、学期、作息模板的读写；提供两个事务型组合操作：`deleteSemesterWithCourses`（删学期同时删其课程）与 `replaceActiveTimeSlotTemplate`（保证同时只有一条激活模板）。 |
 
 ### data/importer
 
 | 文件 | 作用 |
 | --- | --- |
-| `CourseHtmlParser.kt` | 主要教务 HTML 解析器。基于 Jsoup，包含表格解析、div 解析、JSON 片段解析、周次/节次/教师地点等字段归一化，并可转换为 `Course` 实体。文件较大，是后续可继续拆分的重点。 |
-
-## network 网络层
-
-| 文件 | 作用 |
-| --- | --- |
-| `ApiService.kt` | Retrofit 接口占位。提供任意 URL 页面获取和 `schedule` 接口获取方法。当前主导入流程没有直接依赖它。 |
-| `HtmlParser.kt` | 较早期/轻量级 HTML 解析器。可从简单表格或课程列表元素中生成 `Course`，功能少于 `data.importer.CourseHtmlParser`。当前更像兼容或备用代码。 |
+| `CourseHtmlParser.kt` | 教务 HTML 解析器（约 590 行）。基于 Jsoup，按「表格 → div 布局 → JSON 片段」三种策略依次尝试；包含 rowspan/colspan 网格重建、星期列探测、周次/节次/教师/地点归一化、片段化 HTML 补齐，并可转换为 `Course` 实体。是后续可继续拆分的重点。 |
 
 ## viewmodel 状态层
 
 | 文件 | 作用 |
 | --- | --- |
-| `ScheduleViewModel.kt` | 首页课表状态中心。管理课程流、当前周、深色模式、Snackbar、FAB、选中课程、作息模板、当前学期、拖拽移动、背景图；包含周次判断、课程进行中/即将开始判断、课程移动/复制/删除等逻辑。 |
-| `ManageViewModel.kt` | 课程管理页状态。维护添加课程表单、列表批量选择、保存/删除/复制课程、Snackbar。 |
-| `ImportViewModel.kt` | 导入预览状态。调用 `CourseHtmlParser` 解析 HTML，维护解析出的课程、冲突列表、选中项、导入完成状态，并执行冲突替换或整学期替换。 |
-| `ProfileViewModel.kt` | 我的页状态。管理用户展示信息、课程/学期流、通知开关、背景图复制与清理、遮罩透明度、JSON 导入导出等。 |
+| `ScheduleViewModel.kt` | 首页状态中心（约 410 行）。维护全部课程流、当前查看周、日历周、深色模式、Snackbar、FAB、选中课程、作息模板、当前学期、背景图与遮罩；提供课程增删改复制移动、冲突查询、周次范围判断（`isWeekInRange`）、学期周计算（`weekOfSemester`）等。 |
+| `CourseTimeStatus.kt` | 纯计算工具 + `ScheduleClock`：时间槽解析、进行中/即将开始判定、进度与剩余分钟。全部参数显式传入，便于单测。 |
+| `ManageViewModel.kt` | 课程管理页状态。当前学期课程流、孤儿课程计数与清理、批量选择、添加课程表单、保存/删除/复制、Snackbar。 |
+| `ImportViewModel.kt` | 导入预览状态。调用 `CourseHtmlParser` 解析 HTML，维护解析结果与当前学期课程数，执行整学期覆盖导入。 |
+| `ProfileViewModel.kt` | 我的页状态。用户展示信息、学期/课程流、通知开关、背景图复制与清理、遮罩透明度、JSON 读写逻辑（暂未接入 UI）。 |
+| `ImportOverwritePolicy.kt` | 导入时"直接导入 / 需要确认覆盖 / 忽略"的策略枚举与判定。 |
+| `ScheduleCourseFilter.kt` | 按当前学期过滤课程的纯函数。 |
 
 ## ui 界面层
 
-### ui/navigation
-
-| 文件 | 作用 |
-| --- | --- |
-| `AppDestination.kt` | 定义应用内部页面目的地 `AppDestination`，以及底栏配置模型 `BottomNavItem`。 |
-| `CourseAppScaffold.kt` | Compose 应用主壳。持有当前目的地、周选择弹层、作息设置弹层等导航级 UI 状态，并按目的地挂载各页面。 |
-| `AppNavigationBars.kt` | 主壳的顶栏和底栏 UI。包含学期标题/周选择入口、深色模式按钮动画、底部导航项渲染。 |
+> 应用壳（顶栏 / 底栏 / 页面切换 / 周选择弹层 / 作息设置弹层 / 课程详情抽屉）目前直接写在 `MainActivity.kt` 的 `CourseApp()` 里。历史上曾有一份 `ui/navigation/` 的拆出版本，因与 `MainActivity` 内的实现重复且未接入而被删除；后续若要再次拆分，应直接把 `CourseApp()` 迁出，而不是并行维护两套。
 
 ### ui/schedule
 
 | 文件 | 作用 |
-| --- | --- |
-| `ScheduleScreen.kt` | 首页课表页面。绘制课表网格、背景图遮罩、悬浮操作菜单、课程详情、课程长按菜单、移动冲突对话框，并消费 `ScheduleViewModel` 状态。 |
+|---|---|
+| `ScheduleScreen.kt` | 首页课表页（约 670 行）。周分页横向滑动、日期表头、时间轴、课程卡片布局、背景图遮罩、FAB 菜单、长按菜单、移动弹层与冲突对话框、Snackbar。 |
 
 ### ui/manage
 
 | 文件 | 作用 |
-| --- | --- |
-| `ManageScreen.kt` | 课程管理页面。包含课程列表、添加课程表单、批量选择/删除、课程类型与颜色等 UI。文件较大，后续可按列表、表单、批量工具栏拆分。 |
+|---|---|
+| `ManageScreen.kt` | 课程管理页。按当前学期展示课程、按名称分组折叠、批量管理与删除确认、孤儿课程清理入口、添加课程表单与颜色选择。 |
 
 ### ui/profile
 
 | 文件 | 作用 |
-| --- | --- |
-| `ProfileScreen.kt` | 我的页。包含用户信息、设置项、学期管理、背景设置、数据导入导出等 UI。文件较大，后续可按设置卡片、学期管理、背景管理拆分。 |
+|---|---|
+| `ProfileScreen.kt` | 我的页。用户信息、学期管理弹窗（含删除确认）、课表背景与遮罩、辅助线、深色模式、作息入口、清空数据、关于。 |
 
 ### ui/import
 
 | 文件 | 作用 |
-| --- | --- |
-| `WebImportScreen.kt` | Compose 导入入口页。维护学校列表/输入网址等导入交互，并负责进入 WebView 导入流程。 |
-| `WebImportActivity.kt` | XML + WebView Activity。加载教务系统网页，支持桌面/手机版 UA 切换，提取当前页面 HTML 并通过 Activity result 返回。 |
-| `ImportPreviewScreen.kt` | 导入预览页。展示解析课程、冲突信息、选择/取消选择、替换冲突或整学期替换等操作。 |
+|---|---|
+| `WebImportScreen.kt` | 导入入口页。学校列表选择、说明、跳转 WebView 导入。 |
+| `WebImportActivity.kt` | XML + WebView 页面。桌面/手机 UA 切换、`evaluateJavascript` 抓取 `outerHTML`、通过 Activity result 返回。 |
+| `ImportPreviewScreen.kt` | 导入预览页。展示解析结果，整学期覆盖前二次确认。 |
 
 ### ui/settings
 
 | 文件 | 作用 |
-| --- | --- |
-| `TimeSlotSettingsScreen.kt` | 作息时间设置页。编辑每节课开始/结束时间，保存为作息模板，并和 `ScheduleViewModel` 交互。 |
+|---|---|
+| `TimeSlotSettingsScreen.kt` | 作息时间设置页。多模板列表与切换、每节时间编辑（时间选择器/快捷时长）、另存为新模板、删除模板、恢复默认。 |
 
 ### ui/components
 
 | 文件 | 作用 |
-| --- | --- |
-| `AppSnackbar.kt` | 应用内自定义 Snackbar。 |
+|---|---|
+| `AppSnackbar.kt` | 应用内 Snackbar。 |
 | `ColorPickerRow.kt` | 课程颜色选择行。 |
-| `CourseCard.kt` | 课表课程卡片与课程颜色/渐变计算。 |
-| `CourseContextMenu.kt` | 课程长按上下文菜单。 |
-| `CourseDetailSheet.kt` | 课程详情/编辑底部弹层。 |
-| `CourseMoveSheet.kt` | 课程移动目标选择底部弹层。 |
-| `WeekSelectorDialog.kt` | 当前周选择弹层。 |
+| `CourseCard.kt` | 课表课程卡片。含课程配色计算、进行中状态（旋转锥形渐变描边、弥散光晕、呼吸背光、进度条、剩余分钟）。 |
+| `CourseContextMenu.kt` | 课程长按菜单。 |
+| `CourseDetailSheet.kt` | 课程详情/编辑抽屉。自绘两档锚点、拖动阻尼、按速度吸附、编辑表单。 |
+| `CourseMoveSheet.kt` | 课程移动目标选择弹层。 |
+| `WeekSelectorDialog.kt` | 教学周选择面板。本周描边标记、总周数按学期收敛。 |
+
+### ui/splash
+
+| 文件 | 作用 |
+|---|---|
+| `WeakdownSplashOverlay.kt` | 应用内启动动画（约 4 秒），叠加在系统 Splash 之上。 |
 
 ### ui/theme
 
 | 文件 | 作用 |
-| --- | --- |
-| `Color.kt` | 应用颜色常量，包括主色、背景、玻璃态、课程卡片颜色和状态颜色。 |
-| `Theme.kt` | Compose `CourseAppTheme`，根据深色模式选择 Material3 color scheme。 |
-| `Type.kt` | Compose typography 设置。 |
+|---|---|
+| `Color.kt` | 语义色（Accent/Success/Error）、深色卡片底色、课程渐变与类型兜底色。 |
+| `ScheduleTokens.kt` | 尺寸/动效令牌、首页 `schedulePalette`、非首页 `contentPalette` 与 `Modifier.contentCard`。 |
+| `Theme.kt` | Compose `CourseAppTheme`，青绿配色的 Material3 light/dark color scheme。 |
+| `Type.kt` | Compose typography。 |
 
 ## res 资源文件
 
 | 文件 | 作用 |
 | --- | --- |
-| `res/values/strings.xml` | 应用名称 `课程表`。 |
-| `res/values/themes.xml` | Android 传统主题与 SplashScreen 主题。Compose 主题定义在 Kotlin 的 `ui/theme` 中。 |
-| `res/layout/activity_web_import.xml` | `WebImportActivity` 使用的 XML 布局，包含全屏 WebView 和底部两个 Button。 |
-| `res/drawable/ic_launcher_foreground.xml` | 启动图标前景矢量资源。 |
-| `res/values/ic_launcher_background.xml` | 启动图标背景色资源。 |
-| `res/mipmap-anydpi-v26/ic_launcher.xml` | 自适应启动图标配置。 |
-| `res/mipmap-anydpi-v26/ic_launcher_round.xml` | 圆形自适应启动图标配置。 |
+| `res/values/strings.xml` | 应用名称。 |
+| `res/values/themes.xml` | 传统主题与 SplashScreen 主题。 |
+| `res/layout/activity_web_import.xml` | `WebImportActivity` 的 WebView + 两个按钮布局。 |
+| `res/drawable/ic_launcher_foreground.xml` | 启动图标前景。 |
+| `res/values/ic_launcher_background.xml` | 启动图标背景色。 |
+| `res/mipmap-anydpi-v26/ic_launcher*.xml` | 自适应图标配置。 |
+
+## 测试
+
+`app/src/test` 下为纯 JVM 单元测试（`junit:junit:4.13.2`），共 6 个类 25 个用例：
+
+| 测试类 | 覆盖 |
+|---|---|
+| `CourseHtmlParserTest` | 表格解析、真实 `data.html` 样本 |
+| `CourseTimeStatusTest` | 时间槽解析、进行中/即将开始/进度/剩余分钟边界 |
+| `ScheduleWeekTest` | 开学日期到周次的换算边界 |
+| `ScheduleTimeSlotsTest` | 默认作息与旧版作息迁移 |
+| `ScheduleCourseFilterTest` | 按当前学期过滤 |
+| `ImportOverwritePolicyTest` | 覆盖导入策略 |
 
 ## 当前结构评估
 
 已经具备的良好边界：
 
-- 数据持久化集中在 `data/db` 和 `data/model`。
+- 数据持久化集中在 `data/db` 和 `data/model`，页面层没有直接访问 Room。
 - 页面状态基本由 ViewModel 承载，Compose 页面主要消费状态并触发事件。
-- Repository 已经隔离 DAO，页面层没有直接访问 Room。
-- Hilt 负责数据库、DAO、网络对象创建。
-- 入口导航已从 `MainActivity` 拆到 `ui/navigation`，Activity 职责更接近标准 Android 入口。
+- Repository 隔离 DAO，并把"删学期连带删课程""切换激活模板"这类组合操作收进事务。
+- 时间/周次相关的纯计算已抽到 `CourseTimeStatus` 与 `ScheduleViewModel.weekOfSemester`，有单测覆盖。
+- 应用壳唯一：`MainActivity.CourseApp()` 是唯一外壳实现，不会再出现"改到死代码"的问题。
+- 未使用的网络层（Retrofit/OkHttp）与旧版 `HtmlParser` 已移除，依赖也同步清理。
 
 仍需后续优化的点：
 
-- `CourseHtmlParser.kt`、`ProfileScreen.kt`、`ManageScreen.kt`、`ScheduleScreen.kt` 文件体积较大，后续可以按解析策略、页面区块或表单组件继续拆分。
-- `network/HtmlParser.kt` 与 `data/importer/CourseHtmlParser.kt` 职责重复，需要确认旧解析器是否仍有实际调用价值。
-- `ScheduleViewModel` 同时包含周次计算、课程时间判断、样例数据初始化、UI 消息和课程操作，后续可把纯计算逻辑提取为可单测的 domain/helper。
-- `TimeSlot` 当前定义在 `ScheduleViewModel.kt`，但作息设置和课表 UI 都使用它，后续可移动到 `data/model` 或独立 domain model。
-- Room 数据库当前同时配置了明确迁移和 `fallbackToDestructiveMigration()`，若进入正式版本，应重新评估破坏性迁移风险。
+- `MainActivity.kt` 同时承载 Activity 入口和整个应用壳（约 650 行），后续可把 `CourseApp()` 拆到独立文件。
+- `CourseHtmlParser.kt`、`ProfileScreen.kt`、`ManageScreen.kt`、`ScheduleScreen.kt`、`CourseDetailSheet.kt` 体积偏大，可按解析策略、页面区块或表单组件继续拆分。
+- `ScheduleViewModel` 仍同时包含课程操作、作息模板、背景图、UI 消息等职责，可继续按"课表数据 / 外观设置 / 作息"拆分。
+- `Course.colorIndex`、`Course.examDate` 为预留字段，当前无读写；若确定不做考试/索引色，应在下次 schema 变更时移除。
+- Room 同时配置了明确迁移和 `fallbackToDestructiveMigration()`，进入正式版本前应重新评估破坏性迁移风险。
+- 导入预览尚不支持逐条勾选与冲突合并，目前只能是整学期覆盖。

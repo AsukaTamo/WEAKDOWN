@@ -36,7 +36,6 @@ import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.CourseCard
 import com.example.courseapp.ui.components.CourseContextMenu
 import com.example.courseapp.ui.components.CourseMoveSheet
-import com.example.courseapp.ui.components.WeekSelectorDialog
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
@@ -52,7 +51,6 @@ fun ScheduleScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
     onNavigateToAdd: () -> Unit = {},
     onNavigateToImport: () -> Unit = {},
-    onScrollOffsetChanged: ((Float) -> Unit)? = null,
     drawBackground: Boolean = true
 ) {
     val allCourses by viewModel.allCourses.collectAsStateWithLifecycle()
@@ -68,7 +66,6 @@ fun ScheduleScreen(
     val clock by viewModel.clock.collectAsStateWithLifecycle()
     val calendarWeek by viewModel.calendarWeek.collectAsStateWithLifecycle()
 
-    var showWeekDialog by remember { mutableStateOf(false) }
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
     var contextMenuCourse by remember { mutableStateOf<Course?>(null) }
     var moveSheetCourse by remember { mutableStateOf<Course?>(null) }
@@ -152,11 +149,6 @@ fun ScheduleScreen(
                 pageCount = { maxSelectableWeek }
             )
             val latestCurrentWeek by rememberUpdatedState(currentWeek)
-
-            LaunchedEffect(Unit) {
-                snapshotFlow { gridScrollState.value }
-                    .collect { onScrollOffsetChanged?.invoke(it.toFloat()) }
-            }
 
             LaunchedEffect(currentWeek, maxSelectableWeek) {
                 val targetPage = (currentWeek - 1).coerceIn(0, maxSelectableWeek - 1)
@@ -258,18 +250,6 @@ fun ScheduleScreen(
             )
         }
 
-        if (showWeekDialog) {
-            WeekSelectorDialog(
-                currentWeek = currentWeek,
-                isDarkMode = isDarkMode,
-                onWeekSelected = {
-                    viewModel.selectWeek(it)
-                    showWeekDialog = false
-                },
-                onDismiss = { showWeekDialog = false }
-            )
-        }
-
         if (snackbarState.visible) {
             AppSnackbar(
                 message = snackbarState.message,
@@ -300,10 +280,6 @@ fun ScheduleScreen(
         onDismiss = { moveSheetCourse = null },
         onMove = { course, day, slot ->
             pendingMove = Triple(course, day, slot)
-            moveSheetCourse = null
-        },
-        onMoveAndReplace = { course, day, slot ->
-            viewModel.moveCourseTo(course, day, slot, replaceExisting = true)
             moveSheetCourse = null
         }
     )
