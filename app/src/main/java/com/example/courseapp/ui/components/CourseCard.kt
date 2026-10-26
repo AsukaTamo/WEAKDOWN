@@ -35,6 +35,8 @@ import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -44,6 +46,10 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.lerp
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -168,7 +174,7 @@ fun CourseCard(
 ) {
     val palette = schedulePalette(isDarkMode, hasWallpaperBackground)
     val (rawStart, rawEnd) = remember(course, isDarkMode) { courseGradientColors(course, isDarkMode) }
-    // 浅色：蓝/青渐变 @92%，壁纸也挡得住；深色：统一藏蓝底 + 彩色微光 + 彩色描边
+    // 浅色：蓝/青渐变 @92%，壁纸也挡得住；深色：藏蓝底 + 彩色微光 + 彩色描边
     val startColor = if (isDarkMode) rawStart else rawStart.copy(alpha = 0.92f)
     val endColor = if (isDarkMode) rawEnd else rawEnd.copy(alpha = 0.92f)
     val darkBase = Color(0xD914141A)
@@ -184,19 +190,21 @@ fun CourseCard(
     val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
     val interactionSource = remember { MutableInteractionSource() }
     val pressed by interactionSource.collectIsPressedAsState()
-    // 主题切换时按行列错峰回弹：0.94 -> 1.0，弹簧收尾
+    // 主题切换时按行列错峰回弹：0.94 -> 1.0，弹簧收尾。
+    // seenEpoch 以「首次组合时的 epoch」初始化，所以切回首页重建卡片不会重放动画。
     val epoch = ThemeTransition.epoch
     val staggerScale = remember { Animatable(1f) }
+    var seenEpoch by remember { mutableIntStateOf(epoch) }
     LaunchedEffect(epoch) {
-        if (epoch > 0) {
-            val delayMs = ((course.startSlot * 2 + course.dayOfWeek) * 15).coerceAtMost(360)
-            kotlinx.coroutines.delay(delayMs.toLong())
-            staggerScale.snapTo(0.94f)
-            staggerScale.animateTo(
-                targetValue = 1f,
-                animationSpec = spring(dampingRatio = 0.55f, stiffness = 420f)
-            )
-        }
+        if (epoch == seenEpoch) return@LaunchedEffect
+        seenEpoch = epoch
+        val delayMs = ((course.startSlot * 2 + course.dayOfWeek) * 15).coerceAtMost(300)
+        kotlinx.coroutines.delay(delayMs.toLong())
+        staggerScale.snapTo(0.94f)
+        staggerScale.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f)
+        )
     }
     val scale by animateFloatAsState(
         targetValue = if (pressed) ScheduleMotion.PressedScale else 1f,
@@ -227,6 +235,7 @@ fun CourseCard(
         animationSpec = tween(durationMillis = 1200, easing = LinearEasing),
         label = "courseProgress"
     )
+
 
     // 只有进行中的课程才跑无限动画，其余卡片保持零额外开销。
     val activeAnimation = if (isActive) rememberActiveCourseAnimation() else null
