@@ -182,7 +182,6 @@ fun ScheduleScreen(
             HorizontalPager(
                 state = pagerState,
                 modifier = Modifier.fillMaxSize(),
-                beyondBoundsPageCount = 1,
                 key = { it }
             ) { pageIndex ->
                 val week = pageIndex + 1
