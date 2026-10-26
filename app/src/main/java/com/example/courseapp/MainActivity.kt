@@ -326,13 +326,35 @@ fun CourseApp(
                             spotColor = Color.Black.copy(alpha = if (hasBackground) 0.34f else 0.24f)
                         )
                         .clip(RoundedCornerShape(28.dp))
+                        // 近似液态玻璃：磨砂玻璃底 + 顶部高光 + 彩虹描边
                         .background(
                             Brush.verticalGradient(
                                 listOf(
-                                    animatedTopSurface,
-                                    animatedTopSurface.withAlphaMultiplier(0.82f)
+                                    animatedTopSurface.copy(alpha = 0.72f),
+                                    animatedTopSurface.copy(alpha = 0.52f)
                                 )
                             )
+                        )
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    Color.White.copy(alpha = if (isDarkMode) 0.10f else 0.30f),
+                                    Color.Transparent
+                                )
+                            )
+                        )
+                        .border(
+                            width = 0.9.dp,
+                            brush = Brush.sweepGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.55f),
+                                    Color(0x66FF6047),
+                                    Color(0x6600D2D3),
+                                    Color(0x66A29BFE),
+                                    Color.White.copy(alpha = 0.55f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(28.dp)
                         )
                         .border(
                             width = if (hasBackground) 0.7.dp else 0.5.dp,
@@ -523,7 +545,27 @@ fun CourseApp(
                             spotColor = Color.Black.copy(alpha = if (hasBackground) 0.34f else 0.24f)
                         )
                         .clip(RoundedCornerShape(28.dp))
-                        .background(animatedBottomSurface)
+                        .background(
+                            Brush.verticalGradient(
+                                listOf(
+                                    animatedBottomSurface.copy(alpha = 0.74f),
+                                    animatedBottomSurface.copy(alpha = 0.56f)
+                                )
+                            )
+                        )
+                        .border(
+                            width = 0.9.dp,
+                            brush = Brush.sweepGradient(
+                                listOf(
+                                    Color.White.copy(alpha = 0.50f),
+                                    Color(0x55FF6047),
+                                    Color(0x5500D2D3),
+                                    Color(0x55A29BFE),
+                                    Color.White.copy(alpha = 0.50f)
+                                )
+                            ),
+                            shape = RoundedCornerShape(28.dp)
+                        )
                         .border(
                             width = 0.7.dp,
                             color = if (isDarkMode) {
