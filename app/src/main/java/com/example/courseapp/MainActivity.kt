@@ -41,6 +41,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.WeekSelectorDialog
 import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
@@ -186,6 +187,8 @@ fun CourseApp(
     val visibleWeek by scheduleViewModel.visibleWeek.collectAsStateWithLifecycle()
     val activeSemester by scheduleViewModel.activeSemester.collectAsStateWithLifecycle()
     val calendarWeek by scheduleViewModel.calendarWeek.collectAsStateWithLifecycle()
+    val selectedCourse by scheduleViewModel.selectedCourse.collectAsStateWithLifecycle()
+    val timeSlots by scheduleViewModel.timeSlots.collectAsStateWithLifecycle()
     val backgroundUri by scheduleViewModel.backgroundUri.collectAsStateWithLifecycle()
     val scrimAlpha by scheduleViewModel.scrimAlpha.collectAsStateWithLifecycle()
     val showScheduleGuides by scheduleViewModel.showScheduleGuides.collectAsStateWithLifecycle()
@@ -631,6 +634,17 @@ fun CourseApp(
             onBack = { showTimeSlotSettings = false }
         )
     }
+
+    // 课程详情抽屉：放在根布局，遮罩才能覆盖顶栏与底部导航
+    CourseDetailSheet(
+        course = selectedCourse,
+        isDarkMode = isDarkMode,
+        timeSlotLabels = remember(timeSlots) { timeSlots.flatMap { listOf(it.start, it.end) } },
+        onDismiss = { scheduleViewModel.dismissCourseDetail() },
+        onSave = { scheduleViewModel.updateCourse(it) },
+        onDelete = { scheduleViewModel.deleteCourse(it) },
+        onCopy = { scheduleViewModel.copyCourse(it) }
+    )
 }
 
 }

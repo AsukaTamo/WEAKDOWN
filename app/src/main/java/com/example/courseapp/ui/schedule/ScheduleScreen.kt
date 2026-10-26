@@ -35,7 +35,6 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.CourseCard
 import com.example.courseapp.ui.components.CourseContextMenu
-import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.CourseMoveSheet
 import com.example.courseapp.ui.components.WeekSelectorDialog
 import com.example.courseapp.ui.theme.*
@@ -60,7 +59,6 @@ fun ScheduleScreen(
     val currentWeek by viewModel.currentWeek.collectAsStateWithLifecycle()
     val isDarkMode by viewModel.isDarkMode.collectAsStateWithLifecycle()
     val isFabOpen by viewModel.isFabOpen.collectAsStateWithLifecycle()
-    val selectedCourse by viewModel.selectedCourse.collectAsStateWithLifecycle()
     val timeSlots by viewModel.timeSlots.collectAsStateWithLifecycle()
     val activeSemester by viewModel.activeSemester.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
@@ -75,8 +73,6 @@ fun ScheduleScreen(
     var contextMenuCourse by remember { mutableStateOf<Course?>(null) }
     var moveSheetCourse by remember { mutableStateOf<Course?>(null) }
     var pendingMove by remember { mutableStateOf<Triple<Course, Int, Int>?>(null) }
-
-    val timeSlotLabels = remember(timeSlots) { viewModel.timeSlotLabels() }
 
     LaunchedEffect(snackbarFlow.value.first) {
         val (msg, type) = snackbarFlow.value
@@ -283,16 +279,7 @@ fun ScheduleScreen(
         }
     }
 
-    // Course detail bottom sheet
-    CourseDetailSheet(
-        course = selectedCourse,
-        isDarkMode = isDarkMode,
-        timeSlotLabels = timeSlotLabels,
-        onDismiss = { viewModel.dismissCourseDetail() },
-        onSave = { viewModel.updateCourse(it) },
-        onDelete = { viewModel.deleteCourse(it) },
-        onCopy = { viewModel.copyCourse(it) }
-    )
+    // Course detail 抽屉改由 MainActivity 根布局承载（遮罩需要盖住顶栏/底栏），这里不再渲染
 
     // Context menu on long press
     CourseContextMenu(
