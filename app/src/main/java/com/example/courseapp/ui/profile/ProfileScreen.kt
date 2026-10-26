@@ -32,6 +32,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.ui.components.AppSnackbar
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ProfileViewModel
 import java.text.SimpleDateFormat
@@ -344,13 +345,19 @@ fun ProfileScreen(
             title = { Text("清空所有数据") },
             text = { Text("此操作不可撤销，确定要清空所有课程数据吗？") },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.clearAllData()
-                    showClearDialog = false
-                }) { Text("清空", color = Error) }
+                TextButton(
+                    onClick = {
+                        viewModel.clearAllData()
+                        showClearDialog = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("清空", color = Error) }
             },
             dismissButton = {
-                TextButton(onClick = { showClearDialog = false }) { Text("取消") }
+                TextButton(
+                    onClick = { showClearDialog = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -418,7 +425,12 @@ private fun SemesterDialog(
                                 singleLine = true
                             )
                             // Date picker trigger
-                            Box(modifier = Modifier.fillMaxWidth().clickable { showEditDatePicker = true }) {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .elasticPress(RoundedCornerShape(8.dp))
+                                    .clickable { showEditDatePicker = true }
+                            ) {
                                 OutlinedTextField(
                                     value = editStartDate,
                                     onValueChange = {},
@@ -450,7 +462,9 @@ private fun SemesterDialog(
                             ) {
                                 OutlinedButton(
                                     onClick = { editingSemester = null },
-                                    modifier = Modifier.weight(1f)
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .elasticPress(ButtonDefaults.outlinedShape)
                                 ) { Text("取消") }
                                 Button(
                                     onClick = {
@@ -463,7 +477,9 @@ private fun SemesterDialog(
                                         )
                                         editingSemester = null
                                     },
-                                    modifier = Modifier.weight(1f),
+                                    modifier = Modifier
+                                        .weight(1f)
+                                        .elasticPress(ButtonDefaults.shape),
                                     colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                                 ) { Text("保存") }
                             }
@@ -483,15 +499,21 @@ private fun SemesterDialog(
                             DatePickerDialog(
                                 onDismissRequest = { showEditDatePicker = false },
                                 confirmButton = {
-                                    TextButton(onClick = {
-                                        datePickerState.selectedDateMillis?.let { millis ->
-                                            editStartDate = sdf.format(Date(millis))
-                                        }
-                                        showEditDatePicker = false
-                                    }) { Text("确定") }
+                                    TextButton(
+                                        onClick = {
+                                            datePickerState.selectedDateMillis?.let { millis ->
+                                                editStartDate = sdf.format(Date(millis))
+                                            }
+                                            showEditDatePicker = false
+                                        },
+                                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                                    ) { Text("确定") }
                                 },
                                 dismissButton = {
-                                    TextButton(onClick = { showEditDatePicker = false }) { Text("取消") }
+                                    TextButton(
+                                        onClick = { showEditDatePicker = false },
+                                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                                    ) { Text("取消") }
                                 }
                             ) { DatePicker(state = datePickerState) }
                         }
@@ -500,6 +522,7 @@ private fun SemesterDialog(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .elasticPress(RoundedCornerShape(8.dp))
                                 .clip(RoundedCornerShape(8.dp))
                                 .background(if (isActive) palette.accentSoft else Color.Transparent)
                                 .clickable { onSelect(semester) }
@@ -516,7 +539,10 @@ private fun SemesterDialog(
                             // Edit button
                             IconButton(
                                 onClick = { editingSemester = semester },
-                                modifier = Modifier.size(24.dp)
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    // 学期行本身已有触感，避免嵌套控件双重震动
+                                    .elasticPress(CircleShape, hapticsEnabled = false)
                             ) {
                                 Icon(Icons.Default.Edit, "编辑", tint = subColor, modifier = Modifier.size(16.dp))
                             }
@@ -524,7 +550,9 @@ private fun SemesterDialog(
                             if (!isActive) {
                                 IconButton(
                                     onClick = { pendingDelete = semester },
-                                    modifier = Modifier.size(24.dp)
+                                    modifier = Modifier
+                                        .size(24.dp)
+                                        .elasticPress(CircleShape, hapticsEnabled = false)
                                 ) {
                                     Icon(Icons.Default.Delete, "删除", tint = Error, modifier = Modifier.size(16.dp))
                                 }
@@ -543,7 +571,12 @@ private fun SemesterDialog(
                         singleLine = true
                     )
                     // Date picker trigger for add form
-                    Box(modifier = Modifier.fillMaxWidth().clickable { showAddDatePicker = true }) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .elasticPress(RoundedCornerShape(8.dp))
+                            .clickable { showAddDatePicker = true }
+                    ) {
                         OutlinedTextField(
                             value = newStartDate,
                             onValueChange = {},
@@ -576,7 +609,9 @@ private fun SemesterDialog(
                                 newName = ""; newStartDate = "2026-02-23"; newWeeks = "18"; showAddForm = false
                             }
                         },
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .elasticPress(RoundedCornerShape(10.dp)),
                         shape = RoundedCornerShape(10.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                     ) { Text("添加学期") }
@@ -595,20 +630,29 @@ private fun SemesterDialog(
                         DatePickerDialog(
                             onDismissRequest = { showAddDatePicker = false },
                             confirmButton = {
-                                TextButton(onClick = {
-                                    datePickerState.selectedDateMillis?.let { millis ->
-                                        newStartDate = sdf.format(Date(millis))
-                                    }
-                                    showAddDatePicker = false
-                                }) { Text("确定") }
+                                TextButton(
+                                    onClick = {
+                                        datePickerState.selectedDateMillis?.let { millis ->
+                                            newStartDate = sdf.format(Date(millis))
+                                        }
+                                        showAddDatePicker = false
+                                    },
+                                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                                ) { Text("确定") }
                             },
                             dismissButton = {
-                                TextButton(onClick = { showAddDatePicker = false }) { Text("取消") }
+                                TextButton(
+                                    onClick = { showAddDatePicker = false },
+                                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                                ) { Text("取消") }
                             }
                         ) { DatePicker(state = datePickerState) }
                     }
                 } else {
-                    TextButton(onClick = { showAddForm = true }) {
+                    TextButton(
+                        onClick = { showAddForm = true },
+                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                    ) {
                         Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
                         Spacer(modifier = Modifier.width(4.dp))
                         Text("添加新学期")
@@ -617,7 +661,10 @@ private fun SemesterDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = onDismiss) { Text("完成") }
+            TextButton(
+                onClick = onDismiss,
+                modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+            ) { Text("完成") }
         }
     )
 
@@ -637,13 +684,19 @@ private fun SemesterDialog(
                 )
             },
             confirmButton = {
-                TextButton(onClick = {
-                    onDelete(semester)
-                    pendingDelete = null
-                }) { Text("删除", color = Error) }
+                TextButton(
+                    onClick = {
+                        onDelete(semester)
+                        pendingDelete = null
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("删除", color = Error) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+                TextButton(
+                    onClick = { pendingDelete = null },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -745,6 +798,7 @@ private fun SettingsItem(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .elasticPress(RoundedCornerShape(14.dp), enabled = onClick != null)
             .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,

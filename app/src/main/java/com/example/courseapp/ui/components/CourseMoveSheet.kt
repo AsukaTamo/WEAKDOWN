@@ -94,6 +94,7 @@ fun CourseMoveSheet(
                         modifier = Modifier
                             .weight(1f)
                             .height(36.dp)
+                            .elasticPress(RoundedCornerShape(8.dp))
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (selected) palette.accent else inputBg)
                             .clickable { selectedDay = index },
@@ -121,6 +122,7 @@ fun CourseMoveSheet(
                         modifier = Modifier
                             .weight(1f)
                             .height(36.dp)
+                            .elasticPress(RoundedCornerShape(8.dp))
                             .clip(RoundedCornerShape(8.dp))
                             .background(if (selected) palette.accent else inputBg)
                             .clickable { selectedSlot = slotIdx },
@@ -141,7 +143,10 @@ fun CourseMoveSheet(
             // Move button
             Button(
                 onClick = { onMove(course, selectedDay, selectedSlot) },
-                modifier = Modifier.fillMaxWidth().height(48.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .elasticPress(RoundedCornerShape(12.dp)),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {

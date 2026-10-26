@@ -20,6 +20,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -56,6 +57,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.WeekMorphOverlay
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
@@ -408,6 +410,7 @@ fun CourseApp(
                             // 靠右一点点：与顶栏内容右边缘留 6dp，视觉上更贴近圆角外壳
                             .padding(end = 6.dp)
                             .size(40.dp)
+                            .elasticPress(CircleShape)
                             .onGloballyPositioned { themeRevealCenter = it.boundsInRoot().center }
                     ) {
                         Box(
@@ -458,6 +461,7 @@ fun CourseApp(
                                         .graphicsLayer {
                                             alpha = if (weekMorphProgress.value > 0.001f) 0f else 1f
                                         }
+                                        .elasticPress(RoundedCornerShape(16.dp))
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(palette.weekChip)
                                         .clickable { showWeekDialog = !showWeekDialog }
@@ -487,6 +491,7 @@ fun CourseApp(
                                         verticalAlignment = Alignment.CenterVertically,
                                         modifier = Modifier
                                             .height(42.dp)
+                                            .elasticPress(RoundedCornerShape(16.dp))
                                             .clip(RoundedCornerShape(16.dp))
                                             .background(
                                                 if (hasBackground || isDarkMode) {
@@ -606,6 +611,7 @@ fun CourseApp(
                                             scaleX = selectedScale
                                             scaleY = selectedScale
                                         }
+                                        .elasticPress(RoundedCornerShape(22.dp))
                                         .clip(RoundedCornerShape(22.dp))
                                         .background(
                                             if (isSelected) palette.weekChip else Color.Transparent

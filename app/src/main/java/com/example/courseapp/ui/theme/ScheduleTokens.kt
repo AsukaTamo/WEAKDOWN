@@ -41,7 +41,8 @@ object ScheduleMotion {
     val StandardEasing: Easing = CubicBezierEasing(0.2f, 0f, 0f, 1f)
     val EmphasizedEasing: Easing = CubicBezierEasing(0.16f, 1f, 0.3f, 1f)
 
-    const val PressedScale = 0.97f
+    /** 所有可按控件按下时的压缩比例：0.96 的微缩配合内阴影形成"按进去"的物理反馈。 */
+    const val PressedScale = 0.96f
     const val SelectedScale = 1.08f
 }
 
