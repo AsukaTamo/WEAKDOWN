@@ -34,6 +34,9 @@ import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
@@ -42,7 +45,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
-import com.example.courseapp.ui.components.WeekSelectorDialog
+import com.example.courseapp.ui.components.WeekMorphOverlay
 import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
 import com.example.courseapp.ui.manage.ManageScreen
@@ -194,6 +197,10 @@ fun CourseApp(
     val showScheduleGuides by scheduleViewModel.showScheduleGuides.collectAsStateWithLifecycle()
     var showWeekDialog by remember { mutableStateOf(false) }
     var showTimeSlotSettings by remember { mutableStateOf(false) }
+    // 周选择胶囊 → 面板的形变进度（0=胶囊，1=面板），胶囊与面板共用同一条曲线
+    val weekMorphProgress = remember { Animatable(0f) }
+    var weekChipBounds by remember { mutableStateOf(Rect.Zero) }
+    var weekArrowBounds by remember { mutableStateOf(Rect.Zero) }
 
     val navItems = listOf(
         NavItem(Screen.Schedule, "首页", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth),
@@ -251,11 +258,6 @@ fun CourseApp(
                 targetValue = themeIconRotation,
                 animationSpec = tween(520, easing = FastOutSlowInEasing),
                 label = "themeIconRotation"
-            )
-            val weekArrowRotation by animateFloatAsState(
-                targetValue = if (showWeekDialog) 180f else 0f,
-                animationSpec = tween(ScheduleMotion.StandardMillis, easing = ScheduleMotion.StandardEasing),
-                label = "weekArrowRotation"
             )
 
             Box(
@@ -347,6 +349,12 @@ fun CourseApp(
                                     modifier = Modifier
                                         .height(42.dp)
                                         .widthIn(min = 128.dp)
+                                        .onGloballyPositioned { weekChipBounds = it.boundsInRoot() }
+                                        // alpha 必须放在 background/clip 之前，否则药丸底和水波纹不受影响，
+                                        // 展开后会在原位留下一个空的小圆角框
+                                        .graphicsLayer {
+                                            alpha = if (weekMorphProgress.value > 0.001f) 0f else 1f
+                                        }
                                         .clip(RoundedCornerShape(16.dp))
                                         .background(palette.weekChip)
                                         .clickable { showWeekDialog = !showWeekDialog }
@@ -366,9 +374,7 @@ fun CourseApp(
                                         modifier = Modifier
                                             .padding(start = 8.dp)
                                             .size(18.dp)
-                                            .graphicsLayer {
-                                                rotationZ = weekArrowRotation
-                                            }
+                                            .onGloballyPositioned { weekArrowBounds = it.boundsInRoot() }
                                     )
                                 }
 
@@ -574,46 +580,6 @@ fun CourseApp(
                     }
                 )
             }
-
-            // Week selector — slide-down frosted glass panel
-            AnimatedVisibility(
-                visible = showWeekDialog,
-                enter = slideInVertically(
-                    initialOffsetY = { -it },
-                    animationSpec = tween(350, easing = FastOutSlowInEasing)
-                ) + fadeIn(animationSpec = tween(300)),
-                exit = slideOutVertically(
-                    targetOffsetY = { -it },
-                    animationSpec = tween(300, easing = FastOutSlowInEasing)
-                ) + fadeOut(animationSpec = tween(200))
-            ) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    Box(
-                        modifier = Modifier
-                            .matchParentSize()
-                            .background(Color.Transparent)
-                            .clickable(
-                                indication = null,
-                                interactionSource = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
-                            ) {
-                                showWeekDialog = false
-                            }
-                    )
-                    Box(modifier = Modifier.align(Alignment.TopCenter)) {
-                        WeekSelectorDialog(
-                            currentWeek = visibleWeek,
-                            isDarkMode = isDarkMode,
-                            thisWeek = calendarWeek,
-                            maxWeek = activeSemester?.totalWeeks?.coerceAtLeast(1)
-                                ?: ScheduleViewModel.DEFAULT_SELECTABLE_WEEK_LIMIT,
-                            onWeekSelected = {
-                                scheduleViewModel.selectWeek(it)
-                                showWeekDialog = false
-                            }
-                        )
-                    }
-                }
-            }
         }
     }
 
@@ -629,6 +595,27 @@ fun CourseApp(
             onBack = { showTimeSlotSettings = false }
         )
     }
+
+    // 周选择：胶囊 ↔ 面板的流体形变（放在根布局，几何用胶囊在根布局中的真实矩形）
+    WeekMorphOverlay(
+        visible = showWeekDialog,
+        progress = weekMorphProgress,
+        anchor = weekChipBounds,
+        arrowAnchor = weekArrowBounds,
+        maxWeek = activeSemester?.totalWeeks?.coerceAtLeast(1)
+            ?: ScheduleViewModel.DEFAULT_SELECTABLE_WEEK_LIMIT,
+        currentWeek = visibleWeek,
+        thisWeek = calendarWeek,
+        chipColor = palette.weekChip,
+        chipContentColor = palette.weekChipContent,
+        topBarContentColor = palette.topContent,
+        isDarkMode = isDarkMode,
+        onWeekSelected = {
+            scheduleViewModel.selectWeek(it)
+            showWeekDialog = false
+        },
+        onDismiss = { showWeekDialog = false }
+    )
 
     // 课程详情抽屉：放在根布局，遮罩才能覆盖顶栏与底部导航
     CourseDetailSheet(
