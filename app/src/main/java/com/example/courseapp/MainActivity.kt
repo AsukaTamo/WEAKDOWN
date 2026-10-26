@@ -299,7 +299,8 @@ fun CourseApp(
                         },
                         modifier = Modifier
                             .align(Alignment.CenterEnd)
-                            .padding(end = 16.dp)
+                            // 靠右一点点：与顶栏内容右边缘留 6dp，视觉上更贴近圆角外壳
+                            .padding(end = 6.dp)
                             .size(40.dp)
                     ) {
                         Box(
