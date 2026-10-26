@@ -56,6 +56,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.graphics.toArgb
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -164,6 +165,7 @@ fun CourseCard(
     minutesUntil: Int = 0,
     remainingMinutes: Int = 0,
     hasWallpaperBackground: Boolean = false,
+    entranceEpoch: Int = 1,
     onClick: () -> Unit = {},
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
@@ -207,6 +209,23 @@ fun CourseCard(
     }
     val teacherLine = remember(course.teacher) { course.teacher.trim() }
     val locationLine = remember(course.location) { course.location.trim() }
+    // 首次进入首页的 Spring Cascade：启动页还在时先隐藏，启动页退场后按行列错峰向上弹入。
+    // 之后无论是切 Tab、翻周还是重建页面，epoch 都已是 1，不会重放。
+    val entrance = remember { Animatable(if (entranceEpoch == 0) 0f else 1f) }
+    val entranceDistancePx = with(LocalDensity.current) { 26.dp.toPx() }
+    LaunchedEffect(entranceEpoch) {
+        if (entranceEpoch == 0 || entrance.value >= 1f) return@LaunchedEffect
+        val staggerMs = (course.startSlot * 30 + course.dayOfWeek * 22).coerceAtMost(300)
+        kotlinx.coroutines.delay(staggerMs.toLong())
+        entrance.animateTo(
+            targetValue = 1f,
+            animationSpec = spring(
+                dampingRatio = 0.52f,
+                stiffness = 380f,
+                visibilityThreshold = 0.0005f
+            )
+        )
+    }
     val titleFontSize = if (course.slotCount <= 1) 10.sp else 11.sp
     val bodyFontSize = if (course.slotCount <= 1) 8.sp else 9.sp
     val titleMaxLines = if (course.slotCount <= 1) 2 else 3
@@ -235,8 +254,13 @@ fun CourseCard(
         modifier = modifier
             .elasticPress(shape)
             .graphicsLayer {
-                scaleX = staggerScale.value
-                scaleY = staggerScale.value
+                val entranceProgress = entrance.value
+                val entranceAlpha = entranceProgress.coerceIn(0f, 1f)
+                val entranceScale = 0.96f + 0.04f * entranceAlpha
+                scaleX = staggerScale.value * entranceScale
+                scaleY = staggerScale.value * entranceScale
+                translationY = (1f - entranceProgress) * entranceDistancePx
+                alpha = entranceAlpha
             }
     ) {
         if (activeAnimation != null) {

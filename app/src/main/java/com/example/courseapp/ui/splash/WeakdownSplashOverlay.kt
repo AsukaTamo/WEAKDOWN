@@ -1,20 +1,31 @@
 package com.example.courseapp.ui.splash
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.CubicBezierEasing
+import androidx.compose.animation.core.FastOutLinearInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -22,9 +33,11 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -32,16 +45,20 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.R
+import com.example.courseapp.ui.components.elasticPress
+import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.sin
 import kotlin.random.Random
 
 private const val SplashDurationMillis = 4000
+private const val SplashRevealProgress = 0.82f
 private const val StarColumns = 12
 private const val StarRows = 12
 private const val StarCount = StarColumns * StarRows
@@ -81,12 +98,42 @@ private data class SplashStar(
 @Composable
 fun WeakdownSplashOverlay(
     onFinished: () -> Unit,
+    onRevealStart: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val progress = remember { Animatable(0f) }
     var finished by remember { mutableStateOf(false) }
+    var revealed by remember { mutableStateOf(false) }
+    val skipAlpha = remember { Animatable(1f) }
+    val scope = rememberCoroutineScope()
     val stars = remember { generateSplashStars() }
     val characterLine = remember { CharacterLines.random() }
+
+    // 首页入场与启动页退场重叠：在启动页开始淡出的前一刻通知首页，
+    // 这样遮罩淡出时卡片已经在向上弹入，不会出现"先露出空课表再弹卡片"的断层。
+    fun reveal() {
+        if (revealed) return
+        revealed = true
+        onRevealStart()
+    }
+
+    // 默认完整播完；跳过时先快速淡出整个覆盖层，再把首帧交给首页。
+    fun finish(animateOut: Boolean = true) {
+        if (finished) return
+        finished = true
+        reveal()
+        if (!animateOut) {
+            onFinished()
+            return
+        }
+        scope.launch {
+            skipAlpha.animateTo(
+                targetValue = 0f,
+                animationSpec = tween(durationMillis = 160, easing = FastOutLinearInEasing)
+            )
+            onFinished()
+        }
+    }
 
     LaunchedEffect(Unit) {
         progress.animateTo(
@@ -96,16 +143,29 @@ fun WeakdownSplashOverlay(
                 easing = LinearEasing
             )
         )
-        if (!finished) {
-            finished = true
-            onFinished()
-        }
+        finish(animateOut = false)
     }
+
+    // 正常播放到 82% 时提前通知首页，让卡片在启动页淡出期间完成入场。
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay((SplashDurationMillis * SplashRevealProgress).toLong())
+        reveal()
+    }
+
+    // 兜底：系统动画时长被设为 0 或动画帧异常时，启动页也不能卡住。
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay((SplashDurationMillis + 600).toLong())
+        finish(animateOut = false)
+    }
+
+    // 启动页期间按返回键等价于「跳过」，不会直接把 App 退掉。
+    BackHandler { finish() }
 
     val value = progress.value
     val overlayAlpha = fadeOutAfter(value, start = 0.86f)
-    val titleAlpha = intervalProgress(value, start = 0.22f, end = 0.38f) *
-        fadeOutAfter(value, start = 0.82f)
+    // 系统启动页已经显示同一枚标题 Logo，这里从第一帧就接上，
+    // 不再二次淡入，避免"Logo 先消失再出现"的割裂感。
+    val titleAlpha = fadeOutAfter(value, start = 0.82f)
     val titleLift = intervalProgress(value, start = 0.38f, end = 0.82f)
     val density = LocalDensity.current
     val titleTranslationY = with(density) {
@@ -116,8 +176,20 @@ fun WeakdownSplashOverlay(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .graphicsLayer { alpha = overlayAlpha }
+            .graphicsLayer { alpha = overlayAlpha * skipAlpha.value }
     ) {
+        // 吞掉启动页上的触摸，避免播放期间误触到后方的顶栏 / 底栏；
+        // 清掉语义，避免无障碍把整屏当成一个无名可点区域。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .clickable(
+                    interactionSource = remember { MutableInteractionSource() },
+                    indication = null
+                ) {}
+                .clearAndSetSemantics { }
+        )
+
         Image(
             painter = painterResource(id = R.drawable.weakdown_mcd_background),
             contentDescription = null,
@@ -214,6 +286,36 @@ fun WeakdownSplashOverlay(
             progress = value,
             modifier = Modifier.align(Alignment.BottomCenter)
         )
+
+        // 顶部跳过：默认不打断完整播放，只有用户主动点击才提前收尾。
+        Row(
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .statusBarsPadding()
+                .padding(top = 8.dp, end = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .elasticPress(RoundedCornerShape(18.dp))
+                    .clip(RoundedCornerShape(18.dp))
+                    .background(Color(0xB8FFFFFF))
+                    .border(0.8.dp, Color(0x33A0521A), RoundedCornerShape(18.dp))
+                    .clickable { finish() }
+                    .heightIn(min = 48.dp)
+                    .padding(horizontal = 14.dp, vertical = 7.dp),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = "跳过",
+                    color = Color(0xFF7A3E12),
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    letterSpacing = 0.6.sp
+                )
+            }
+        }
     }
 }
 
