@@ -5,9 +5,10 @@
 ## 项目概况
 
 - 项目名称：CourseApp。
-- 技术栈：Android、Kotlin、Jetpack Compose、Gradle Kotlin DSL、Hilt、Room、Retrofit/OkHttp。
+- 技术栈：Android、Kotlin 2.0、Jetpack Compose（BOM 2024.10）、Gradle Kotlin DSL、Hilt、Room、Jsoup；网络层（Retrofit/OkHttp）已移除。
 - 根模块：`:app`。
-- 主要验证命令优先使用 Windows Gradle Wrapper：`.\gradlew.bat ...`。
+- 构建命令优先使用 Windows Gradle Wrapper：`.\gradlew.bat ...`；本机 wrapper jar 异常时改用缓存的 Gradle 8.7：
+  `& 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat' :app:assembleDebug`
 
 ## 仓库与分支规范
 
@@ -57,13 +58,13 @@
 
 ## 验证与测试规范
 
-- AI 助手负责代码改动、代码构建、冲突检查和逻辑检查；移动端运行以及测试由用户在 Android Studio 中自行操作。
+- AI 助手负责代码改动、代码构建、冲突检查和逻辑检查。**当设备已通过 adb 连接且用户已授权时，AI 可以自行完成「构建 → 装机 → 启动 → 截图 → 读图分析」的完整闭环**（见下节），不必每步都交回用户。
 - 完成代码改动后必须进行与职责匹配的检查，并在回复中说明实际执行过的命令。
 - 常用构建/检查命令：
   - `.\gradlew.bat assembleDebug`
   - `.\gradlew.bat test`（仅在用户要求或任务明确需要本地单元测试时执行）
 - 若验证命令失败，必须说明失败原因、相关日志摘要和下一步建议；不能声称任务完成。
-- 若需要移动端运行、模拟器/真机测试或 Android Studio 内操作，应交给用户执行，并给出清晰验收路径。
+- 若设备未连接、adb 断连或需要交互式操作（如系统相册选图、权限弹窗），再交回用户，并给出清晰的验收路径。
 - 修复 bug 时应尽量补充或更新测试；若当前项目没有合适测试框架，也要说明手动验收路径。
 
 ## Review、Commit 与 PR 规范
@@ -82,6 +83,92 @@
 - 不擅自安装依赖、升级 Gradle/Android/Kotlin 版本或修改构建配置；确需修改时先说明原因和影响。
 - 不生成大体积文件、二进制文件或构建产物进入版本控制。
 - 交付时保持简洁：说明完成内容、修改文件、验证结果和仍需用户处理的事项。
+
+## 真机调试方法（构建 → 装机 → 截图 → 分析）
+
+本仓库的 UI/性能问题优先用"真机闭环"定位，而不是靠读代码猜。下列命令已在本机验证可用。
+
+### 环境
+
+| 项 | 值 |
+|---|---|
+| 设备 | `10CG5J0Q0F004E7`（vivo V2520A），Android 16 / API 36，1080×2376 px，density 3.0 |
+| adb | `E:\Androidstdio_SDK\platform-tools\adb.exe` |
+| Gradle | 缓存的 Gradle 8.7（`gradlew.bat` 的 wrapper jar 异常） |
+| 包名 | `com.example.courseapp` |
+
+### 标准闭环
+
+```powershell
+$g = 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat'
+$adb = 'E:\Androidstdio_SDK\platform-tools\adb.exe'
+
+& $g :app:assembleDebug :app:testDebugUnitTest          # 1. 构建 + 单测
+& $adb install -r 'E:\WEAKDOWN\app\build\outputs\apk\debug\app-debug.apk'  # 2. 装机
+& $adb shell am force-stop com.example.courseapp         # 3. 冷启动，保证跑的是新代码
+& $adb shell am start -n com.example.courseapp/.MainActivity
+Start-Sleep -Seconds 7                                  # 4. 等启动动画结束
+& $adb exec-out screencap -p > "$env:TEMP\shot.png"     # 5. 截图
+```
+
+然后直接用读图工具分析 `$env:TEMP\shot.png`。**截图必须真的看**，不能凭代码推断"应该是对的"。
+
+### 交互与定位
+
+```powershell
+& $adb shell input tap 540 2200        # 点击（坐标按 1080×2376 真机像素，不是预览图坐标）
+& $adb shell input swipe 540 1700 540 800 260   # 滑动（起点/终点/时长 ms）
+& $adb shell uiautomator dump /sdcard/ui.xml      # 拿控件树
+& $adb shell cat /sdcard/ui.xml > "$env:TEMP\ui.xml"
+```
+
+- 控件坐标从 uiautomator dump 里读 `bounds`，**不要**用截图预览的比例换算，容易点到别的地方
+- 只验证视觉时优先截图；需要确认某个元素是否存在时才 dump
+
+### 性能数据
+
+```powershell
+& $adb shell dumpsys gfxinfo com.example.courseapp reset | Out-Null
+# ……执行待测操作（切页 / 滚动 / 开关抽屉）……
+& $adb shell dumpsys gfxinfo com.example.courseapp | Select-String 'Janky frames|50th|90th|99th|Slow UI thread'
+```
+
+判断标准：`p90 ≤ 16ms` 且 `janky < 5%` 视为流畅；单帧 150ms 以上一定能在手感上感知，需要定位。
+
+### 应用内部状态取证
+
+需要在设备上看 App 自己生成的文件（如捕获纹理、导出的 JSON）时：
+
+```powershell
+& $adb shell run-as com.example.courseapp ls -la files
+& $adb exec-out run-as com.example.courseapp cat files/xxx.png > "$env:TEMP\xxx.png"
+```
+
+配合代码里临时写的 dump（例如把 Compose 的 `GraphicsLayer` 落盘成 PNG），可以直接看到"程序眼里的纹理"，比截屏更能定位采样/坐标问题。
+
+### 日志
+
+```powershell
+& $adb logcat -c
+& $adb shell am start -n com.example.courseapp/.MainActivity
+& $adb logcat -d -b crash -t 40 | Select-String 'FATAL|Caused by'
+& $adb logcat -d | Select-String '<自己的 TAG>'      # 例如 LiquidGlass / GlassCapture
+```
+
+### 调试用实验的纪律
+
+1. **一次只验证一个假设**，每次改动只回答一个是非题（红块铺满了吗？纹理是多大？）
+2. **临时代码不提交**：验证完 `git checkout -- <file>` 回退，保持 `main` 始终可运行
+3. **回退后必须重新构建 + 装机**，确认用户手上跑的是稳定版
+4. 需要长期保留的探针（如 `debugSample` 开关）放在未被引用的 WIP 文件里，或加 `BuildConfig.DEBUG` 守卫
+5. 设计实验时优先选**能被单张截图证伪**的方案（纯色探针、原样输出、channel 可视化），而不是靠调参数观察差异
+
+### 安全边界（踩过的坑）
+
+- 在「我的」页做自动化点击时，**避开"清除背景""清空数据"这类破坏性行**，本会话曾误触清除背景，删掉了用户的课表壁纸
+- 自动滑动前确认起点落在可滚动区域，避免误触发开关控件（曾把"辅助线"开关滑开）
+- 用户正在使用手机（前台是相册/视频/其他 App）时不要抢焦点，等回到桌面再操作
+- 所有删除/移动命令执行前，先确认解析出的绝对路径就是目标路径
 
 ## 排障手册入口
 
