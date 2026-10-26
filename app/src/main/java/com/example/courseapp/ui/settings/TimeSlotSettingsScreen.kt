@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -25,6 +26,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.TimeSlotTemplate
 import com.example.courseapp.ui.components.AppSnackbar
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.ContentPalette
 import com.example.courseapp.ui.theme.contentCard
 import com.example.courseapp.ui.theme.contentPalette
@@ -80,7 +82,10 @@ fun TimeSlotSettingsScreen(
                 TopAppBar(
                     title = { Text("作息时间设置", fontWeight = FontWeight.SemiBold) },
                     navigationIcon = {
-                        IconButton(onClick = onBack) {
+                        IconButton(
+                            onClick = onBack,
+                            modifier = Modifier.elasticPress(CircleShape)
+                        ) {
                             Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                         }
                     },
@@ -93,7 +98,8 @@ fun TimeSlotSettingsScreen(
                                 } else {
                                     viewModel.updateActiveTimeSlotTemplate(editingSlots)
                                 }
-                            }
+                            },
+                            modifier = Modifier.elasticPress(ButtonDefaults.textShape)
                         ) {
                             Text("保存", color = palette.accent, fontWeight = FontWeight.SemiBold)
                         }
@@ -134,6 +140,7 @@ fun TimeSlotSettingsScreen(
                             newTemplateName = defaultTemplateName(templates.size)
                             showSaveAsDialog = true
                         },
+                        modifier = Modifier.elasticPress(ButtonDefaults.textShape),
                         contentPadding = PaddingValues(horizontal = 4.dp)
                     ) {
                         Icon(Icons.Default.Add, contentDescription = null, tint = palette.accent, modifier = Modifier.size(16.dp))
@@ -193,7 +200,10 @@ fun TimeSlotSettingsScreen(
                             val newEnd = "${(totalMin / 60).toString().padStart(2, '0')}:${(totalMin % 60).toString().padStart(2, '0')}"
                             editingSlots = editingSlots + TimeSlot(lastEnd, newEnd)
                         },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .elasticPress(RoundedCornerShape(14.dp)),
                         shape = RoundedCornerShape(14.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, palette.surfaceBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent)
@@ -207,7 +217,10 @@ fun TimeSlotSettingsScreen(
                 item {
                     OutlinedButton(
                         onClick = { editingSlots = ScheduleViewModel.defaultTimeSlots() },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp)
+                            .elasticPress(RoundedCornerShape(14.dp)),
                         shape = RoundedCornerShape(14.dp),
                         border = androidx.compose.foundation.BorderStroke(1.dp, palette.surfaceBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.body)
@@ -261,11 +274,15 @@ fun TimeSlotSettingsScreen(
                             viewModel.saveTimeSlotTemplate(name, editingSlots)
                             showSaveAsDialog = false
                         }
-                    }
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
                 ) { Text("保存", color = palette.accent) }
             },
             dismissButton = {
-                TextButton(onClick = { showSaveAsDialog = false }) { Text("取消") }
+                TextButton(
+                    onClick = { showSaveAsDialog = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -276,13 +293,19 @@ fun TimeSlotSettingsScreen(
             title = { Text("删除作息表") },
             text = { Text("确定删除「${template.name}」吗？删除后无法恢复。") },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.deleteTimeSlotTemplate(template)
-                    pendingDelete = null
-                }) { Text("删除", color = palette.destructive) }
+                TextButton(
+                    onClick = {
+                        viewModel.deleteTimeSlotTemplate(template)
+                        pendingDelete = null
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("删除", color = palette.destructive) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingDelete = null }) { Text("取消") }
+                TextButton(
+                    onClick = { pendingDelete = null },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -313,6 +336,7 @@ private fun TemplateRow(
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .elasticPress(shape, enabled = !isActive)
             .clip(shape)
             .background(if (isActive) palette.accentSoft else palette.surface)
             .border(0.8.dp, if (isActive) palette.accent.copy(alpha = 0.45f) else palette.surfaceBorder, shape)
@@ -344,7 +368,13 @@ private fun TemplateRow(
             )
         }
         if (!isActive) {
-            IconButton(onClick = onDelete, modifier = Modifier.size(32.dp)) {
+            IconButton(
+                onClick = onDelete,
+                modifier = Modifier
+                    .size(32.dp)
+                    // 作息表行本身已有触感，避免嵌套控件双重震动
+                    .elasticPress(CircleShape, hapticsEnabled = false)
+            ) {
                 Icon(
                     Icons.Default.Delete,
                     contentDescription = "删除作息表",
@@ -408,6 +438,7 @@ private fun TimeSlotEditItem(
             fontWeight = FontWeight.Medium,
             color = palette.title,
             modifier = Modifier
+                .elasticPress(RoundedCornerShape(8.dp))
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { showStartPicker = true }
                 .background(palette.inputSurface)
@@ -422,6 +453,7 @@ private fun TimeSlotEditItem(
             fontWeight = FontWeight.Medium,
             color = palette.title,
             modifier = Modifier
+                .elasticPress(RoundedCornerShape(8.dp))
                 .clip(RoundedCornerShape(8.dp))
                 .clickable { showEndPicker = true }
                 .background(palette.inputSurface)
@@ -437,6 +469,7 @@ private fun TimeSlotEditItem(
                 color = palette.accent,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier
+                    .elasticPress(RoundedCornerShape(6.dp))
                     .clip(RoundedCornerShape(6.dp))
                     .clickable { showDurationMenu = true }
                     .background(palette.accentSoft)
@@ -449,6 +482,7 @@ private fun TimeSlotEditItem(
                 listOf(45, 50, 90, 100, 120).forEach { dur ->
                     DropdownMenuItem(
                         text = { Text("${dur}分钟") },
+                        modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
                         onClick = {
                             val startMin = parseTimeToMinutes(slot.start)
                             onEndTimeChange(minutesToTime(startMin + dur))
@@ -461,7 +495,12 @@ private fun TimeSlotEditItem(
 
         Spacer(modifier = Modifier.weight(1f))
 
-        IconButton(onClick = onDelete, modifier = Modifier.size(30.dp)) {
+        IconButton(
+            onClick = onDelete,
+            modifier = Modifier
+                .size(30.dp)
+                .elasticPress(CircleShape)
+        ) {
             Icon(
                 Icons.Default.Close,
                 contentDescription = "删除",
@@ -481,15 +520,21 @@ private fun TimeSlotEditItem(
         AlertDialog(
             onDismissRequest = { showStartPicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    onStartTimeChange(
-                        "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
-                    )
-                    showStartPicker = false
-                }) { Text("确定", color = palette.accent) }
+                TextButton(
+                    onClick = {
+                        onStartTimeChange(
+                            "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
+                        )
+                        showStartPicker = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("确定", color = palette.accent) }
             },
             dismissButton = {
-                TextButton(onClick = { showStartPicker = false }) { Text("取消") }
+                TextButton(
+                    onClick = { showStartPicker = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             },
             text = { TimePicker(state = state) }
         )
@@ -505,15 +550,21 @@ private fun TimeSlotEditItem(
         AlertDialog(
             onDismissRequest = { showEndPicker = false },
             confirmButton = {
-                TextButton(onClick = {
-                    onEndTimeChange(
-                        "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
-                    )
-                    showEndPicker = false
-                }) { Text("确定", color = palette.accent) }
+                TextButton(
+                    onClick = {
+                        onEndTimeChange(
+                            "${state.hour.toString().padStart(2, '0')}:${state.minute.toString().padStart(2, '0')}"
+                        )
+                        showEndPicker = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("确定", color = palette.accent) }
             },
             dismissButton = {
-                TextButton(onClick = { showEndPicker = false }) { Text("取消") }
+                TextButton(
+                    onClick = { showEndPicker = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             },
             text = { TimePicker(state = state) }
         )

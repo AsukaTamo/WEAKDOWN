@@ -54,6 +54,7 @@ fun ColorPickerRow(
             Box(
                 modifier = Modifier
                     .size(32.dp)
+                    .elasticPress(CircleShape)
                     .clip(CircleShape)
                     .background(Color.Transparent)
                     .border(
@@ -72,6 +73,7 @@ fun ColorPickerRow(
                 Box(
                     modifier = Modifier
                         .size(32.dp)
+                        .elasticPress(CircleShape)
                         .clip(CircleShape)
                         .background(color)
                         .then(

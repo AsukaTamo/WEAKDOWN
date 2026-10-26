@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -17,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ImportViewModel
 
@@ -47,7 +49,10 @@ fun ImportPreviewScreen(
             TopAppBar(
                 title = { Text("导入预览", fontWeight = FontWeight.SemiBold) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(
+                        onClick = onBack,
+                        modifier = Modifier.elasticPress(CircleShape)
+                    ) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "返回")
                     }
                 },
@@ -79,7 +84,13 @@ fun ImportPreviewScreen(
                             }
                         },
                         enabled = parsedCourses.isNotEmpty(),
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .elasticPress(
+                                shape = RoundedCornerShape(12.dp),
+                                enabled = parsedCourses.isNotEmpty()
+                            ),
                         shape = RoundedCornerShape(12.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                     ) {
@@ -193,17 +204,23 @@ fun ImportPreviewScreen(
                 Text("当前学期已经有课程。继续后将直接覆盖当前课表，不进行冲突检测。")
             },
             confirmButton = {
-                TextButton(onClick = {
-                    viewModel.importCurrentSemester(overwriteExisting = true)
-                    showOverwriteDialog = false
-                }) {
+                TextButton(
+                    onClick = {
+                        viewModel.importCurrentSemester(overwriteExisting = true)
+                        showOverwriteDialog = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) {
                     Text("继续覆盖")
                 }
             },
             dismissButton = {
-                TextButton(onClick = {
-                    showOverwriteDialog = false
-                }) {
+                TextButton(
+                    onClick = {
+                        showOverwriteDialog = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) {
                     Text("再想想")
                 }
             }

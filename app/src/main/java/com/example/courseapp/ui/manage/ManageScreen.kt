@@ -7,6 +7,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -30,6 +31,7 @@ import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.ColorPickerRow
 import com.example.courseapp.ui.components.courseGradientColors
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ManageViewModel
@@ -138,6 +140,7 @@ private fun TabBar(
                 modifier = Modifier
                     .weight(1f)
                     .fillMaxHeight()
+                    .elasticPress(RoundedCornerShape(12.dp))
                     .clickable { onTabSelected(index) },
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center
@@ -193,6 +196,7 @@ private fun AllCoursesPanel(
                 .fillMaxWidth()
                 .padding(horizontal = 16.dp)
                 .padding(top = 10.dp)
+                .elasticPress(RoundedCornerShape(12.dp))
                 .clip(RoundedCornerShape(12.dp))
                 .background(palette.surface)
                 .clickable(onClick = onNavigateToImport)
@@ -233,14 +237,23 @@ private fun AllCoursesPanel(
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (isBatchMode) {
-                    TextButton(onClick = onSelectAll) {
+                    TextButton(
+                        onClick = onSelectAll,
+                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                    ) {
                         Text("全选", fontSize = 13.sp, color = palette.accent)
                     }
-                    TextButton(onClick = { showBatchDeleteDialog = true }) {
+                    TextButton(
+                        onClick = { showBatchDeleteDialog = true },
+                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                    ) {
                         Text("删除", fontSize = 13.sp, color = palette.destructive)
                     }
                 }
-                TextButton(onClick = onToggleBatch) {
+                TextButton(
+                    onClick = onToggleBatch,
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) {
                     Text(
                         if (isBatchMode) "取消" else "批量管理",
                         fontSize = 13.sp,
@@ -298,6 +311,7 @@ private fun AllCoursesPanel(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
+                                .elasticPress(RoundedCornerShape(10.dp))
                                 .clickable {
                                     if (expandedGroups.contains(name)) expandedGroups.remove(name)
                                     else expandedGroups.add(name)
@@ -356,13 +370,19 @@ private fun AllCoursesPanel(
             title = { Text("确认删除") },
             text = { Text("确定要删除「${course.name}」吗？") },
             confirmButton = {
-                TextButton(onClick = {
-                    onDeleteCourse(course)
-                    showDeleteDialog = null
-                }) { Text("删除", color = palette.destructive) }
+                TextButton(
+                    onClick = {
+                        onDeleteCourse(course)
+                        showDeleteDialog = null
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("删除", color = palette.destructive) }
             },
             dismissButton = {
-                TextButton(onClick = { showDeleteDialog = null }) { Text("取消") }
+                TextButton(
+                    onClick = { showDeleteDialog = null },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -374,13 +394,19 @@ private fun AllCoursesPanel(
             title = { Text("删除所选课程") },
             text = { Text("将删除已选中的 ${selectedIds.size} 门课程，操作不可恢复。") },
             confirmButton = {
-                TextButton(onClick = {
-                    onDeleteSelected()
-                    showBatchDeleteDialog = false
-                }) { Text("删除", color = palette.destructive) }
+                TextButton(
+                    onClick = {
+                        onDeleteSelected()
+                        showBatchDeleteDialog = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("删除", color = palette.destructive) }
             },
             dismissButton = {
-                TextButton(onClick = { showBatchDeleteDialog = false }) { Text("取消") }
+                TextButton(
+                    onClick = { showBatchDeleteDialog = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -394,13 +420,19 @@ private fun AllCoursesPanel(
                 Text("这 $orphanCourseCount 门课程所属的学期已被删除，清理后无法恢复。")
             },
             confirmButton = {
-                TextButton(onClick = {
-                    onClearOrphans()
-                    showCleanupDialog = false
-                }) { Text("清理", color = palette.destructive) }
+                TextButton(
+                    onClick = {
+                        onClearOrphans()
+                        showCleanupDialog = false
+                    },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("清理", color = palette.destructive) }
             },
             dismissButton = {
-                TextButton(onClick = { showCleanupDialog = false }) { Text("取消") }
+                TextButton(
+                    onClick = { showCleanupDialog = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("取消") }
             }
         )
     }
@@ -437,7 +469,10 @@ private fun OrphanCoursesBanner(
             color = bannerText,
             modifier = Modifier.weight(1f)
         )
-        TextButton(onClick = onClean) {
+        TextButton(
+            onClick = onClean,
+            modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+        ) {
             Text("清理", fontSize = 12.sp, fontWeight = FontWeight.SemiBold, color = contentPalette(isDarkMode).destructive)
         }
     }
@@ -471,6 +506,7 @@ private fun CourseListItem(
             .fillMaxWidth()
             .height(IntrinsicSize.Min)
             .padding(horizontal = 16.dp, vertical = 4.dp)
+            .elasticPress(RoundedCornerShape(12.dp))
             .contentCard(palette, radius = 12.dp)
             .clickable(onClick = onClick)
             .padding(start = 14.dp, end = 10.dp, top = 12.dp, bottom = 12.dp),
@@ -537,7 +573,13 @@ private fun CourseListItem(
         // Context menu
         if (!isBatchMode) {
             Box {
-                IconButton(onClick = { showMenu = true }, modifier = Modifier.size(32.dp)) {
+                IconButton(
+                    onClick = { showMenu = true },
+                    modifier = Modifier
+                        .size(32.dp)
+                        // 外层课程行已负责触感，图标这里只做缩放/内阴影，避免双重震动
+                        .elasticPress(CircleShape, hapticsEnabled = false)
+                ) {
                     Icon(
                         imageVector = Icons.Default.MoreVert,
                         contentDescription = "更多",
@@ -552,11 +594,13 @@ private fun CourseListItem(
                     DropdownMenuItem(
                         text = { Text("复制课程") },
                         leadingIcon = { Icon(Icons.Default.ContentCopy, null, modifier = Modifier.size(18.dp)) },
+                        modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
                         onClick = { onDuplicate(); showMenu = false }
                     )
                     DropdownMenuItem(
                         text = { Text("删除", color = Error) },
                         leadingIcon = { Icon(Icons.Default.Delete, null, tint = Error, modifier = Modifier.size(18.dp)) },
+                        modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
                         onClick = { onDelete(); showMenu = false }
                     )
                 }
@@ -628,7 +672,8 @@ private fun AddCoursePanel(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(48.dp)
-                    .padding(top = 4.dp),
+                    .padding(top = 4.dp)
+                    .elasticPress(RoundedCornerShape(12.dp)),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {
@@ -747,6 +792,7 @@ private fun FormDropdown(
                 options.forEachIndexed { index, option ->
                     DropdownMenuItem(
                         text = { Text(option, color = textColor, fontSize = 13.sp) },
+                        modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
                         onClick = { onSelected(index); expanded = false }
                     )
                 }
@@ -754,6 +800,7 @@ private fun FormDropdown(
             Spacer(
                 modifier = Modifier
                     .matchParentSize()
+                    .elasticPress(RoundedCornerShape(10.dp))
                     .clickable { expanded = true }
             )
         }

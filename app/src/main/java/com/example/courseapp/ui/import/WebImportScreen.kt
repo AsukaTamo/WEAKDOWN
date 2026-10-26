@@ -7,6 +7,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,6 +23,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 
 data class SchoolInfo(
@@ -73,7 +75,12 @@ fun WebImportScreen(
                 .padding(horizontal = 8.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            IconButton(onClick = onBack, modifier = Modifier.size(36.dp)) {
+            IconButton(
+                onClick = onBack,
+                modifier = Modifier
+                    .size(36.dp)
+                    .elasticPress(CircleShape)
+            ) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = textColor, modifier = Modifier.size(20.dp))
             }
             Text(
@@ -112,6 +119,7 @@ fun WebImportScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
+                        .elasticPress(RoundedCornerShape(12.dp))
                         .clip(RoundedCornerShape(12.dp))
                         .background(cardColor)
                         .clickable { showSchoolDropdown = true }
@@ -142,6 +150,7 @@ fun WebImportScreen(
                                     fontWeight = if (school == selectedSchool) FontWeight.Bold else FontWeight.Normal
                                 )
                             },
+                            modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
                             onClick = { selectedSchool = school; showSchoolDropdown = false },
                             trailingIcon = {
                                 if (school == selectedSchool) {
@@ -165,7 +174,10 @@ fun WebImportScreen(
                     }
                     webImportLauncher.launch(intent)
                 },
-                modifier = Modifier.fillMaxWidth().height(52.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(52.dp)
+                    .elasticPress(RoundedCornerShape(14.dp)),
                 shape = RoundedCornerShape(14.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
             ) {

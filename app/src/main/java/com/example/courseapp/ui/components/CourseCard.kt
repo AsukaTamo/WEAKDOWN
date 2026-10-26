@@ -12,12 +12,9 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.combinedClickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
@@ -84,7 +81,6 @@ import com.example.courseapp.ui.theme.CourseRequiredStart
 import com.example.courseapp.ui.theme.CourseRequiredStartDark
 import com.example.courseapp.ui.theme.ThemeTransition
 import com.example.courseapp.ui.theme.ScheduleDimensions
-import com.example.courseapp.ui.theme.ScheduleMotion
 import com.example.courseapp.ui.theme.schedulePalette
 
 fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color> {
@@ -188,8 +184,6 @@ fun CourseCard(
     )
     val baseTextStyle = LocalTextStyle.current.copy(shadow = textShadow)
     val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
-    val interactionSource = remember { MutableInteractionSource() }
-    val pressed by interactionSource.collectIsPressedAsState()
     // 主题切换时按行列错峰回弹：0.94 -> 1.0，弹簧收尾。
     // seenEpoch 以「首次组合时的 epoch」初始化，所以切回首页重建卡片不会重放动画。
     val epoch = ThemeTransition.epoch
@@ -203,17 +197,14 @@ fun CourseCard(
         staggerScale.snapTo(0.94f)
         staggerScale.animateTo(
             targetValue = 1f,
-            animationSpec = spring(dampingRatio = 0.6f, stiffness = 500f)
+            animationSpec = spring(
+                dampingRatio = 0.6f,
+                stiffness = 500f,
+                // scale 的收敛阈值要远小于默认 0.01，否则会停在 0.99
+                visibilityThreshold = 0.0005f
+            )
         )
     }
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) ScheduleMotion.PressedScale else 1f,
-        animationSpec = tween(
-            durationMillis = ScheduleMotion.FastMillis,
-            easing = ScheduleMotion.StandardEasing
-        ),
-        label = "courseCardPressScale"
-    )
     val teacherLine = remember(course.teacher) { course.teacher.trim() }
     val locationLine = remember(course.location) { course.location.trim() }
     val titleFontSize = if (course.slotCount <= 1) 10.sp else 11.sp
@@ -241,10 +232,12 @@ fun CourseCard(
     val activeAnimation = if (isActive) rememberActiveCourseAnimation() else null
 
     Box(
-        modifier = modifier.graphicsLayer {
-            scaleX = scale * staggerScale.value
-            scaleY = scale * staggerScale.value
-        }
+        modifier = modifier
+            .elasticPress(shape)
+            .graphicsLayer {
+                scaleX = staggerScale.value
+                scaleY = staggerScale.value
+            }
     ) {
         if (activeAnimation != null) {
             ActiveCourseGlow(
@@ -313,8 +306,6 @@ fun CourseCard(
                     }
                 )
                 .combinedClickable(
-                    interactionSource = interactionSource,
-                    indication = LocalIndication.current,
                     onClick = onClick,
                     onLongClick = { onLongClick?.invoke() }
                 )

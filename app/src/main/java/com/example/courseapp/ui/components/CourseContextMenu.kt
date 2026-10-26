@@ -151,6 +151,7 @@ private fun ContextMenuItem(
         modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 4.dp)
+            .elasticPress(RoundedCornerShape(12.dp))
             .clip(RoundedCornerShape(12.dp))
             .background(bgColor)
             .clickable(onClick = onClick)

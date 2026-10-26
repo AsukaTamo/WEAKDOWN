@@ -36,6 +36,7 @@ import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.CourseCard
 import com.example.courseapp.ui.components.CourseContextMenu
 import com.example.courseapp.ui.components.CourseMoveSheet
+import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
@@ -262,15 +263,21 @@ fun ScheduleScreen(
                     Text("目标时段与以下课程冲突：${currentConflicts.joinToString { it.name }}。是否替换？")
                 },
                 confirmButton = {
-                    TextButton(onClick = {
-                        viewModel.moveCourseTo(course, day, slot, replaceExisting = true)
-                        pendingMove = null
-                    }) {
+                    TextButton(
+                        onClick = {
+                            viewModel.moveCourseTo(course, day, slot, replaceExisting = true)
+                            pendingMove = null
+                        },
+                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                    ) {
                         Text("替换")
                     }
                 },
                 dismissButton = {
-                    TextButton(onClick = { pendingMove = null }) {
+                    TextButton(
+                        onClick = { pendingMove = null },
+                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                    ) {
                         Text("取消")
                     }
                 }

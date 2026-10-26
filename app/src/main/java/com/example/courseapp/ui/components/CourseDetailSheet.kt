@@ -14,6 +14,7 @@ import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
@@ -295,7 +296,10 @@ fun CourseDetailSheet(
                 ) {
                     OutlinedButton(
                         onClick = { isEditing = false },
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .elasticPress(RoundedCornerShape(14.dp)),
                         shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, palette.surfaceBorder),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.body)
@@ -319,7 +323,10 @@ fun CourseDetailSheet(
                                 )
                             )
                         },
-                        modifier = Modifier.weight(1.4f).height(48.dp),
+                        modifier = Modifier
+                            .weight(1.4f)
+                            .height(48.dp)
+                            .elasticPress(RoundedCornerShape(14.dp)),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
                     ) {
@@ -338,7 +345,10 @@ fun CourseDetailSheet(
                 ) {
                     OutlinedButton(
                         onClick = { onCopy(course) },
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .elasticPress(RoundedCornerShape(14.dp)),
                         shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, palette.accent.copy(alpha = 0.45f)),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.accent)
@@ -349,7 +359,10 @@ fun CourseDetailSheet(
                     }
                     OutlinedButton(
                         onClick = { onDelete(course) },
-                        modifier = Modifier.weight(1f).height(48.dp),
+                        modifier = Modifier
+                            .weight(1f)
+                            .height(48.dp)
+                            .elasticPress(RoundedCornerShape(14.dp)),
                         shape = RoundedCornerShape(14.dp),
                         border = BorderStroke(1.dp, palette.destructive),
                         colors = ButtonDefaults.outlinedButtonColors(contentColor = palette.destructive)
@@ -423,7 +436,12 @@ private fun SheetHeader(
                     modifier = Modifier.padding(top = 2.dp)
                 )
             }
-            IconButton(onClick = onToggleEdit, modifier = Modifier.size(40.dp)) {
+            IconButton(
+                onClick = onToggleEdit,
+                modifier = Modifier
+                    .size(40.dp)
+                    .elasticPress(CircleShape)
+            ) {
                 Icon(
                     imageVector = if (isEditing) Icons.Default.Close else Icons.Default.Edit,
                     contentDescription = if (isEditing) "退出编辑" else "编辑课程",
@@ -610,6 +628,7 @@ private fun ChipRow(
                     modifier = Modifier
                         .weight(1f)
                         .heightIn(min = 40.dp)
+                        .elasticPress(RoundedCornerShape(10.dp))
                         .clip(RoundedCornerShape(10.dp))
                         .background(if (selected) palette.accent else palette.inputSurface)
                         .clickable { onSelected(index) }

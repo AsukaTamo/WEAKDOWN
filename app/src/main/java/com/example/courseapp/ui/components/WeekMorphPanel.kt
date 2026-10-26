@@ -222,6 +222,7 @@ fun WeekMorphOverlay(
                     IntOffset((arrowX - arrowHalf).roundToInt(), (arrowY - arrowHalf).roundToInt())
                 }
                 .size(ArrowTouchSize)
+                .elasticPress(CircleShape)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
@@ -303,7 +304,10 @@ private fun WeekPanelContent(
         Spacer(modifier = Modifier.height(16.dp))
         Button(
             onClick = onConfirm,
-            modifier = Modifier.fillMaxWidth().height(46.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp)
+                .elasticPress(RoundedCornerShape(15.dp)),
             shape = RoundedCornerShape(15.dp),
             colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
         ) {
@@ -325,6 +329,7 @@ private fun WeekCell(
     Box(
         modifier = modifier
             .aspectRatio(1f)
+            .elasticPress(shape)
             .clip(shape)
             .background(if (isSelected) palette.accent else palette.surfaceAlt)
             .then(
