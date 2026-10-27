@@ -33,6 +33,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.ui.theme.ContentPalette
 import com.example.courseapp.ui.theme.contentPalette
+import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.glassEffect
 import kotlin.math.roundToInt
 
 private const val WeekColumns = 5
@@ -64,6 +67,8 @@ fun WeekMorphOverlay(
     chipContentColor: Color,
     topBarContentColor: Color,
     isDarkMode: Boolean,
+    backdrop: GlassBackdrop,
+    glass: Glass,
     onWeekSelected: (Int) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -133,7 +138,7 @@ fun WeekMorphOverlay(
     val panelContentAlpha = ((p - 0.26f) / 0.74f).coerceIn(0f, 1f)
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // 遮罩
+        // 遮罩同时作为面板/箭头的父层：玻璃开启后，子内容的点击先被消费，不会穿透到遮罩。
         Box(
             modifier = Modifier
                 .fillMaxSize()
@@ -142,7 +147,7 @@ fun WeekMorphOverlay(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { onDismiss() }
-        )
+        ) {
 
         // 首帧离屏测量面板自然高度（只测量，不显示）
         if (contentHeightPx <= 0f) {
@@ -163,13 +168,16 @@ fun WeekMorphOverlay(
             }
         }
 
-        // 形变容器：同一个不透明圆角矩形，从胶囊矩形连续长成面板矩形
+        // 形变容器：同一个圆角矩形从胶囊长成面板；玻璃负责模糊/折射，颜色层负责品牌色与可读性。
+        // 玻璃形状跟着 spring 的圆角走，外层 clip 只负责把内容裁在形变轮廓里。
         Box(
             modifier = Modifier
                 .offset { IntOffset(left.roundToInt(), top.roundToInt()) }
                 .size(widthDp, heightDp)
+                .glassEffect(backdrop, glass, RoundedCornerShape(cornerDp))
                 .clip(RoundedCornerShape(cornerDp))
-                .background(background)
+                // 起点（p=0）保持完全不透明，避免与下面真实胶囊叠加；展开后让玻璃透出来。
+                .background(background.copy(alpha = 1f - 0.24f * colorFraction))
         ) {
             // 第一层：胶囊里的「第 X 周」，形状一长大就淡出；箭头独立绘制，这里留出等宽占位保持文字位置
             Row(
@@ -238,6 +246,7 @@ fun WeekMorphOverlay(
                     .size(20.dp)
                     .graphicsLayer { rotationZ = 180f * p }
             )
+        }
         }
     }
 }

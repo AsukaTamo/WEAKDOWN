@@ -202,3 +202,30 @@ Material3 的 `Scaffold` 内部是一个全屏 `Surface`，而 `Surface` 会额�
   `adb push` + `adb shell pm install -r` 可绕过。
 - **验证**：升级后必须重新跑真机滚动/点击/翻周/主题，并对比玻璃静态外观与帧耗时；
   仅编译通过不代表视觉或命中测试没变。
+
+## glassEffect 覆盖层里的按钮/列表点不到（遮罩抢命中）
+
+### 典型现象
+
+- 给周选择面板或课程详情抽屉的容器加 `glassEffect` 后，点周格、编辑、复制、删除都会把面板关掉；
+  去掉玻璃就恢复。
+- `glassEffect` 本身不消费事件，问题出在 Vitro 非交互玻璃的
+  `sharePointerInputWithSiblings() = true`：它会把**同一父层里的兄弟遮罩**也加入命中路径，
+  全屏遮罩的 `clickable` 抢在子内容之前响应。
+
+### 处理线路
+
+1. 把遮罩从「面板/抽屉的兄弟」改成「面板/抽屉的父层」：
+   ```kotlin
+   Box(Modifier.fillMaxSize().clickable { dismiss() }) {   // 遮罩父层
+       Box(...glassEffect(...)) { /* 面板内容，子控件优先命中 */ }
+   }
+   ```
+2. 遮罩需要按动画变透明度时，alpha 放在**只负责视觉的子 Box** 上，不要包住面板内容，
+   否则面板会跟着整体变透明。
+3. 验证时不要只看“能打开”：必须点一个子控件（周格、编辑铅笔、复制/删除），确认回调生效，
+   并确认点空白区域仍能关闭。
+4. `glassEffectContainer(spacing = 0.dp)` **不会融合**，官方 KDoc 明确零间距只是合并绘制；
+   融合需要 `spacing > 0` 且材质相同，组内会使用 lead 的 `tint`，彩色胶囊会失去强调色。
+5. `scrollEdgeEffect` 的 veil 是**全宽矩形**：开顶边时会在圆角顶栏两侧、状态栏下方留下方角暗带。
+   本仓库因此用 `isTopHidden = true` 只开底边；要顶边必须先按顶栏轮廓裁剪 veil。

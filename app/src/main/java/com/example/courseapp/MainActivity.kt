@@ -75,9 +75,11 @@ import com.example.courseapp.viewmodel.ScheduleViewModel
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.LocalGlassDarkTheme
+import io.github.itshedimisawi.vitro.ScrollEdgeEffectStyle
 import io.github.itshedimisawi.vitro.glassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
+import io.github.itshedimisawi.vitro.scrollEdgeEffect
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -399,6 +401,12 @@ fun CourseApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = pageViewportTop)
+                    // 内容滚到底栏下面时按 iOS 的 scroll edge 方式压暗渐隐。
+                    // 顶边先关掉：Shaded 遮罩是全宽矩形，会越过圆角顶栏在状态栏下方留下方角暗带。
+                    .scrollEdgeEffect(
+                        style = ScrollEdgeEffectStyle.Shaded,
+                        isTopHidden = true
+                    )
             ) {
                 listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
                     key(screen) {
@@ -806,6 +814,8 @@ fun CourseApp(
         chipContentColor = palette.weekChipContent,
         topBarContentColor = palette.topContent,
         isDarkMode = isDarkMode,
+        backdrop = glassBackdrop,
+        glass = glassMaterial,
         onWeekSelected = {
             scheduleViewModel.selectWeek(it)
             showWeekDialog = false
@@ -828,6 +838,8 @@ fun CourseApp(
         course = selectedCourse,
         isDarkMode = isDarkMode,
         timeSlotLabels = remember(timeSlots) { timeSlots.flatMap { listOf(it.start, it.end) } },
+        backdrop = glassBackdrop,
+        glass = glassMaterial,
         onDismiss = { scheduleViewModel.dismissCourseDetail() },
         onSave = { scheduleViewModel.updateCourse(it) },
         onDelete = { scheduleViewModel.deleteCourse(it) },

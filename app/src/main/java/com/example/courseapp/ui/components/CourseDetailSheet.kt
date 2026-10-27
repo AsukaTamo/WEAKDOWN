@@ -49,6 +49,9 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.theme.ContentPalette
 import com.example.courseapp.ui.theme.contentPalette
+import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.glassEffect
 import kotlinx.coroutines.launch
 import kotlin.math.abs
 import kotlin.math.roundToInt
@@ -81,6 +84,8 @@ fun CourseDetailSheet(
     course: Course?,
     isDarkMode: Boolean,
     timeSlotLabels: List<String>,
+    backdrop: GlassBackdrop,
+    glass: Glass,
     onDismiss: () -> Unit,
     onSave: (Course) -> Unit,
     onDelete: (Course) -> Unit,
@@ -202,25 +207,29 @@ fun CourseDetailSheet(
         // 只有"完全展开/贴顶"这一个布尔位会变，用 derivedStateOf 让重组发生在翻越阈值那一刻
         val contentScrollEnabled by remember { derivedStateOf { offsetY <= 1f } }
 
-        // 遮罩：随展开程度加深。
-        // 透明度放在 graphicsLayer 里读 offsetY（draw 阶段），避免每帧重组整个抽屉。
+        // 遮罩同时作为抽屉的父层：抽屉里的按钮/拖动先消费事件，不会穿透到遮罩。
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .graphicsLayer {
-                    val expansion = if (peekOffset > 1f) {
-                        ((peekOffset - offsetY) / peekOffset).coerceIn(0f, 1f)
-                    } else {
-                        1f
-                    }
-                    alpha = 0.30f + 0.22f * expansion
-                }
-                .background(Color.Black)
                 .clickable(
                     interactionSource = remember { MutableInteractionSource() },
                     indication = null
                 ) { scope.launch { dismissSheet() } }
-        )
+        ) {
+            // 只负责视觉的遮罩层，alpha 在 draw 阶段读 offsetY，避免每帧重组。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .graphicsLayer {
+                        val expansion = if (peekOffset > 1f) {
+                            ((peekOffset - offsetY) / peekOffset).coerceIn(0f, 1f)
+                        } else {
+                            1f
+                        }
+                        alpha = 0.30f + 0.22f * expansion
+                    }
+                    .background(Color.Black)
+            )
 
         Column(
             modifier = Modifier
@@ -230,7 +239,13 @@ fun CourseDetailSheet(
                 .onSizeChanged { sheetHeightPx = it.height.toFloat() }
                 .offset { IntOffset(0, offsetY.roundToInt()) }
                 .clip(RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner))
-                .background(palette.surface)
+                .glassEffect(
+                    backdrop = backdrop,
+                    glass = glass,
+                    shape = RoundedCornerShape(topStart = SheetCorner, topEnd = SheetCorner)
+                )
+                // 玻璃负责模糊/折射，留 12% 的半透明表面色保证正文可读性
+                .background(palette.surface.copy(alpha = 0.88f))
                 .draggable(
                     state = dragState,
                     orientation = Orientation.Vertical,
@@ -373,6 +388,7 @@ fun CourseDetailSheet(
                     }
                 }
             }
+        }
         }
     }
 }
