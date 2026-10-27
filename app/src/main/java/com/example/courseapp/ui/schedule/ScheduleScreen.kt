@@ -144,6 +144,15 @@ fun ScheduleScreen(
                                 )
                             )
                     )
+                    // 深色模式下壁纸整体再压暗一点，避免亮色照片把深色主题顶得发白
+                    val darkFraction = ThemeFade.fractionFor(isDarkMode)
+                    if (darkFraction > 0.001f) {
+                        Box(
+                            Modifier
+                                .fillMaxSize()
+                                .background(Color.Black.copy(alpha = 0.22f * darkFraction))
+                        )
+                    }
                 }
             }
         }

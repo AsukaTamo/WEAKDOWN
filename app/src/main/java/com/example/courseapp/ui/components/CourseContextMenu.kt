@@ -12,6 +12,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -53,7 +54,11 @@ fun CourseContextMenu(
                         .width(36.dp)
                         .height(4.dp)
                         .background(
-                            if (isDarkMode) Color(0xFF555555) else Color(0xFFD0D0D0),
+                            lerp(
+                                Color(0xFFD0D0D0),
+                                Color(0xFF555555),
+                                ThemeFade.fractionFor(isDarkMode)
+                            ),
                             RoundedCornerShape(2.dp)
                         )
                 )

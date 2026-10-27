@@ -1,7 +1,12 @@
 package com.example.courseapp
 
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
+import android.view.PixelCopy
+import android.view.Window
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
@@ -40,13 +45,14 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -57,6 +63,7 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
@@ -88,6 +95,7 @@ import io.github.itshedimisawi.vitro.glassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
 import kotlinx.coroutines.launch
+import kotlin.math.roundToInt
 import dagger.hilt.android.AndroidEntryPoint
 
 sealed class Screen {
@@ -118,7 +126,7 @@ private fun ThemeMorphIcon(
 ) {
     val sunProgress by animateFloatAsState(
         targetValue = if (isSun) 1f else 0f,
-        animationSpec = tween(560, easing = FastOutSlowInEasing),
+        animationSpec = tween(ThemeTransitionMillis, easing = FastOutSlowInEasing),
         label = "themeIconMorph"
     )
 
@@ -210,6 +218,7 @@ class MainActivity : ComponentActivity() {
                         CourseApp(
                             scheduleViewModel = scheduleViewModel,
                             isDarkMode = isDarkMode,
+                            window = window,
                             homeEntranceEpoch = homeEntranceEpoch
                         )
 
@@ -236,6 +245,7 @@ class MainActivity : ComponentActivity() {
 fun CourseApp(
     scheduleViewModel: ScheduleViewModel,
     isDarkMode: Boolean,
+    window: Window,
     homeEntranceEpoch: Int = 1
 ) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Schedule) }
@@ -258,23 +268,17 @@ fun CourseApp(
     val weekMorphProgress = remember { Animatable(0f) }
     var weekChipBounds by remember { mutableStateOf(Rect.Zero) }
     var weekArrowBounds by remember { mutableStateOf(Rect.Zero) }
-    // 主题切换：圆形揭示 + 图标缩放
-    val themeReveal = remember { Animatable(1f) }
-    // 只有开始/结束各变一次，避免在 composition 里每帧读动画值
-    var themeRevealActive by remember { mutableStateOf(false) }
-    // 覆盖层自身的淡入：从 0 到 1 用 90ms，画面先柔和地化到底色，再扩散圆洞
-    val themeCoverAlpha = remember { Animatable(1f) }
-    // 隐藏页面的主题色延迟到揭示结束后再切：主题切换那一帧只重组当前可见页
-    var delayedDarkMode by remember { mutableStateOf(isDarkMode) }
-    LaunchedEffect(isDarkMode) {
-        if (delayedDarkMode == isDarkMode) return@LaunchedEffect
-        kotlinx.coroutines.delay(ThemeRevealDelayMillis)
-        delayedDarkMode = isDarkMode
-    }
+    // 主题切换：图标缩放 + 切换前快照淡出。
+    // 快照把旧主题整屏拍下来，换主题后按 alpha 淡出——每张卡片/按钮都是逐像素颜色渐变，
+    // 但只有一次 GPU 混合，不需要每帧重算整棵树，能跑满高刷。
     val themeIconScale = remember { Animatable(1f) }
-    var themeRevealCenter by remember { mutableStateOf(Offset.Zero) }
-    var themeRevealColor by remember { mutableStateOf(Color.Transparent) }
     val themeScope = rememberCoroutineScope()
+    var themeSnapshot by remember { mutableStateOf<ImageBitmap?>(null) }
+    var themeSnapshotAlpha by remember { mutableFloatStateOf(1f) }
+    var themeCapturing by remember { mutableStateOf(false) }
+    // 主题按钮在根布局中的位置：快照淡出时在这里挖一个软边孔，
+    // 保证太阳/月亮动画不会被快照盖住。
+    var themeButtonCenter by remember { mutableStateOf(Offset.Zero) }
 
     val navItems = listOf(
         NavItem(Screen.Schedule, "首页", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth),
@@ -337,53 +341,28 @@ fun CourseApp(
 
     // ── 液态玻璃（Vitro）：背景层标成 backdrop，顶栏/底栏都以它为折射源 ──
     val glassBackdrop = rememberGlassBackdrop()
-    val glassMaterial = remember(isDarkMode) {
-        // 浅色：乳白玻璃（原型图里顶栏/底栏都是上白下淡的奶白玻璃），带一点色散
-        // 深色：烟熏玻璃，用深色染色压下去，白字才有对比度
-        // 厚度：加大 refractionHeight / refractionAmount（默认 12/26dp 太平），
-        // 再加一点放大、高光和投影，边缘才有真正“玻璃块”的倒角感。
-        if (isDarkMode) {
-            Glass.Regular.copy(
-                appearance = GlassAppearance.Dark,
-                tint = Color(0xFF0B0B10).copy(alpha = 0.72f),
-                brightness = 0.55f,
-                dispersion = 0.06f,
-                blurRadius = 7.dp,
-                refractionHeight = 18.dp,
-                refractionAmount = 34.dp,
-                magnification = 1.02f,
-                saturation = 1.15f,
-                highlightIntensity = 1.3f,
-                shadowRadius = 34.dp,
-                shadowOffset = 12.dp,
-                shadowOpacity = 0.22f
-            )
-        } else {
-            Glass.Regular.copy(
-                appearance = GlassAppearance.Light,
-                brightness = 0.30f,
-                dispersion = 0.06f,
-                blurRadius = 7.dp,
-                refractionHeight = 18.dp,
-                refractionAmount = 34.dp,
-                magnification = 1.02f,
-                saturation = 1.15f,
-                highlightIntensity = 1.25f,
-                shadowRadius = 34.dp,
-                shadowOffset = 12.dp,
-                shadowOpacity = 0.20f
-            )
-        }
-    }
+    // 主题过渡期间按同一个"深色程度"插值玻璃材质，避免顶/底栏在切换时硬跳。
+    // 玻璃着色器对材质变化很敏感，按 1/4 档更新即可，既不闪也不至于每帧重建。
+    val themeDarkFraction = ThemeFade.fractionFor(isDarkMode)
+    val glassStep = (themeDarkFraction * 4f).roundToInt() / 4f
+    val glassMaterial = remember(glassStep) { themeGlass(glassStep) }
     // 玻璃底上的次级文字（学期名 / 未选中的 Tab）：muted 灰在亮玻璃上只有 2.6:1，
     // 换成同色系压深一档的 textSecondary，暗玻璃继续用原来的 muted
-    val barMutedInk = if (isDarkMode) palette.topMuted else appColors(false).textSecondary
-    val navInactiveInk = if (isDarkMode) palette.navInactive else appColors(false).textSecondary
+    val barMutedInk = lerpColor(
+        appColors(false).textSecondary,
+        palette.topMuted,
+        themeDarkFraction
+    )
+    val navInactiveInk = lerpColor(
+        appColors(false).textSecondary,
+        palette.navInactive,
+        themeDarkFraction
+    )
 
     // 彩色描边：在玻璃外圈叠一层极淡的 sweepGradient，近似原型图的「色彩溢出 / Color Bleed」。
-    val colorBleed = remember(isDarkMode) { colorBleedBrush(isDarkMode) }
+    val colorBleed = remember(themeDarkFraction) { colorBleedBrush(themeDarkFraction) }
     // 玻璃面：顶部提亮、底部压暗的极淡渐变，配合内侧倒角高光/阴影，避免像一块平的半透明板。
-    val glassFace = remember(isDarkMode) { glassFaceBrush(isDarkMode) }
+    val glassFace = remember(themeDarkFraction) { glassFaceBrush(themeDarkFraction) }
 
     // 返回键：先关周选择弹层 / 回到首页，最后才交给系统退出。
     BackHandler(
@@ -444,7 +423,7 @@ fun CourseApp(
                 listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
                     key(screen) {
                         val visible = currentScreen == screen
-                        val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
+                        val screenDarkMode = isDarkMode
                         Box(
                             modifier = Modifier
                                 .fillMaxSize()
@@ -479,8 +458,6 @@ fun CourseApp(
                                     contentPadding = mainPagePadding
                                 )
                                 Screen.Profile -> ProfileScreen(
-                                    onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                                    onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
                                     isDarkMode = screenDarkMode,
                                     showScheduleGuides = showScheduleGuides,
                                     onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
@@ -536,7 +513,7 @@ fun CourseApp(
             var themeIconRotation by remember { mutableFloatStateOf(0f) }
             val animatedThemeIconRotation by animateFloatAsState(
                 targetValue = themeIconRotation,
-                animationSpec = tween(300, easing = FastOutSlowInEasing),
+                animationSpec = tween(ThemeTransitionMillis, easing = FastOutSlowInEasing),
                 label = "themeIconRotation"
             )
 
@@ -569,43 +546,47 @@ fun CourseApp(
                         // 玻璃面 → 彩色边 → 内侧倒角：三层一起才有“玻璃块”的厚度
                         .background(glassFace, GlassBarShape)
                         .border(1.dp, colorBleed, GlassBarShape)
-                        .glassBevel(isDarkMode)
+                        .glassBevel(themeDarkFraction)
                         .padding(horizontal = 18.dp, vertical = 6.dp)
                 ) {
                     IconButton(
                         onClick = {
-                            // 每次累计 180°，让太阳/月亮始终沿同一方向旋转。
-                            themeIconRotation += 180f
-                            themeRevealColor = appColors(isDarkMode).canvas
-                            themeScope.launch {
-                                themeIconScale.animateTo(0f, tween(150, easing = FastOutSlowInEasing))
-                                themeIconScale.animateTo(1f, tween(150, easing = FastOutSlowInEasing))
-                            }
-                            themeScope.launch {
-                                themeRevealActive = true
-                                themeReveal.snapTo(0f)
-                                // 旧界面先用 90ms 柔和地化到纯底色，再在纯色下面换主题：
-                                // 既没有整屏硬切，也把整树换色那一帧藏住了
-                                themeCoverAlpha.snapTo(0f)
-                                themeCoverAlpha.animateTo(
-                                    targetValue = 1f,
-                                    animationSpec = tween(90, easing = FastOutSlowInEasing)
-                                )
-                                scheduleViewModel.toggleDarkMode()
-                                // 让主题重组先落地，再启动卡片错峰，避免挤在同一帧
-                                kotlinx.coroutines.delay(96)
-                                ThemeTransition.trigger()
-                                // 与周数面板展开同一条高阻尼 spring 曲线
-                                themeReveal.animateTo(
-                                    targetValue = 1f,
-                                    animationSpec = spring(
-                                        dampingRatio = 0.97f,
-                                        stiffness = 170f,
-                                        visibilityThreshold = 0.001f
-                                    )
-                                )
-                                themeReveal.snapTo(1f)
-                                themeRevealActive = true
+                            // 切换/淡出期间忽略重复点击，避免两段动画互相覆盖
+                            if (themeSnapshot != null || themeCapturing) return@IconButton
+                            // 先把当前画面拍成快照，再换主题、让快照淡出：
+                            // 每张卡片/按钮都经历真实的旧→新颜色渐变，但过渡只花一次 GPU 混合。
+                            themeCapturing = true
+                            captureWindowSnapshot(window) { bitmap ->
+                                themeCapturing = false
+                                // 图标旋转/缩放在主题真正开始切换的这一刻启动，
+                                // 和 380ms 的整体渐变同速同相（太阳/月亮的形变也是 380ms）。
+                                themeIconRotation += 180f
+                                themeScope.launch {
+                                    themeIconScale.animateTo(0f, tween(ThemeTransitionMillis / 2, easing = FastOutSlowInEasing))
+                                    themeIconScale.animateTo(1f, tween(ThemeTransitionMillis / 2, easing = FastOutSlowInEasing))
+                                }
+                                if (bitmap != null) {
+                                    // 先同步把遮罩置为不透明，新主题那一帧不会闪出来
+                                    themeSnapshotAlpha = 1f
+                                    themeSnapshot = bitmap.asImageBitmap()
+                                    scheduleViewModel.toggleDarkMode()
+                                    themeScope.launch {
+                                        // 等新主题完成一次组合，再开始淡出
+                                        withFrameNanos { }
+                                        animate(
+                                            initialValue = 1f,
+                                            targetValue = 0f,
+                                            animationSpec = tween(
+                                                durationMillis = ThemeTransitionMillis,
+                                                easing = FastOutSlowInEasing
+                                            )
+                                        ) { value, _ -> themeSnapshotAlpha = value }
+                                        themeSnapshot = null
+                                    }
+                                } else {
+                                    // 极少数设备 PixelCopy 失败：直接换主题
+                                    scheduleViewModel.toggleDarkMode()
+                                }
                             }
                         },
                         modifier = Modifier
@@ -614,7 +595,7 @@ fun CourseApp(
                             .padding(end = 6.dp)
                             .size(40.dp)
                             .elasticPress(CircleShape)
-                            .onGloballyPositioned { themeRevealCenter = it.boundsInRoot().center }
+                            .onGloballyPositioned { themeButtonCenter = it.boundsInRoot().center }
                     ) {
                         Box(
                             modifier = Modifier
@@ -778,7 +759,7 @@ fun CourseApp(
                         )
                         .background(glassFace, GlassBarShape)
                         .border(1.dp, colorBleed, GlassBarShape)
-                        .glassBevel(isDarkMode)
+                        .glassBevel(themeDarkFraction)
                         .onGloballyPositioned { coords ->
                             val origin = coords.positionInWindow()
                             if (bottomBarOrigin != origin) bottomBarOrigin = origin
@@ -857,6 +838,43 @@ fun CourseApp(
                 }
             }
 
+    // 主题切换快照：盖在整屏最上层，只改一个 alpha，不拦截触摸，也不触发重组。
+    // 在主题按钮处挖一个软边透明孔，按钮的变色/缩放/日月形变动画始终露在最上面。
+    themeSnapshot?.let { snapshot ->
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .graphicsLayer { alpha = themeSnapshotAlpha }
+        ) {
+            drawIntoCanvas {
+                it.saveLayer(Rect(0f, 0f, size.width, size.height), Paint())
+            }
+            drawImage(
+                image = snapshot,
+                dstSize = IntSize(size.width.roundToInt(), size.height.roundToInt())
+            )
+            if (themeButtonCenter != Offset.Zero) {
+                // 孔半径贴着按钮自己的 38dp 圆底：只让按钮这一块（图标 + 圆底）露出来，
+                // 不把顶栏的新旧底色差带进来。
+                val holeRadius = 20.dp.toPx()
+                drawCircle(
+                    brush = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0.76f to Color.Black,
+                            1f to Color.Transparent
+                        ),
+                        center = themeButtonCenter,
+                        radius = holeRadius
+                    ),
+                    radius = holeRadius,
+                    center = themeButtonCenter,
+                    blendMode = BlendMode.DstOut
+                )
+            }
+            drawIntoCanvas { it.restore() }
+        }
+    }
+
     // Time slot settings overlay
     AnimatedVisibility(
         visible = showTimeSlotSettings,
@@ -893,16 +911,6 @@ fun CourseApp(
         onDismiss = { showWeekDialog = false }
     )
 
-    // 主题切换的圆形揭示：用旧底色盖住全屏，只挖出从按钮扩散的圆洞。
-    // 进度在 DrawScope 里读，只失效绘制，不触发重组。
-    ThemeRevealOverlay(
-        active = themeRevealActive,
-        progress = themeReveal,
-        coverAlpha = themeCoverAlpha,
-        center = themeRevealCenter,
-        color = themeRevealColor
-    )
-
     // 课程详情抽屉：放在根布局，遮罩才能覆盖顶栏与底部导航
     CourseDetailSheet(
         course = selectedCourse,
@@ -931,30 +939,6 @@ fun CourseApp(
     )
 }
 
-}
-
-@Composable
-private fun ThemeRevealOverlay(
-    active: Boolean,
-    progress: Animatable<Float, AnimationVector1D>,
-    coverAlpha: Animatable<Float, AnimationVector1D>,
-    center: Offset,
-    color: Color
-) {
-    if (!active) return
-    Canvas(modifier = Modifier.fillMaxSize()) {
-        // DrawScope 里读 Animatable：只让这一层重绘，不带着整棵树重组
-        val raw = progress.value
-        val fraction = raw.coerceIn(0f, 1f)
-        if (fraction >= 1f) return@Canvas
-        val maxRadius = kotlin.math.hypot(size.width.toDouble(), size.height.toDouble()).toFloat()
-        val path = Path().apply {
-            fillType = PathFillType.EvenOdd
-            addRect(Rect(0f, 0f, size.width, size.height))
-            addOval(Rect(center = center, radius = maxRadius * fraction))
-        }
-        drawPath(path, color.copy(alpha = color.alpha * coverAlpha.value.coerceIn(0f, 1f)))
-    }
 }
 
 @Composable
@@ -997,6 +981,15 @@ private fun ImmersiveScheduleBackground(
                 )
             )
     )
+    // 深色模式下壁纸整体再压暗一点，避免亮色照片把深色主题顶得发白
+    val darkFraction = ThemeFade.fractionFor(isDarkMode)
+    if (darkFraction > 0.001f) {
+        Box(
+            Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.22f * darkFraction))
+        )
+    }
 }
 
 /**
@@ -1012,8 +1005,36 @@ private fun Modifier.keepPlacedWhen(visible: Boolean): Modifier = this.layout { 
     }
 }
 
-/** 揭示动画时长（spring 收尾），隐藏页在这之后才跟着换主题。 */
-private const val ThemeRevealDelayMillis = 520L
+/**
+ * 把当前窗口表面抓成一张位图（含液态玻璃等 GPU 效果）。
+ * 用于主题切换的逐像素交叉淡化：比每帧重算整棵树便宜得多。
+ */
+private fun captureWindowSnapshot(window: Window, onCaptured: (Bitmap?) -> Unit) {
+    val decor = window.decorView
+    val width = decor.width
+    val height = decor.height
+    if (width <= 0 || height <= 0) {
+        onCaptured(null)
+        return
+    }
+    val bitmap = Bitmap.createBitmap(width, height, Bitmap.Config.ARGB_8888)
+    PixelCopy.request(
+        window,
+        bitmap,
+        { result ->
+            if (result == PixelCopy.SUCCESS) {
+                onCaptured(bitmap)
+            } else {
+                bitmap.recycle()
+                onCaptured(null)
+            }
+        },
+        Handler(Looper.getMainLooper())
+    )
+}
+
+/** 主题切换的整体节拍：渐变、太阳/月亮形变、旋转、缩放全部跟着它走。 */
+private const val ThemeTransitionMillis = 460
 
 /** 顶栏玻璃外壳与状态栏、屏幕左右边缘之间的留白；页面视口也从这个上沿开始裁断。 */
 private val TopBarTopGap = 8.dp
@@ -1023,27 +1044,57 @@ private val PageTopCorner = 28.dp
 
 private val GlassBarShape = RoundedCornerShape(28.dp)
 
+private fun lerpFloat(start: Float, stop: Float, fraction: Float): Float =
+    start + (stop - start) * fraction.coerceIn(0f, 1f)
+
+private fun lerpColor(start: Color, stop: Color, fraction: Float): Color =
+    androidx.compose.ui.graphics.lerp(start, stop, fraction.coerceIn(0f, 1f))
+
+/**
+ * 深浅两套玻璃材质按同一进度插值。
+ * 浅色：乳白玻璃，带一点色散；深色：烟熏玻璃，用深色染色压下去保证白字对比度。
+ */
+private fun themeGlass(darkFraction: Float): Glass {
+    val t = darkFraction.coerceIn(0f, 1f)
+    return Glass.Regular.copy(
+        // appearance 只能二选一，取过半那一档；tint / brightness 连续变化，过渡中看不出硬切
+        appearance = if (t >= 0.5f) GlassAppearance.Dark else GlassAppearance.Light,
+        tint = lerpColor(Color.Transparent, Color(0xFF0B0B10).copy(alpha = 0.72f), t),
+        brightness = lerpFloat(0.30f, 0.55f, t),
+        dispersion = 0.06f,
+        blurRadius = 7.dp,
+        refractionHeight = 18.dp,
+        refractionAmount = 34.dp,
+        magnification = 1.02f,
+        saturation = 1.15f,
+        highlightIntensity = lerpFloat(1.25f, 1.3f, t),
+        shadowRadius = 34.dp,
+        shadowOffset = 12.dp,
+        shadowOpacity = lerpFloat(0.20f, 0.22f, t)
+    )
+}
+
 /** 玻璃面渐变：顶部受光、底部略暗，给平整的半透明面一点体积感。 */
-private fun glassFaceBrush(isDarkMode: Boolean): Brush = Brush.verticalGradient(
-    0f to Color.White.copy(alpha = if (isDarkMode) 0.14f else 0.18f),
+private fun glassFaceBrush(darkFraction: Float): Brush = Brush.verticalGradient(
+    0f to Color.White.copy(alpha = lerpFloat(0.18f, 0.14f, darkFraction)),
     0.45f to Color.Transparent,
-    1f to Color.Black.copy(alpha = if (isDarkMode) 0.24f else 0.07f)
+    1f to Color.Black.copy(alpha = lerpFloat(0.07f, 0.24f, darkFraction))
 )
 
 /**
  * 内侧倒角：沿外轮廓再画一圈 1.8dp 的竖向渐变描边。
  * 顶边亮、底边先暗再带一道细高光，模拟玻璃边缘的厚度，而不是只有一圈细边框。
  */
-private fun Modifier.glassBevel(isDarkMode: Boolean): Modifier = drawWithContent {
+private fun Modifier.glassBevel(darkFraction: Float): Modifier = drawWithContent {
     drawContent()
     // 内侧柔光带：顶部微亮、底部微暗，先铺一层 5dp 的软过渡，让倒角不是只有一条硬线
     val soft = 5.dp.toPx()
     drawRoundRect(
         brush = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = if (isDarkMode) 0.07f else 0.08f),
+            0f to Color.White.copy(alpha = lerpFloat(0.08f, 0.07f, darkFraction)),
             0.35f to Color.Transparent,
             0.70f to Color.Transparent,
-            1f to Color.Black.copy(alpha = if (isDarkMode) 0.14f else 0.07f)
+            1f to Color.Black.copy(alpha = lerpFloat(0.07f, 0.14f, darkFraction))
         ),
         topLeft = Offset(soft / 2f, soft / 2f),
         size = Size(size.width - soft, size.height - soft),
@@ -1056,11 +1107,11 @@ private fun Modifier.glassBevel(isDarkMode: Boolean): Modifier = drawWithContent
     val radius = (28.dp.toPx() - inset).coerceAtLeast(0f)
     drawRoundRect(
         brush = Brush.verticalGradient(
-            0f to Color.White.copy(alpha = if (isDarkMode) 0.45f else 0.55f),
+            0f to Color.White.copy(alpha = lerpFloat(0.55f, 0.45f, darkFraction)),
             0.22f to Color.White.copy(alpha = 0.05f),
             0.55f to Color.Transparent,
-            0.88f to Color.Black.copy(alpha = if (isDarkMode) 0.26f else 0.12f),
-            1f to Color.White.copy(alpha = if (isDarkMode) 0.30f else 0.32f)
+            0.88f to Color.Black.copy(alpha = lerpFloat(0.12f, 0.26f, darkFraction)),
+            1f to Color.White.copy(alpha = lerpFloat(0.32f, 0.30f, darkFraction))
         ),
         topLeft = Offset(inset, inset),
         size = Size(size.width - stroke, size.height - stroke),
@@ -1073,8 +1124,8 @@ private fun Modifier.glassBevel(isDarkMode: Boolean): Modifier = drawWithContent
  * 原型图的「色彩溢出」：玻璃外圈很淡的一圈光谱。Vitro 的 dispersion 是物理 RGB 分离，
  * 在平整背景上几乎看不见，所以额外用 sweepGradient 描边做视觉近似。
  */
-private fun colorBleedBrush(isDarkMode: Boolean): Brush {
-    val alpha = if (isDarkMode) 0.60f else 0.50f
+private fun colorBleedBrush(darkFraction: Float): Brush {
+    val alpha = lerpFloat(0.50f, 0.60f, darkFraction)
     return Brush.sweepGradient(
         listOf(
             Color(0xFF7BD8FF).copy(alpha = alpha),

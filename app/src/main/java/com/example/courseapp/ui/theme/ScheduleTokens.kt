@@ -22,16 +22,6 @@ object ScheduleDimensions {
     val FabSize = 56.dp
 }
 
-/** 主题切换的全局节拍：课表卡片据此错峰做一次缩放回弹。 */
-object ThemeTransition {
-    private val state = androidx.compose.runtime.mutableIntStateOf(0)
-    val epoch: Int get() = state.intValue
-
-    fun trigger() {
-        state.intValue++
-    }
-}
-
 object ScheduleMotion {
     const val FastMillis = 140
     const val StandardMillis = 240
