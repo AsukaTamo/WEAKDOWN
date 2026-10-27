@@ -22,6 +22,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -475,8 +476,9 @@ private fun OrphanCoursesBanner(
     isDarkMode: Boolean,
     onClean: () -> Unit
 ) {
-    val bannerBg = if (isDarkMode) Color(0xFF33281A) else Color(0xFFFFF3E0)
-    val bannerText = if (isDarkMode) Color(0xFFFFCC80) else Color(0xFF8A5A00)
+    val bannerTheme = ThemeFade.fractionFor(isDarkMode)
+    val bannerBg = lerp(Color(0xFFFFF3E0), Color(0xFF33281A), bannerTheme)
+    val bannerText = lerp(Color(0xFF8A5A00), Color(0xFFFFCC80), bannerTheme)
 
     Row(
         modifier = Modifier

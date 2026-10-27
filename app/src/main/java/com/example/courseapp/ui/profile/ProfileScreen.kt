@@ -23,6 +23,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
@@ -41,8 +42,6 @@ import java.util.Locale
 
 @Composable
 fun ProfileScreen(
-    onDarkModeToggle: () -> Unit = {},
-    onDarkModeChange: (Boolean) -> Unit = { onDarkModeToggle() },
     isDarkMode: Boolean = false,
     showScheduleGuides: Boolean = true,
     onScheduleGuidesChange: (Boolean) -> Unit = {},
@@ -205,14 +204,7 @@ fun ProfileScreen(
                             Switch(
                                 checked = showScheduleGuides,
                                 onCheckedChange = onScheduleGuidesChange,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = if (isDarkMode) Color(0xFF000035) else Color.White,
-                                    checkedTrackColor = palette.accent,
-                                    checkedBorderColor = Color.Transparent,
-                                    uncheckedThumbColor = if (isDarkMode) Color(0xFF8E92B2) else Color.White,
-                                    uncheckedTrackColor = if (isDarkMode) Color(0xFF161852) else Color(0xFFE0E0E0),
-                                    uncheckedBorderColor = if (isDarkMode) Color(0xFF3A3F7A) else Color.Transparent
-                                )
+                                colors = themeSwitchColors(isDarkMode, palette.accent)
                             )
                         }
                     )
@@ -223,25 +215,6 @@ fun ProfileScreen(
             item {
                 SettingsGroup(isDarkMode = isDarkMode) {
                     SettingsItem(
-                        icon = Icons.Filled.DarkMode,
-                        title = "深色模式",
-                        isDarkMode = isDarkMode,
-                        trailing = {
-                            Switch(
-                                checked = isDarkMode,
-                                onCheckedChange = onDarkModeChange,
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = if (isDarkMode) Color(0xFF000035) else Color.White,
-                                    checkedTrackColor = palette.accent,
-                                    checkedBorderColor = Color.Transparent,
-                                    uncheckedThumbColor = if (isDarkMode) Color(0xFF8E92B2) else Color.White,
-                                    uncheckedTrackColor = if (isDarkMode) Color(0xFF161852) else Color(0xFFE0E0E0),
-                                    uncheckedBorderColor = if (isDarkMode) Color(0xFF3A3F7A) else Color.Transparent
-                                )
-                            )
-                        }
-                    )
-                    SettingsItem(
                         icon = Icons.Outlined.Notifications,
                         title = "上课提醒",
                         isDarkMode = isDarkMode,
@@ -249,14 +222,7 @@ fun ProfileScreen(
                             Switch(
                                 checked = notificationsEnabled,
                                 onCheckedChange = { viewModel.toggleNotifications() },
-                                colors = SwitchDefaults.colors(
-                                    checkedThumbColor = if (isDarkMode) Color(0xFF000035) else Color.White,
-                                    checkedTrackColor = palette.accent,
-                                    checkedBorderColor = Color.Transparent,
-                                    uncheckedThumbColor = if (isDarkMode) Color(0xFF8E92B2) else Color.White,
-                                    uncheckedTrackColor = if (isDarkMode) Color(0xFF161852) else Color(0xFFE0E0E0),
-                                    uncheckedBorderColor = if (isDarkMode) Color(0xFF3A3F7A) else Color.Transparent
-                                )
+                                colors = themeSwitchColors(isDarkMode, palette.accent)
                             )
                         }
                     )
@@ -707,30 +673,41 @@ private fun SemesterDialog(
     }
 }
 
+/** 开关配色也走主题过渡进度，避免页面在渐变时开关硬跳色。 */
+@Composable
+private fun themeSwitchColors(isDarkMode: Boolean, accent: Color): SwitchColors {
+    val t = ThemeFade.fractionFor(isDarkMode)
+    return SwitchDefaults.colors(
+        checkedThumbColor = lerp(Color.White, Color(0xFF000035), t),
+        checkedTrackColor = accent,
+        checkedBorderColor = Color.Transparent,
+        uncheckedThumbColor = lerp(Color.White, Color(0xFF8E92B2), t),
+        uncheckedTrackColor = lerp(Color(0xFFE0E0E0), Color(0xFF161852), t),
+        uncheckedBorderColor = lerp(Color.Transparent, Color(0xFF3A3F7A), t)
+    )
+}
+
 @Composable
 private fun UserHeader(
     name: String,
     subtitle: String,
     isDarkMode: Boolean
 ) {
-    // 浅色：鸢尾蓝 135° 渐变；深色：藏蓝 → 紫 → 火山橙微光，并加一圈橙色描边
-    val brush = if (isDarkMode) {
-        androidx.compose.ui.graphics.Brush.linearGradient(
-            colorStops = arrayOf(
-                0.0f to Color(0xFF121552),
-                0.55f to Color(0xFF2A1B4E),
-                1.0f to Color(0x80FF6047)
-            )
+    // 浅色：鸢尾蓝 135° 渐变；深色：藏蓝 → 紫 → 火山橙微光。
+    // 主题过渡期间按同一进度插值，头图卡片和页面其余元素一起变色。
+    val t = ThemeFade.fractionFor(isDarkMode)
+    fun themeColor(light: Color, dark: Color): Color = lerp(light, dark, t)
+    val brush = androidx.compose.ui.graphics.Brush.linearGradient(
+        colorStops = arrayOf(
+            0.0f to themeColor(Color(0xFF0F64B5), Color(0xFF121552)),
+            0.55f to themeColor(Color(0xFF1E88E5), Color(0xFF2A1B4E)),
+            1.0f to themeColor(Color(0xFF1E88E5), Color(0x80FF6047))
         )
-    } else {
-        androidx.compose.ui.graphics.Brush.linearGradient(
-            colors = listOf(Color(0xFF0F64B5), Color(0xFF1E88E5))
-        )
-    }
-    val avatarBg = if (isDarkMode) Color(0xFFFF6047) else Color(0xFFFFFBEA)
-    val avatarInk = if (isDarkMode) Color(0xFF000035) else Color(0xFF0F64B5)
-    val nameColor = if (isDarkMode) Color(0xFFF5F6FA) else Color(0xFFFFFBEA)
-    val subColor = if (isDarkMode) Color(0xFF8E92B2) else Color(0xFFD6E6F7)
+    )
+    val avatarBg = themeColor(Color(0xFFFFFBEA), Color(0xFFFF6047))
+    val avatarInk = themeColor(Color(0xFF0F64B5), Color(0xFF000035))
+    val nameColor = themeColor(Color(0xFFFFFBEA), Color(0xFFF5F6FA))
+    val subColor = themeColor(Color(0xFFD6E6F7), Color(0xFF8E92B2))
 
     Row(
         modifier = Modifier
@@ -739,12 +716,10 @@ private fun UserHeader(
             .shadow(6.dp, RoundedCornerShape(18.dp))
             .clip(RoundedCornerShape(18.dp))
             .background(brush = brush)
-            .then(
-                if (isDarkMode) {
-                    Modifier.border(1.dp, Color(0x66FF6047), RoundedCornerShape(18.dp))
-                } else {
-                    Modifier
-                }
+            .border(
+                1.dp,
+                Color(0x66FF6047).copy(alpha = 0.4f * t),
+                RoundedCornerShape(18.dp)
             )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically,

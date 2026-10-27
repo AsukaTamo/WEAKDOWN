@@ -33,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -80,39 +79,66 @@ import com.example.courseapp.ui.theme.CourseRequiredEnd
 import com.example.courseapp.ui.theme.CourseRequiredEndDark
 import com.example.courseapp.ui.theme.CourseRequiredStart
 import com.example.courseapp.ui.theme.CourseRequiredStartDark
-import com.example.courseapp.ui.theme.ThemeTransition
 import com.example.courseapp.ui.theme.ScheduleDimensions
+import com.example.courseapp.ui.theme.ThemeFade
 import com.example.courseapp.ui.theme.schedulePalette
 
 fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color> {
-    // 自定义颜色保持用户选择，只按模式微调透明度后直接使用
-    if (course.customColor.isNotEmpty()) {
-        try {
-            val base = Color(android.graphics.Color.parseColor(course.customColor))
-            val end = base.copy(alpha = if (isDarkMode) 0.70f else 0.86f)
-            return if (isDarkMode) base.copy(alpha = 0.88f) to end else base to end
-        } catch (_: Exception) {
-        }
+    // 主题切换期间按同一进度在浅色/深色两套卡片配色之间插值，
+    // 每张卡片自己完成渐变，而不是靠整屏遮罩。
+    val t = ThemeFade.fractionFor(isDarkMode)
+    val light = lightCourseGradient(course)
+    val dark = darkCourseGradient(course)
+    return lerp(light.first, dark.first, t) to lerp(light.second, dark.second, t)
+}
+
+/** 浅色主题的卡片渐变：统一 92% 不透明度，壁纸背景也挡得住。 */
+private fun lightCourseGradient(course: Course): Pair<Color, Color> {
+    val seed = course.name.hashCode()
+    val start: Color
+    val end: Color
+    val custom = if (course.customColor.isNotEmpty()) parseCustomColor(course) else null
+    if (custom != null) {
+        start = custom
+        end = custom
+    } else {
+        val base = lightTypeGradient(course.type)
+        start = courseVariant(base.first, seed)
+        end = courseVariant(base.second, seed)
+    }
+    return start.copy(alpha = 0.92f) to end.copy(alpha = 0.92f)
+}
+
+/** 深色主题的卡片渐变：自定义色按透明度压暗，类型色直接使用深色基准。 */
+private fun darkCourseGradient(course: Course): Pair<Color, Color> {
+    val seed = course.name.hashCode()
+    val custom = if (course.customColor.isNotEmpty()) parseCustomColor(course) else null
+    if (custom != null) {
+        return custom.copy(alpha = 0.88f) to custom.copy(alpha = 0.70f)
+    }
+    val base = darkTypeGradient(course.type)
+    return courseVariant(base.first, seed) to courseVariant(base.second, seed)
+}
+
+private fun parseCustomColor(course: Course): Color? =
+    try {
+        Color(android.graphics.Color.parseColor(course.customColor))
+    } catch (_: Exception) {
+        null
     }
 
-    // 先按课程类型取基准色，再按课程名做一点色相漂移：
-    // 同一类型的课不会挤成一片同色，白字对比度也不会掉（亮度只降不升）。
-    val seed = course.name.hashCode()
-    val base = when (course.type) {
-        CourseType.REQUIRED ->
-            if (isDarkMode) CourseRequiredStartDark to CourseRequiredEndDark
-            else CourseRequiredStart to CourseRequiredEnd
-        CourseType.ELECTIVE ->
-            if (isDarkMode) CourseElectiveStartDark to CourseElectiveEndDark
-            else CourseElectiveStart to CourseElectiveEnd
-        CourseType.LAB ->
-            if (isDarkMode) CourseLabStartDark to CourseLabEndDark
-            else CourseLabStart to CourseLabEnd
-        CourseType.CUSTOM ->
-            if (isDarkMode) CourseCustomStartDark to CourseCustomEndDark
-            else CourseCustomStart to CourseCustomEnd
-    }
-    return courseVariant(base.first, seed) to courseVariant(base.second, seed)
+private fun lightTypeGradient(type: CourseType): Pair<Color, Color> = when (type) {
+    CourseType.REQUIRED -> CourseRequiredStart to CourseRequiredEnd
+    CourseType.ELECTIVE -> CourseElectiveStart to CourseElectiveEnd
+    CourseType.LAB -> CourseLabStart to CourseLabEnd
+    CourseType.CUSTOM -> CourseCustomStart to CourseCustomEnd
+}
+
+private fun darkTypeGradient(type: CourseType): Pair<Color, Color> = when (type) {
+    CourseType.REQUIRED -> CourseRequiredStartDark to CourseRequiredEndDark
+    CourseType.ELECTIVE -> CourseElectiveStartDark to CourseElectiveEndDark
+    CourseType.LAB -> CourseLabStartDark to CourseLabEndDark
+    CourseType.CUSTOM -> CourseCustomStartDark to CourseCustomEndDark
 }
 
 /** 在类型基准色上做确定性微调：色相 ±10°、饱和度 ±4%、亮度只降不升。 */
@@ -171,42 +197,28 @@ fun CourseCard(
     modifier: Modifier = Modifier
 ) {
     val palette = schedulePalette(isDarkMode, hasWallpaperBackground)
-    val (rawStart, rawEnd) = remember(course, isDarkMode) { courseGradientColors(course, isDarkMode) }
-    // 浅色：蓝/青渐变 @92%，壁纸也挡得住；深色：藏蓝底 + 彩色微光 + 彩色描边
-    val startColor = if (isDarkMode) rawStart else rawStart.copy(alpha = 0.92f)
-    val endColor = if (isDarkMode) rawEnd else rawEnd.copy(alpha = 0.92f)
+    // 主题过渡进度：卡片自己的背景/描边/正文色全部按它插值，和页面其余元素同步
+    val themeFraction = ThemeFade.fractionFor(isDarkMode)
+    val (rawStart, rawEnd) = courseGradientColors(course, isDarkMode)
     val darkBase = Color(0xD914141A)
-    val cardAccent = if (isDarkMode) courseDarkAccent(course) else rawStart
-    val titleColor = if (isDarkMode) Color.White else Color.White
-    val bodyColor = if (isDarkMode) Color(0xFFD1D5F0) else Color.White.copy(alpha = 0.88f)
-    val textShadow = if (isDarkMode) null else Shadow(
+    // 浅色是彩色渐变、深色是藏蓝底 + 彩色微光：底色向 darkBase 收拢
+    val startColor = lerp(rawStart, darkBase, themeFraction)
+    val endColor = lerp(rawEnd, darkBase, themeFraction)
+    val cardAccent = lerp(rawStart, courseDarkAccent(course), themeFraction)
+    val bodyColor = lerp(
+        Color.White.copy(alpha = 0.88f),
+        Color(0xFFD1D5F0),
+        themeFraction
+    )
+    val textShadow = if (themeFraction < 0.5f) Shadow(
         color = Color(0x33000000),
         offset = Offset(0f, 1f),
         blurRadius = 2f
-    )
+    ) else null
+    val lightOverlayAlpha = 1f - themeFraction
+    val darkOverlayAlpha = themeFraction
     val baseTextStyle = LocalTextStyle.current.copy(shadow = textShadow)
     val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
-    // 主题切换时按行列错峰回弹：0.94 -> 1.0，弹簧收尾。
-    // seenEpoch 以「首次组合时的 epoch」初始化，所以切回首页重建卡片不会重放动画。
-    val epoch = ThemeTransition.epoch
-    val staggerScale = remember { Animatable(1f) }
-    var seenEpoch by remember { mutableIntStateOf(epoch) }
-    LaunchedEffect(epoch) {
-        if (epoch == seenEpoch) return@LaunchedEffect
-        seenEpoch = epoch
-        val delayMs = ((course.startSlot * 2 + course.dayOfWeek) * 15).coerceAtMost(300)
-        kotlinx.coroutines.delay(delayMs.toLong())
-        staggerScale.snapTo(0.94f)
-        staggerScale.animateTo(
-            targetValue = 1f,
-            animationSpec = spring(
-                dampingRatio = 0.6f,
-                stiffness = 500f,
-                // scale 的收敛阈值要远小于默认 0.01，否则会停在 0.99
-                visibilityThreshold = 0.0005f
-            )
-        )
-    }
     val teacherLine = remember(course.teacher) { course.teacher.trim() }
     val locationLine = remember(course.location) { course.location.trim() }
     // 首次进入首页的 Spring Cascade：启动页还在时先隐藏，启动页退场后按行列错峰向上弹入。
@@ -257,8 +269,8 @@ fun CourseCard(
                 val entranceProgress = entrance.value
                 val entranceAlpha = entranceProgress.coerceIn(0f, 1f)
                 val entranceScale = 0.96f + 0.04f * entranceAlpha
-                scaleX = staggerScale.value * entranceScale
-                scaleY = staggerScale.value * entranceScale
+                scaleX = entranceScale
+                scaleY = entranceScale
                 translationY = (1f - entranceProgress) * entranceDistancePx
                 alpha = entranceAlpha
             }
@@ -286,25 +298,28 @@ fun CourseCard(
                 )
                 .clip(shape)
                 .background(
-                    brush = if (isDarkMode) Brush.linearGradient(listOf(darkBase, darkBase))
-                    else Brush.linearGradient(listOf(startColor, endColor)),
+                    brush = Brush.linearGradient(listOf(startColor, endColor)),
+                    shape = shape
+                )
+                // 浅色高光/压暗与深色彩色微光同时存在，只是透明度跟着过渡进度此消彼长
+                .background(
+                    brush = Brush.verticalGradient(
+                        listOf(
+                            Color.White.copy(
+                                alpha = (if (hasWallpaperBackground) 0.18f else 0.12f) * lightOverlayAlpha
+                            ),
+                            Color.Transparent,
+                            Color.Black.copy(
+                                alpha = (if (hasWallpaperBackground) 0.16f else 0.08f) * lightOverlayAlpha
+                            )
+                        )
+                    ),
                     shape = shape
                 )
                 .background(
-                    brush = if (isDarkMode) {
-                        // 18% 彩色微光：从左上角斜向铺开，让同底色卡片仍能分辨
-                        Brush.linearGradient(
-                            listOf(cardAccent.copy(alpha = 0.18f), Color.Transparent)
-                        )
-                    } else {
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.White.copy(alpha = if (hasWallpaperBackground) 0.18f else 0.12f),
-                                Color.Transparent,
-                                Color.Black.copy(alpha = if (hasWallpaperBackground) 0.16f else 0.08f)
-                            )
-                        )
-                    },
+                    brush = Brush.linearGradient(
+                        listOf(cardAccent.copy(alpha = 0.18f * darkOverlayAlpha), Color.Transparent)
+                    ),
                     shape = shape
                 )
                 .then(
@@ -323,10 +338,16 @@ fun CourseCard(
                             width = 2.dp,
                             corner = ScheduleDimensions.CourseCorner
                         )
-                    } else if (isDarkMode) {
-                        Modifier.border(1.5.dp, cardAccent.copy(alpha = 0.85f), shape)
                     } else {
-                        Modifier.border(1.dp, palette.courseStroke, shape)
+                        Modifier.border(
+                            width = (1f + 0.5f * themeFraction).dp,
+                            color = lerp(
+                                palette.courseStroke,
+                                cardAccent.copy(alpha = 0.85f),
+                                themeFraction
+                            ),
+                            shape = shape
+                        )
                     }
                 )
                 .combinedClickable(

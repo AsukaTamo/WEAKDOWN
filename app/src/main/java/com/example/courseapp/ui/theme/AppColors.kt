@@ -89,4 +89,5 @@ val DarkAppColors = AppColors(
     glassInkMuted = Color(0xFF8E90A0)
 )
 
-fun appColors(isDarkMode: Boolean): AppColors = if (isDarkMode) DarkAppColors else LightAppColors
+fun appColors(isDarkMode: Boolean): AppColors =
+    if (isDarkMode) DarkAppColors else LightAppColors
