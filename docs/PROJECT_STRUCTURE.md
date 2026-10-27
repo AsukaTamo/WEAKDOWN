@@ -75,7 +75,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 | --- | --- |
-| `app/build.gradle.kts` | 应用模块配置。启用 Compose、KSP、Hilt；`compileSdk/targetSdk = 36`、`minSdk = 26`、Java/Kotlin 21；依赖包含 Compose BOM 2024.01.00、Material3、Navigation Compose、Hilt 2.50、Room 2.6.1、Jsoup 1.17.2、Gson 2.10.1、Coroutines 1.7.3、SplashScreen 1.0.1。 |
+| `app/build.gradle.kts` | 应用模块配置。启用 Compose、KSP、Hilt；`compileSdk = 37（targetSdk 36）`、`minSdk = 26`、Java/Kotlin 21；依赖包含 Compose BOM 2024.01.00、Material3、Navigation Compose、Hilt 2.50、Room 2.6.1、Jsoup 1.17.2、Gson 2.10.1、Coroutines 1.7.3、SplashScreen 1.0.1。 |
 | `app/proguard-rules.pro` | Release 混淆规则扩展点，当前未开启 minify。 |
 | `app/src/main/AndroidManifest.xml` | 声明网络权限；注册 `.CourseApp`、`.MainActivity`、`.ui.import.WebImportActivity`；配置启动页主题、硬件加速、明文流量等。 |
 
@@ -189,6 +189,12 @@ WebImportScreen
 | 文件 | 作用 |
 |---|---|
 | `WeakdownSplashOverlay.kt` | 应用内启动动画（约 4 秒），叠加在系统 Splash 之上。 |
+
+### 第三方源码（vendor）
+
+| 文件 | 作用 |
+|---|---|
+| `io/github/itshedimisawi/vitro/**` | **Vitro 0.1.0**（Apache-2.0，commit `3384d04`）源码，顶栏/底栏的液态玻璃材质。接线、编译基线（compileSdk 37）与本地兼容改动见 `docs/VITRO_LIQUID_GLASS.md`。许可证副本 `io/LICENSE-vitro.txt`。 |
 
 ### ui/theme
 
