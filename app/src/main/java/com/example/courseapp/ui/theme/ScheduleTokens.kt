@@ -43,7 +43,6 @@ object ScheduleMotion {
 
     /** 所有可按控件按下时的压缩比例：0.96 的微缩配合内阴影形成"按进去"的物理反馈。 */
     const val PressedScale = 0.96f
-    const val SelectedScale = 1.08f
 }
 
 data class SchedulePalette(

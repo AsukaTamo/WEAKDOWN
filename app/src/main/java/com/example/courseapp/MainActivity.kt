@@ -47,6 +47,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.positionInWindow
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
@@ -56,6 +57,7 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
+import com.example.courseapp.ui.components.ElasticTabIndicator
 import com.example.courseapp.ui.components.WeekMorphOverlay
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.components.keepPlacedWhen
@@ -259,6 +261,13 @@ fun CourseApp(
         NavItem(Screen.Manage, "添加", Icons.Filled.AddCircle, Icons.Outlined.AddCircle),
         NavItem(Screen.Profile, "我的", Icons.Filled.Person, Icons.Outlined.Person)
     )
+
+    // 底栏指示器：先记录每个 Tab 胶囊在窗口中的矩形，再换算成底栏内部的相对坐标。
+    // 用窗口坐标做基线，底栏上下移动（导航栏 inset 变化）时也不会错位。
+    val bottomTabBoundsInWindow = remember {
+        mutableStateListOf<Rect>().apply { repeat(navItems.size) { add(Rect.Zero) } }
+    }
+    var bottomBarOrigin by remember { mutableStateOf<Offset?>(null) }
 
     val topBarTitle = when (currentScreen) {
         Screen.Schedule -> activeSemester?.name ?: "未设置学期"
@@ -546,6 +555,22 @@ fun CourseApp(
             }
         },
         bottomBar = {
+            // 指示器矩形换到底栏内部坐标：原点未知（首帧）或 Tab 未测量时先给 Rect.Zero，
+            // 组件会先不绘制，等测量完成后再落位，避免第一帧闪一个错误位置。
+            val tabBounds = remember(bottomTabBoundsInWindow.toList(), bottomBarOrigin) {
+                val origin = bottomBarOrigin
+                if (origin == null) {
+                    List(navItems.size) { Rect.Zero }
+                } else {
+                    bottomTabBoundsInWindow.map { rect ->
+                        if (rect.width <= 0f) {
+                            Rect.Zero
+                        } else {
+                            rect.translate(-origin.x, -origin.y)
+                        }
+                    }
+                }
+            }
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -593,7 +618,17 @@ fun CourseApp(
                             },
                             shape = RoundedCornerShape(28.dp)
                         )
+                        .onGloballyPositioned { coords ->
+                            val origin = coords.positionInWindow()
+                            if (bottomBarOrigin != origin) bottomBarOrigin = origin
+                        }
                 ) {
+                    // 液态拉伸指示器放在内容下方：图标/文字始终压在胶囊之上。
+                    ElasticTabIndicator(
+                        selectedIndex = navItems.indexOfFirst { it.screen == currentScreen },
+                        tabBounds = tabBounds,
+                        color = palette.weekChip
+                    )
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
@@ -601,16 +636,8 @@ fun CourseApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        navItems.forEach { item ->
+                        navItems.forEachIndexed { index, item ->
                             val isSelected = currentScreen == item.screen
-                            val selectedScale by animateFloatAsState(
-                                targetValue = if (isSelected) ScheduleMotion.SelectedScale else 1f,
-                                animationSpec = tween(
-                                    durationMillis = ScheduleMotion.StandardMillis,
-                                    easing = ScheduleMotion.EmphasizedEasing
-                                ),
-                                label = "bottomNavSelectedScale"
-                            )
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
@@ -620,15 +647,16 @@ fun CourseApp(
                             ) {
                                 Column(
                                     modifier = Modifier
-                                        .graphicsLayer {
-                                            scaleX = selectedScale
-                                            scaleY = selectedScale
+                                        // 记录胶囊真实矩形，供底栏指示器定位；放在按压缩放外层，
+                                        // 按下时 0.96 的缩放不会让指示器跟着抖。
+                                        .onGloballyPositioned { coords ->
+                                            val rect = coords.boundsInRoot()
+                                            if (bottomTabBoundsInWindow[index] != rect) {
+                                                bottomTabBoundsInWindow[index] = rect
+                                            }
                                         }
                                         .elasticPress(RoundedCornerShape(22.dp))
                                         .clip(RoundedCornerShape(22.dp))
-                                        .background(
-                                            if (isSelected) palette.weekChip else Color.Transparent
-                                        )
                                         .clickable {
                                             currentScreen = item.screen
                                             // 底部「+」直接进添加表单，补上首页 FAB 移除后的添加入口
@@ -636,10 +664,9 @@ fun CourseApp(
                                                 manageViewModel.switchTab(1)
                                             }
                                         }
-                                        .padding(
-                                            horizontal = if (isSelected) 18.dp else 10.dp,
-                                            vertical = 6.dp
-                                        ),
+                                        // 选中态不再修改内边距：胶囊宽度保持稳定，
+                                        // 指示器只需要处理位置/宽度，不会因为选中而二次撑开。
+                                        .padding(horizontal = 18.dp, vertical = 6.dp),
                                     horizontalAlignment = Alignment.CenterHorizontally,
                                     verticalArrangement = Arrangement.Center
                                 ) {
