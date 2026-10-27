@@ -15,20 +15,19 @@ import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
-import androidx.compose.foundation.border
 import androidx.compose.foundation.background
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
 import androidx.compose.material3.*
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -53,6 +52,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -72,6 +72,12 @@ import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ImportViewModel
 import com.example.courseapp.viewmodel.ManageViewModel
 import com.example.courseapp.viewmodel.ScheduleViewModel
+import io.github.itshedimisawi.vitro.Glass
+import io.github.itshedimisawi.vitro.GlassAppearance
+import io.github.itshedimisawi.vitro.LocalGlassDarkTheme
+import io.github.itshedimisawi.vitro.glassBackdrop
+import io.github.itshedimisawi.vitro.glassEffect
+import io.github.itshedimisawi.vitro.rememberGlassBackdrop
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -189,24 +195,27 @@ class MainActivity : ComponentActivity() {
             }
 
             CourseAppTheme(darkTheme = isDarkMode) {
-                Box(modifier = Modifier.fillMaxSize()) {
-                    CourseApp(
-                        scheduleViewModel = scheduleViewModel,
-                        isDarkMode = isDarkMode,
-                        homeEntranceEpoch = homeEntranceEpoch
-                    )
-
-                    if (showWeakdownSplash) {
-                        WeakdownSplashOverlay(
-                            onFinished = {
-                                showWeakdownSplash = false
-                                if (homeEntranceEpoch == 0) homeEntranceEpoch = 1
-                            },
-                            // 启动页开始淡出前就放行首页，让卡片入场和遮罩退场重叠
-                            onRevealStart = {
-                                if (homeEntranceEpoch == 0) homeEntranceEpoch = 1
-                            }
+                // Vitro 的玻璃默认跟系统深色；这里显式喂给它 App 自己的主题开关
+                CompositionLocalProvider(LocalGlassDarkTheme provides isDarkMode) {
+                    Box(modifier = Modifier.fillMaxSize()) {
+                        CourseApp(
+                            scheduleViewModel = scheduleViewModel,
+                            isDarkMode = isDarkMode,
+                            homeEntranceEpoch = homeEntranceEpoch
                         )
+
+                        if (showWeakdownSplash) {
+                            WeakdownSplashOverlay(
+                                onFinished = {
+                                    showWeakdownSplash = false
+                                    if (homeEntranceEpoch == 0) homeEntranceEpoch = 1
+                                },
+                                // 启动页开始淡出前就放行首页，让卡片入场和遮罩退场重叠
+                                onRevealStart = {
+                                    if (homeEntranceEpoch == 0) homeEntranceEpoch = 1
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -279,17 +288,68 @@ fun CourseApp(
     val showWeekSelector = currentScreen == Screen.Schedule
     val hasBackground = currentScreen == Screen.Schedule && backgroundUri.isNotEmpty()
     val palette = schedulePalette(isDarkMode, hasBackground)
-            // 大色块做颜色过渡，换主题时顶栏/底栏是"化"过去的，不是直接跳
-            val animatedTopSurface by animateColorAsState(
-                targetValue = palette.topSurface,
-                animationSpec = tween(600, easing = FastOutSlowInEasing),
-                label = "topSurfaceColor"
+    val density = LocalDensity.current
+    val topInset = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+    val bottomInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    var measuredTopBarPx by remember { mutableIntStateOf(0) }
+    var measuredBottomBarPx by remember { mutableIntStateOf(0) }
+    val fallbackTopBar = topInset + 16.dp + ScheduleDimensions.TopBarHeight
+    val fallbackBottomBar = bottomInset + 14.dp + 72.dp
+    val topBarContentPadding = maxOf(
+        fallbackTopBar,
+        with(density) { measuredTopBarPx.toDp() }
+    )
+    val bottomBarContentPadding = maxOf(
+        fallbackBottomBar,
+        with(density) { measuredBottomBarPx.toDp() }
+    )
+    // The bars remain floating overlays. Their occupied area is fed back to page content as
+    // scrollable padding, so course rows can pass behind the glass while the first/last rows stay
+    // reachable. This mirrors Scaffold's measured insets without putting the schedule in a
+    // clipped content slot.
+    val pagePadding = remember(topInset, bottomInset, measuredTopBarPx, measuredBottomBarPx) {
+        PaddingValues(
+            top = topBarContentPadding,
+            bottom = bottomBarContentPadding
+        )
+    }
+    // 主页面视口整体下移到顶栏外壳的上沿（状态栏 + 顶栏外边距），并相应扣掉顶部留白：
+    // 滚动内容仍然可以从顶栏玻璃后面经过，但不会画到状态栏图标底下，也不会在玻璃上方露出被裁断的卡片。
+    // 初始布局位置与之前完全一致：视口偏移 + (顶部留白 - 视口偏移)。
+    val pageViewportTop = topInset + TopBarTopGap
+    val mainPagePadding = remember(pagePadding, pageViewportTop) {
+        PaddingValues(
+            top = (pagePadding.calculateTopPadding() - pageViewportTop).coerceAtLeast(0.dp),
+            bottom = pagePadding.calculateBottomPadding()
+        )
+    }
+
+    // ── 液态玻璃（Vitro）：背景层标成 backdrop，顶栏/底栏都以它为折射源 ──
+    val glassBackdrop = rememberGlassBackdrop()
+    val glassMaterial = remember(isDarkMode) {
+        // 浅色：乳白玻璃（原型图里顶栏/底栏都是上白下淡的奶白玻璃），带一点色散
+        // 深色：烟熏玻璃，用深色染色压下去，白字才有对比度
+        if (isDarkMode) {
+            Glass.Regular.copy(
+                appearance = GlassAppearance.Dark,
+                tint = Color(0xFF0B0B10).copy(alpha = 0.72f),
+                brightness = 0.55f,
+                dispersion = 0.05f,
+                blurRadius = 7.dp
             )
-            val animatedBottomSurface by animateColorAsState(
-                targetValue = palette.bottomSurface,
-                animationSpec = tween(600, easing = FastOutSlowInEasing),
-                label = "bottomSurfaceColor"
+        } else {
+            Glass.Regular.copy(
+                appearance = GlassAppearance.Light,
+                brightness = 0.30f,
+                dispersion = 0.05f,
+                blurRadius = 7.dp
             )
+        }
+    }
+    // 玻璃底上的次级文字（学期名 / 未选中的 Tab）：muted 灰在亮玻璃上只有 2.6:1，
+    // 换成同色系压深一档的 textSecondary，暗玻璃继续用原来的 muted
+    val barMutedInk = if (isDarkMode) palette.topMuted else appColors(false).textSecondary
+    val navInactiveInk = if (isDarkMode) palette.navInactive else appColors(false).textSecondary
 
     // 返回键：先关周选择弹层 / 回到首页，最后才交给系统退出。
     BackHandler(
@@ -302,30 +362,121 @@ fun CourseApp(
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(
-                Brush.verticalGradient(
-                    listOf(
-                        palette.appCanvas,
-                        palette.appCanvasEnd
+    Box(modifier = Modifier.fillMaxSize()) {
+        // 背景层：底色 + 壁纸 + 遮罩。玻璃从这一层采样，所以它必须画在栏之前、
+        // 并且单独成为一个 backdrop（玻璃自己不在这一层里）。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .glassBackdrop(glassBackdrop)
+        ) {
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            listOf(
+                                palette.appCanvas,
+                                palette.appCanvasEnd
+                            )
+                        )
                     )
+            )
+            if (hasBackground) {
+                ImmersiveScheduleBackground(
+                    backgroundUri = backgroundUri,
+                    scrimAlpha = scrimAlpha,
+                    isDarkMode = isDarkMode
                 )
-            )
-    ) {
-        if (hasBackground) {
-            ImmersiveScheduleBackground(
-                backgroundUri = backgroundUri,
-                scrimAlpha = scrimAlpha,
-                isDarkMode = isDarkMode
-            )
+            }
+
+            // Page content belongs to the backdrop recording. The bars below are siblings, so
+            // Vitro samples the actual scrolling course grid instead of a static wallpaper layer.
+            // The viewport starts at the floating bar's outer top edge (below the status bar), so
+            // scrolled content never collides with the system status icons; it still passes behind
+            // the glass bar and is sampled by Vitro.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = pageViewportTop)
+            ) {
+                listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
+                    key(screen) {
+                        val visible = currentScreen == screen
+                        val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .keepPlacedWhen(visible)
+                        ) {
+                            when (screen) {
+                                Screen.Schedule -> ScheduleScreen(
+                                    viewModel = scheduleViewModel,
+                                    onNavigateToAdd = {
+                                        currentScreen = Screen.Manage
+                                        manageViewModel.switchTab(1)
+                                    },
+                                    onNavigateToImport = { currentScreen = Screen.WebImport },
+                                    drawBackground = false,
+                                    contentPadding = mainPagePadding,
+                                    entranceEpoch = homeEntranceEpoch
+                                )
+                                Screen.Manage -> Box(Modifier.fillMaxSize().padding(mainPagePadding)) {
+                                    ManageScreen(
+                                        viewModel = manageViewModel,
+                                        isDarkMode = screenDarkMode,
+                                        onNavigateToImport = { currentScreen = Screen.WebImport }
+                                    )
+                                }
+                                Screen.Profile -> Box(Modifier.fillMaxSize().padding(mainPagePadding)) {
+                                    ProfileScreen(
+                                        onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
+                                        onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
+                                        isDarkMode = screenDarkMode,
+                                        showScheduleGuides = showScheduleGuides,
+                                        onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
+                                        onTimeSlotSettings = { showTimeSlotSettings = true }
+                                    )
+                                }
+                                else -> Unit
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (currentScreen == Screen.WebImport) {
+                Box(Modifier.fillMaxSize().padding(pagePadding)) {
+                    WebImportScreen(
+                        isDarkMode = isDarkMode,
+                        onBack = { currentScreen = Screen.Schedule },
+                        onParseHtml = { html ->
+                            importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
+                            currentScreen = Screen.ImportPreview
+                        }
+                    )
+                }
+            }
+
+            if (currentScreen == Screen.ImportPreview) {
+                Box(Modifier.fillMaxSize().padding(pagePadding)) {
+                    ImportPreviewScreen(
+                        viewModel = importViewModel,
+                        isDarkMode = isDarkMode,
+                        onBack = { currentScreen = Screen.WebImport },
+                        onImportComplete = {
+                            currentScreen = Screen.Schedule
+                            importViewModel.clearState()
+                        }
+                    )
+                }
+            }
         }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        topBar = {
+            // 顶栏 / 底栏不再放进 Material3 Scaffold：Scaffold 内部的 Surface 是全屏的，并且自带一个
+            // pointerInput 节点，会在命中测试里赢得整屏，导致 backdrop 里的页面永远收不到触摸
+            // （只有 Surface 内部的栏按钮能响应）。直接作为根 Box 的子节点摆放，位置与原来一致，
+            // 页面重新拿到命中测试。
             var themeIconRotation by remember { mutableFloatStateOf(0f) }
             val animatedThemeIconRotation by animateFloatAsState(
                 targetValue = themeIconRotation,
@@ -335,58 +486,20 @@ fun CourseApp(
 
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 8.dp)
+                    .padding(start = 14.dp, top = TopBarTopGap, end = 14.dp, bottom = 8.dp)
+                    .onGloballyPositioned { measuredTopBarPx = it.size.height }
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(ScheduleDimensions.TopBarHeight)
-                        .shadow(
-                            elevation = if (hasBackground) 24.dp else 14.dp,
-                            shape = RoundedCornerShape(28.dp),
-                            ambientColor = Color.Black.copy(alpha = if (hasBackground) 0.24f else 0.16f),
-                            spotColor = Color.Black.copy(alpha = if (hasBackground) 0.34f else 0.24f)
-                        )
-                        .clip(RoundedCornerShape(28.dp))
-                        // 近似液态玻璃：磨砂玻璃底 + 顶部高光 + 彩虹描边
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    animatedTopSurface.copy(alpha = 0.72f),
-                                    animatedTopSurface.copy(alpha = 0.52f)
-                                )
-                            )
-                        )
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    Color.White.copy(alpha = if (isDarkMode) 0.10f else 0.30f),
-                                    Color.Transparent
-                                )
-                            )
-                        )
-                        .border(
-                            width = 0.9.dp,
-                            brush = Brush.sweepGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.55f),
-                                    Color(0x66FF6047),
-                                    Color(0x6600D2D3),
-                                    Color(0x66A29BFE),
-                                    Color.White.copy(alpha = 0.55f)
-                                )
-                            ),
-                            shape = RoundedCornerShape(28.dp)
-                        )
-                        .border(
-                            width = if (hasBackground) 0.7.dp else 0.5.dp,
-                            color = if (isDarkMode) {
-                                Color.White.copy(alpha = if (hasBackground) 0.08f else 0.04f)
-                            } else {
-                                Color.White.copy(alpha = if (hasBackground) 0.22f else 0.46f)
-                            },
+                        // 液态玻璃：折射 / 色散 / 高光 / 阴影全部由 Vitro 的着色器负责
+                        .glassEffect(
+                            backdrop = glassBackdrop,
+                            glass = glassMaterial,
                             shape = RoundedCornerShape(28.dp)
                         )
                         .padding(horizontal = 18.dp, vertical = 6.dp)
@@ -466,7 +579,7 @@ fun CourseApp(
                                 },
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
-                                color = palette.topMuted,
+                                color = barMutedInk,
                                 letterSpacing = 0.2.sp
                             )
                             Spacer(modifier = Modifier.height(4.dp))
@@ -553,8 +666,8 @@ fun CourseApp(
                     }
                 }
             }
-        },
-        bottomBar = {
+
+            // 底栏
             // 指示器矩形换到底栏内部坐标：原点未知（首帧）或 Tab 未测量时先给 Rect.Zero，
             // 组件会先不绘制，等测量完成后再落位，避免第一帧闪一个错误位置。
             val tabBounds = remember(bottomTabBoundsInWindow.toList(), bottomBarOrigin) {
@@ -573,49 +686,19 @@ fun CourseApp(
             }
             Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(start = 28.dp, top = 4.dp, end = 28.dp, bottom = 10.dp)
+                    .onGloballyPositioned { measuredBottomBarPx = it.size.height }
             ) {
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(72.dp)
-                        .shadow(
-                            elevation = if (hasBackground) 26.dp else 18.dp,
-                            shape = RoundedCornerShape(28.dp),
-                            ambientColor = Color.Black.copy(alpha = if (hasBackground) 0.24f else 0.16f),
-                            spotColor = Color.Black.copy(alpha = if (hasBackground) 0.34f else 0.24f)
-                        )
-                        .clip(RoundedCornerShape(28.dp))
-                        .background(
-                            Brush.verticalGradient(
-                                listOf(
-                                    animatedBottomSurface.copy(alpha = 0.74f),
-                                    animatedBottomSurface.copy(alpha = 0.56f)
-                                )
-                            )
-                        )
-                        .border(
-                            width = 0.9.dp,
-                            brush = Brush.sweepGradient(
-                                listOf(
-                                    Color.White.copy(alpha = 0.50f),
-                                    Color(0x55FF6047),
-                                    Color(0x5500D2D3),
-                                    Color(0x55A29BFE),
-                                    Color.White.copy(alpha = 0.50f)
-                                )
-                            ),
-                            shape = RoundedCornerShape(28.dp)
-                        )
-                        .border(
-                            width = 0.7.dp,
-                            color = if (isDarkMode) {
-                                Color.White.copy(alpha = if (hasBackground) 0.08f else 0.04f)
-                            } else {
-                                Color.White.copy(alpha = if (hasBackground) 0.24f else 0.62f)
-                            },
+                        .glassEffect(
+                            backdrop = glassBackdrop,
+                            glass = glassMaterial,
                             shape = RoundedCornerShape(28.dp)
                         )
                         .onGloballyPositioned { coords ->
@@ -677,7 +760,7 @@ fun CourseApp(
                                         Icon(
                                             imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
                                             contentDescription = item.label,
-                                            tint = if (isSelected) palette.weekChipContent else palette.navInactive,
+                                            tint = if (isSelected) palette.weekChipContent else navInactiveInk,
                                             modifier = Modifier.size(20.dp)
                                         )
                                     }
@@ -686,7 +769,7 @@ fun CourseApp(
                                         text = item.label,
                                         fontSize = 10.sp,
                                         fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                        color = if (isSelected) palette.weekChipContent else palette.navInactive,
+                                        color = if (isSelected) palette.weekChipContent else navInactiveInk,
                                         letterSpacing = 0.2.sp
                                     )
                                 }
@@ -695,79 +778,6 @@ fun CourseApp(
                     }
                 }
             }
-        }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // 三个主页面常驻组合：切 Tab 只切可见性，不再整屏重建（重建会有 ~200ms 首帧尖峰）。
-            // 隐藏页只 measure 不 place，所以既不绘制也不参与命中测试。
-            listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
-                key(screen) {
-                    val visible = currentScreen == screen
-                    // 可见页立刻跟主题，隐藏页用延迟值，避免一次切换让三整屏同时重组
-                    val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .keepPlacedWhen(visible)
-                    ) {
-                        when (screen) {
-                            Screen.Schedule -> ScheduleScreen(
-                                viewModel = scheduleViewModel,
-                                onNavigateToAdd = {
-                                    currentScreen = Screen.Manage
-                                    manageViewModel.switchTab(1)
-                                },
-                                onNavigateToImport = { currentScreen = Screen.WebImport },
-                                drawBackground = false,
-                                entranceEpoch = homeEntranceEpoch
-                            )
-                            Screen.Manage -> ManageScreen(
-                                viewModel = manageViewModel,
-                                isDarkMode = screenDarkMode,
-                                onNavigateToImport = { currentScreen = Screen.WebImport }
-                            )
-                            Screen.Profile -> ProfileScreen(
-                                onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                                onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
-                                isDarkMode = screenDarkMode,
-                                showScheduleGuides = showScheduleGuides,
-                                onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
-                                onTimeSlotSettings = { showTimeSlotSettings = true }
-                            )
-                            else -> Unit
-                        }
-                    }
-                }
-            }
-
-            if (currentScreen == Screen.WebImport) {
-                WebImportScreen(
-                    isDarkMode = isDarkMode,
-                    onBack = { currentScreen = Screen.Schedule },
-                    onParseHtml = { html ->
-                        importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
-                        currentScreen = Screen.ImportPreview
-                    }
-                )
-            }
-
-            if (currentScreen == Screen.ImportPreview) {
-                ImportPreviewScreen(
-                    viewModel = importViewModel,
-                    isDarkMode = isDarkMode,
-                    onBack = { currentScreen = Screen.WebImport },
-                    onImportComplete = {
-                        currentScreen = Screen.Schedule
-                        importViewModel.clearState()
-                    }
-                )
-            }
-        }
-    }
 
     // Time slot settings overlay
     AnimatedVisibility(
@@ -908,3 +918,6 @@ private fun Modifier.keepPlacedWhen(visible: Boolean): Modifier = this.layout { 
 
 /** 揭示动画时长（spring 收尾），隐藏页在这之后才跟着换主题。 */
 private const val ThemeRevealDelayMillis = 520L
+
+/** 顶栏玻璃外壳与状态栏、屏幕左右边缘之间的留白；页面视口也从这个上沿开始裁断。 */
+private val TopBarTopGap = 8.dp

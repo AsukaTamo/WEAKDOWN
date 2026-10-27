@@ -1,7 +1,11 @@
 # 液态玻璃（Liquid Glass）待办清单
 
-> 状态：**近似版已上线**（磨砂底 + 顶部高光 + 彩虹描边），真着色器（SDF 折射 / 色散 / GGX）尚未接通。
-> 本文档记录已经排除的假设、剩余实验、以及真着色器路线的完整参数表，方便下次继续。
+> **状态：自研着色器路线已停止，改用 Vitro。**
+> 现状见 [VITRO_LIQUID_GLASS.md](VITRO_LIQUID_GLASS.md)：材质换成了 `io.github.itshedimisawi.vitro`
+> 的 AGSL 液态玻璃（源码已 vendor 进本仓库），`ui/components/LiquidGlass.kt` 已删除。
+>
+> 本文档保留下来只作为**历史记录**：记录自研路线已经排除的假设和踩过的坑，避免以后有人再走一遍。
+> 下面第二、三、四节是**旧路线**的内容，不再适用。
 
 ---
 
@@ -95,9 +99,10 @@ android.util.Log.d("GlassSlice", "bitmap=${bitmap.width}x${bitmap.height}")
 
 | 文件 | 内容 |
 |---|---|
-| `ui/components/LiquidGlass.kt` | 未接线的 WIP：`LiquidGlassSpec`（含 `debugSample` 调试通道）、`Modifier.liquidGlass`（AGSL 版）、`Modifier.glassSlice`（Canvas 切片版） |
-| `MainActivity.kt` | 顶栏/底栏的近似材质、主题切换揭示动画、整屏捕获（`sceneLayer`） |
-| `app/build.gradle.kts` | Kotlin 2.0.21 / Compose 1.7.4 / KSP / Hilt 2.52（`GraphicsLayer` 捕获的前提） |
+| `app/src/main/java/io/github/itshedimisawi/vitro/` | **当前有效**：vendor 进来的 Vitro（液态玻璃材质），接线说明见 `docs/VITRO_LIQUID_GLASS.md` |
+| `ui/components/LiquidGlass.kt` | 已删除（自研着色器路线，见本文档历史记录） |
+| `MainActivity.kt` | 顶栏/底栏的玻璃材质（`glassBackdrop` + `glassEffect`）、主题切换揭示动画 |
+| `app/build.gradle.kts` | compileSdk 37 / Kotlin 2.0.21 / Compose 1.7.5 / KSP / Hilt 2.52；Gradle 8.7（见 AGENT-TROUBLESHOOT.md） |
 
 ## 七、参考资料
 

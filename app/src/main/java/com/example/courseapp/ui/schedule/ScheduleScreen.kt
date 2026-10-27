@@ -57,6 +57,7 @@ fun ScheduleScreen(
     onNavigateToAdd: () -> Unit = {},
     onNavigateToImport: () -> Unit = {},
     drawBackground: Boolean = true,
+    contentPadding: PaddingValues = PaddingValues(),
     entranceEpoch: Int = 1
 ) {
     val allCourses by viewModel.allCourses.collectAsStateWithLifecycle()
@@ -210,6 +211,7 @@ fun ScheduleScreen(
                     getMinutesUntil = { viewModel.getMinutesUntilCourse(it, clock) },
                     getRemainingMinutes = { viewModel.getCourseRemainingMinutes(it, clock) },
                     scrollState = gridScrollState,
+                    contentPadding = contentPadding,
                     entranceEpoch = entranceEpoch,
                     modifier = Modifier.fillMaxSize()
                 )
@@ -370,6 +372,7 @@ private fun ScheduleGrid(
     getRemainingMinutes: (Course) -> Int = { 0 },
     entranceEpoch: Int = 1,
     scrollState: ScrollState = rememberScrollState(),
+    contentPadding: PaddingValues = PaddingValues(),
     modifier: Modifier = Modifier
 ) {
     val palette = schedulePalette(isDarkMode, hasBackground)
@@ -378,8 +381,12 @@ private fun ScheduleGrid(
 
     val periodCount = timeSlots.size
 
-    Row(
+    Column(
         modifier = modifier
+            .fillMaxSize()
+            // Keep the bar clearances in the scroll content: the initial date row starts below
+            // the top bar, then both spacers move away as the shared grid scrolls behind the glass.
+            .verticalScroll(scrollState)
             .background(bgColor)
             .then(
                 if (hasBackground) {
@@ -389,11 +396,13 @@ private fun ScheduleGrid(
                 }
             )
     ) {
+        Spacer(Modifier.height(contentPadding.calculateTopPadding()))
+
+        Row(modifier = Modifier.fillMaxWidth()) {
         // ── Time axis (sticky left) ──
         Column(
             modifier = Modifier
                 .width(TIME_AXIS_WIDTH)
-                .verticalScroll(scrollState)
                 // 节次栏做成和星期胶囊同一套圆角卡片：顶部留 7dp 与胶囊对齐，
                 // 左右各留 3dp；底部留 2dp，让最后一行时间和圆角都收得下。
                 .drawBehind {
@@ -474,7 +483,6 @@ private fun ScheduleGrid(
         Row(
             modifier = Modifier
                 .weight(1f)
-                .then(Modifier.verticalScroll(scrollState))
         ) {
             for (day in 0..6) {
                 val dayCourses = coursesByDay.getOrElse(day) { emptyList() }
@@ -568,5 +576,8 @@ private fun ScheduleGrid(
                 }
             }
         }
+        }
+
+        Spacer(Modifier.height(contentPadding.calculateBottomPadding()))
     }
 }
