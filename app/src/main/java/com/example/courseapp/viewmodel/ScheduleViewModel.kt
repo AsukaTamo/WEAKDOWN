@@ -123,9 +123,8 @@ class ScheduleViewModel @Inject constructor(
     private fun loadSemester() {
         viewModelScope.launch {
             repository.getActiveSemester().collect { semester ->
-                _activeSemester.value = semester
-                _backgroundUri.value = semester?.backgroundUri ?: ""
-                _scrimAlpha.value = semester?.scrimAlpha ?: 0.4f
+                // 先落学期开始日期，再发布 _activeSemester：calendarWeek 的 combine 会在
+                // _activeSemester 变化时立刻重算，若此时字段还是兜底值，启动瞬间会先闪一个错误周数。
                 if (semester != null) {
                     try {
                         val parts = semester.startDate.split("-")
@@ -133,11 +132,16 @@ class ScheduleViewModel @Inject constructor(
                             set(parts[0].toInt(), parts[1].toInt() - 1, parts[2].toInt(), 0, 0, 0)
                             set(Calendar.MILLISECOND, 0)
                         }
-                        // 首次进入停留在"今天属于的那一周"
-                        val calculatedWeek = calculateCalendarWeek()
-                        _currentWeek.value = calculatedWeek
-                        _visibleWeek.value = calculatedWeek
                     } catch (_: Exception) {}
+                }
+                _activeSemester.value = semester
+                _backgroundUri.value = semester?.backgroundUri ?: ""
+                _scrimAlpha.value = semester?.scrimAlpha ?: 0.4f
+                if (semester != null) {
+                    // 首次进入停留在"今天属于的那一周"
+                    val calculatedWeek = calculateCalendarWeek()
+                    _currentWeek.value = calculatedWeek
+                    _visibleWeek.value = calculatedWeek
                 }
             }
         }

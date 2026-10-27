@@ -24,7 +24,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
@@ -62,7 +62,7 @@ fun ManageScreen(
             onTabSelected = { viewModel.switchTab(it) },
             isDarkMode = isDarkMode
         )
-        Divider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
+        HorizontalDivider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
 
         // Content：两个 Tab 都常驻组合，切 Tab 只切摆放。
         // 之前用 AnimatedContent 时，切到「添加课程」要现场组合整张表单，会先卡一下再出现。

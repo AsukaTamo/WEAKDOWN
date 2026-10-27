@@ -24,32 +24,46 @@ Vitro 用的是「`glassBackdrop` 把背景内容录进 `GraphicsLayer` + 着色
 | 许可证 | Apache-2.0，副本见 `app/src/main/java/io/LICENSE-vitro.txt` |
 | 落点 | `app/src/main/java/io/github/itshedimisawi/vitro/`（34 个 .kt，包名保持上游不变） |
 
-## 三、编译基线：compileSdk 37（36 保留）
+## 三、编译基线：与上游一致（compileSdk 37）
 
-1. 本机 SDK 新增 `platforms/android-37`，来自官方 `platform-37.0_r02.zip`；
-   `platforms/android-36`、`platforms/android-36.1`、`build-tools/37.0.0` 原样保留。
-2. **该平台的 `source.properties` 需要一处本地改动**：`AndroidVersion.ApiLevel` 从 `37.0` 改成 `37`。
-   AGP 8.2.2 只认整数 API 等级，不改会直接报
-   `Failed to find Platform SDK with path: platforms;android-37`。原文件备份在同目录
-   `source.properties.bak`；以后升级到原生支持 `37.0` 次版本号的 AGP 9 时应改回。
-3. `app/build.gradle.kts`：`compileSdk = 37`（`targetSdk` 仍是 36，不改运行时行为）。
-4. `gradle.properties`：`android.suppressUnsupportedCompileSdk=36,37`
-   —— AGP 8.2.2 官方只测到 34，这行只是压掉升级提示；实际用到的最高接口是 API 33。
+| 项 | 版本 |
+|---|---|
+| Gradle | 9.6.0（wrapper 已重建，分发包走腾讯镜像） |
+| AGP | 9.4.1（内置 Kotlin，不再单独应用 `org.jetbrains.kotlin.android`） |
+| Kotlin | 2.4.21（`kotlin.plugin.compose`；AGP 内置 Kotlin 由它带到同一版本） |
+| Compose | BOM `2026.09.00` → ui / foundation / runtime `1.12.1`，material3 `1.4.0` |
+| KSP / Hilt / Room | `2.3.12` / `2.60.1` / `2.8.5` |
+| compileSdk / targetSdk / minSdk | 37 / 36 / 26 |
 
-**为什么不用上游自己的构建**：上游用 Gradle 9.6 + AGP 9.4.1 + Kotlin 2.4.21 + Compose 1.12.1。
-本机 `services.gradle.org` 的 Gradle 分发包下载卡在 0 字节（`gradle-9.6.0-bin.zip.part` 一直是 0），
-所以改成把源码 vendor 进本项目、用本项目的 Compose 1.7.5 编译。这个组合只差下面一处 API。
+1. 本机 SDK 需 `platforms/android-37`（官方 `platform-37.0_r02.zip`）与 `build-tools/37.0.0`。
+   早期为了 AGP 8.2.2 把 `AndroidVersion.ApiLevel=37.0` 改成 `37` 的本地补丁仍保留；
+   AGP 9.4.1 原生支持 API 37，重装 SDK 后若 `37.0` 也能识别，就可以去掉这个补丁。
+2. Compose 1.12.1 的 AAR 元数据写死 `minCompileSdk=37`、`minAndroidGradlePluginVersion=9.1.0`，
+   所以 **AGP 不能停留在 8.x**；本仓库直接对齐上游的 AGP 9.4.1 + Gradle 9.6。
+3. AGP 9 默认启用内置 Kotlin：`app/build.gradle.kts` 去掉了 `org.jetbrains.kotlin.android`
+   和 `android.kotlinOptions {}`，`jvmTarget` 跟随 `compileOptions`（Java 21）。
+   KSP 用 `2.3.12`，Hilt 用 `2.60.1`（AGP 9 的最低兼容要求分别是 2.3.6 / 2.59.2）。
+4. `gradle.properties` 不再需要 `android.suppressUnsupportedCompileSdk`；
+   `gradlew.bat` 的坏 wrapper jar 已用 Gradle 9.6 重新生成，现在可直接运行 `.\gradlew.bat ...`。
+5. 未使用的 `navigation-compose` 与 `accompanist-systemuicontroller` 依赖已移除（源码中没有引用）。
+   `hiltViewModel` 改用新包 `androidx.hilt.lifecycle.viewmodel.compose`。
 
-## 四、和上游的唯一差异
+## 四、与上游一致（兼容改动已撤回）
 
-`internal/node/BackdropNode.kt`、`internal/node/ScrollEdgeNode.kt`：
+之前为了在 Compose 1.7.5 上编译，删掉了 `internal/node/BackdropNode.kt`、
+`internal/node/ScrollEdgeNode.kt` 里的 `UnplacedAwareModifierNode` 与 `onUnplaced()`。
+升级到 Compose 1.12.1 后已按上游原样恢复：
 
-- 删掉 `UnplacedAwareModifierNode` 接口和 `onUnplaced()` —— 该接口是 Compose 1.9 才引入的，
-  当前项目是 1.7.5；
-- 影响面：`onUnplaced()` 只做 `reader.pause()`（暂停按背景亮度取材质）。本项目对两条栏
-  **强制指定 `GlassAppearance`**，不会去读 tone，所以这处暂停有没有都无所谓。
+```kotlin
+// Unplaced content is not drawn, so there is nothing to read until it is placed again.
+override fun onUnplaced() {
+    reader.pause()
+}
+```
 
-升级 Compose 之后可以把这两处改动撤回。
+vendor 源码现在与上游 commit `3384d04` 完全一致，不再有本地兼容差异；
+末尾的 `onUnplaced()` 会暂停按背景亮度取材质的 `ToneReader`，本项目强制指定
+`GlassAppearance` 时它不影响视觉。
 
 ## 五、接线方式
 
@@ -113,16 +127,17 @@ Box(Modifier.fillMaxSize()) {
 
 | 项 | 结果 |
 |---|---|
-| `:app:assembleDebug`（compileSdk 37） | 通过 |
-| `:app:testDebugUnitTest` | 通过 |
-| 真机 `10CG5J0Q0F004E7` 冷启动截图 | 浅色 / 深色两套栏材质正常，数值与原型对齐（见上表） |
-| 真机交互回归（2026-10-27，修复 Scaffold 命中测试后） | 首页/管理/我的页纵向滚动、课程点击与返回、底部 Tab、周面板、横向翻周、主题切换、作息设置页全部通过 |
+| `.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest`（AGP 9.4.1 / Gradle 9.6 / Compose 1.12.1） | 通过 |
+| 真机 `10CG5J0Q0F004E7` 冷启动截图 | 浅 / 深两套栏材质与 1.7.5 基线一致，数值仍与原型对齐（见上表） |
+| 真机交互回归（2026-10-27，Compose 1.12.1） | 首页/管理/我的页纵向滚动、课程点击与详情返回、长按菜单、底部 Tab、周面板、横向翻周、主题切换、作息设置页全部通过 |
+| 启动周数 | 冷启动直接显示「第 9 周」，不再先闪兜底日期的「第 18 周」 |
 | 滚动 + 玻璃动态折射 | 课程色块与文字从顶栏/底栏后方经过，玻璃内采样随内容移动，栏内无黑块或固定纹理 |
-| 纵向滚动的 `gfxinfo` | p50 11ms / p90 16ms / p99 19ms，janky 2.81%，missed vsync 0，GPU p90 7ms |
-| 滚动 + 横向翻周的 `gfxinfo` | p50 12ms / p90 18ms / p99 32ms，janky 6.70%，missed vsync 1，GPU p90 7ms |
+| 纵向滚动的 `gfxinfo`（Compose 1.12.1） | p50 12ms / p90 15ms / p99 20ms，janky 1.86%，missed vsync 0，GPU p90 7ms |
+| 滚动 + 横向翻周的 `gfxinfo`（Compose 1.12.1） | p50 10ms / p90 15ms / p99 19ms，janky 2.17%，missed vsync 1，GPU p90 8ms |
+| `logcat -b crash` | 无本应用 FATAL / ANR |
 
-最后两组数字是当前布局（课程内容已纳入 backdrop）的实测；横向翻周那一组包含页面切换动画，
-不代表纯滚动性能。旧记录中的 p50 8ms / p90 17ms 只代表首次接线、页面尚未进入 backdrop 时的历史基线。
+上一轮 Compose 1.7.5 的纵向滚动是 p90 16ms / janky 2.81%，混合翻周是 p90 18ms / janky 6.70%；
+升级后两组都更低。横向翻周仍包含页面切换动画，不代表纯滚动性能。
 
 交互回归必须连同命中测试一起验：栏虽然能点，不代表页面能收到触摸。验收时至少覆盖首页滚动、
 课程点击/返回、管理/我的页列表滚动、普通设置按钮、横向翻周和玻璃内动态采样；没有连接设备时
@@ -135,14 +150,14 @@ Android 13（API 33）及以上应使用 Vitro 的 AGSL 动态折射；Android 1
 
 - 课程详情抽屉、周选择面板套同一个 `backdrop`（现在仍是实色面板）；
 - `glassEffectContainer` 让「顶栏 + 周数胶囊」融合成一整块玻璃；
-- `scrollEdgeEffect`（内容滚到栏下渐隐）仍可作为后续增强；当前先保证课表内容确实进入
-  backdrop 并能从栏后方折射，避免用渐隐效果掩盖采样范围错误；
-- 想用上游 1.12 之后的新 API，需要把 Compose 升到对应版本，并撤回第四节的兼容改动。
+- `scrollEdgeEffect`（内容滚到栏下渐隐）现在已具备条件（Compose 1.12.1 + Vitro 0.1.0），
+  可作为下一项视觉增强；当前先保证真实折射，不用渐隐掩盖采样范围错误；
+- 继续更新上游 Vitro 时，直接按第八节覆盖源码即可，不再需要重新套兼容改动。
 
 ## 八、更新上游的步骤
 
 1. clone 上游，记录新 commit；
 2. 用新的 `vitro/src/main/kotlin/io` 覆盖 `app/src/main/java/io`；
-3. 重新套用第四节的 `UnplacedAwareModifierNode` 兼容改动（Compose 升级后可省）；
+3. Compose 1.12.1 已支持 `UnplacedAwareModifierNode`，**不需要**再删接口/`onUnplaced()`；
 4. 同步 `LICENSE-vitro.txt`；
-5. `:app:assembleDebug` + 真机截图复核材质有没有变。
+5. `.\gradlew.bat :app:assembleDebug` + 真机截图复核材质有没有变。

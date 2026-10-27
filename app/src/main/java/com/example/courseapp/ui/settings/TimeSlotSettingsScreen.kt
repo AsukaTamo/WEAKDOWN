@@ -151,7 +151,7 @@ fun TimeSlotSettingsScreen(
 
                 item {
                     Spacer(modifier = Modifier.height(4.dp))
-                    Divider(color = palette.divider, thickness = 0.8.dp)
+                    HorizontalDivider(color = palette.divider, thickness = 0.8.dp)
                     Spacer(modifier = Modifier.height(12.dp))
                     Text(
                         text = "当前编辑：${activeTemplate?.name ?: "未命名"}",

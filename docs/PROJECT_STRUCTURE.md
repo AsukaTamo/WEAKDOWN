@@ -11,7 +11,7 @@ E:\WEAKDOWN
 ├─ build.gradle.kts                 # 根 Gradle 插件版本声明
 ├─ settings.gradle.kts              # 项目名、仓库源与 :app 模块声明
 ├─ gradle.properties                # Gradle/Android 构建属性
-├─ gradlew.bat                      # Windows Gradle Wrapper 入口（本机 wrapper jar 异常，见 AGENT-TROUBLESHOOT.md）
+├─ gradlew.bat                      # Windows Gradle Wrapper 入口（9.6.0，可用）
 ├─ AGENT.md                         # AI 协作规范
 ├─ AGENT-TROUBLESHOOT.md            # 可复用的排障线路
 ├─ README.md                        # 产品介绍与使用说明
@@ -62,9 +62,9 @@ WebImportScreen
 | 文件 | 作用 |
 | --- | --- |
 | `settings.gradle.kts` | 配置插件仓库、依赖仓库、根项目名 `CourseApp`，并声明唯一模块 `:app`。 |
-| `build.gradle.kts` | 根工程插件版本集中声明：Android Gradle Plugin 8.2.2、Kotlin 1.9.22、KSP 1.9.22-1.0.17、Hilt 2.50。 |
-| `gradle.properties` | Gradle 与 Android 构建属性。 |
-| `gradlew.bat` | Windows 下优先使用的 Gradle Wrapper。本机 `gradle-wrapper.jar` 不是标准 wrapper 包，需按 `AGENT-TROUBLESHOOT.md` 用缓存的 Gradle 8.7 分发包代替。 |
+| `build.gradle.kts` | 根工程插件版本集中声明：Android Gradle Plugin 9.4.1、Kotlin 2.4.21（Compose 插件；Kotlin 由 AGP 内置）、KSP 2.3.12、Hilt 2.60.1。 |
+| `gradle.properties` | Gradle 与 Android 构建属性（JVM 4G，无 `suppressUnsupportedCompileSdk`）。 |
+| `gradlew.bat` | Windows 下优先使用的 Gradle Wrapper（9.6.0，wrapper jar 已重新生成并可用，分发地址走腾讯镜像）。 |
 | `AGENT.md` | AI 协作规范，不参与 Android 编译。 |
 | `AGENT-TROUBLESHOOT.md` | Gradle wrapper、KSP、片段化 HTML 解析等排障线路。 |
 | `README.md` | 产品介绍、技术栈、构建与测试说明。 |
@@ -75,7 +75,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 | --- | --- |
-| `app/build.gradle.kts` | 应用模块配置。启用 Compose、KSP、Hilt；`compileSdk = 37（targetSdk 36）`、`minSdk = 26`、Java/Kotlin 21；依赖包含 Compose BOM 2024.01.00、Material3、Navigation Compose、Hilt 2.50、Room 2.6.1、Jsoup 1.17.2、Gson 2.10.1、Coroutines 1.7.3、SplashScreen 1.0.1。 |
+| `app/build.gradle.kts` | 应用模块配置。启用 Compose、KSP、Hilt；`compileSdk = 37（targetSdk 36）`、`minSdk = 26`、Java/Kotlin 21；依赖包含 Compose BOM 2026.09.00（ui/foundation 1.12.1、Material3 1.4.0）、Hilt 2.60.1、Room 2.8.5、Jsoup 1.17.2、Gson 2.10.1、Coroutines 1.11.0、SplashScreen 1.0.1。 |
 | `app/proguard-rules.pro` | Release 混淆规则扩展点，当前未开启 minify。 |
 | `app/src/main/AndroidManifest.xml` | 声明网络权限；注册 `.CourseApp`、`.MainActivity`、`.ui.import.WebImportActivity`；配置启动页主题、硬件加速、明文流量等。 |
 
@@ -194,7 +194,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 |---|---|
-| `io/github/itshedimisawi/vitro/**` | **Vitro 0.1.0**（Apache-2.0，commit `3384d04`）源码，顶栏/底栏的液态玻璃材质。接线、编译基线（compileSdk 37）与本地兼容改动见 `docs/VITRO_LIQUID_GLASS.md`。许可证副本 `io/LICENSE-vitro.txt`。 |
+| `io/github/itshedimisawi/vitro/**` | **Vitro 0.1.0**（Apache-2.0，commit `3384d04`）源码，顶栏/底栏的液态玻璃材质。已恢复上游的 `UnplacedAwareModifierNode`，源码与上游一致；接线与编译基线（compileSdk 37 / Compose 1.12.1）见 `docs/VITRO_LIQUID_GLASS.md`。许可证副本 `io/LICENSE-vitro.txt`。 |
 
 ### ui/theme
 

@@ -33,7 +33,7 @@ import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.ui.components.AppSnackbar
@@ -534,7 +534,7 @@ private fun ScheduleGrid(
                         // Subtle horizontal separators
                         if (showGuides) {
                             for (i in 1 until periodCount) {
-                                Divider(
+                                HorizontalDivider(
                                     modifier = Modifier.offset(y = SLOT_HEIGHT * i),
                                     color = palette.gridLine,
                                     thickness = 0.5.dp

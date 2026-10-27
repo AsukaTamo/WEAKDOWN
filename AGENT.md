@@ -5,10 +5,10 @@
 ## 项目概况
 
 - 项目名称：CourseApp。
-- 技术栈：Android、Kotlin 2.0、Jetpack Compose（BOM 2024.10）、Gradle Kotlin DSL、Hilt、Room、Jsoup；网络层（Retrofit/OkHttp）已移除。
+- 技术栈：Android、Kotlin 2.4、Jetpack Compose 1.12.1（BOM 2026.09）、Gradle 9.6 / AGP 9.4.1、Gradle Kotlin DSL、Hilt、Room、Jsoup；网络层（Retrofit/OkHttp）已移除。
 - 根模块：`:app`。
-- 构建命令优先使用 Windows Gradle Wrapper：`.\gradlew.bat ...`；本机 wrapper jar 异常时改用缓存的 Gradle 8.7：
-  `& 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat' :app:assembleDebug`
+- 构建命令优先使用 Windows Gradle Wrapper：`.\gradlew.bat ...`；wrapper 已用 Gradle 9.6 重新生成，
+  分发地址指向腾讯镜像。历史文档里的「wrapper jar 异常、改用缓存 Gradle 8.7」只适用于升级前的旧版本。
 
 ## 仓库与分支规范
 
@@ -94,21 +94,21 @@
 |---|---|
 | 设备 | `10CG5J0Q0F004E7`（vivo V2520A），Android 16 / API 36，1080×2376 px，density 3.0 |
 | adb | `E:\Androidstdio_SDK\platform-tools\adb.exe` |
-| Gradle | 缓存的 Gradle 8.7（`gradlew.bat` 的 wrapper jar 异常） |
+| Gradle | `.\gradlew.bat`（wrapper 9.6.0，可用；分发包走腾讯镜像） |
 | 包名 | `com.example.courseapp` |
 
 ### 标准闭环
 
 ```powershell
-$g = 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat'
 $adb = 'E:\Androidstdio_SDK\platform-tools\adb.exe'
 
-& $g :app:assembleDebug :app:testDebugUnitTest          # 1. 构建 + 单测
-& $adb install -r 'E:\WEAKDOWN\app\build\outputs\apk\debug\app-debug.apk'  # 2. 装机
-& $adb shell am force-stop com.example.courseapp         # 3. 冷启动，保证跑的是新代码
+.\gradlew.bat :app:assembleDebug :app:testDebugUnitTest  # 1. 构建 + 单测
+& $adb push 'E:\WEAKDOWN\app\build\outputs\apk\debug\app-debug.apk' /data/local/tmp/courseapp.apk
+& $adb shell pm install -r /data/local/tmp/courseapp.apk  # 2. 装机（绕过 vivo 外部来源弹窗）
+& $adb shell am force-stop com.example.courseapp          # 3. 冷启动，保证跑的是新代码
 & $adb shell am start -n com.example.courseapp/.MainActivity
-Start-Sleep -Seconds 7                                  # 4. 等启动动画结束
-& $adb exec-out screencap -p > "$env:TEMP\shot.png"     # 5. 截图
+Start-Sleep -Seconds 7                                   # 4. 等启动动画结束
+& $adb exec-out screencap -p > "$env:TEMP\shot.png"      # 5. 截图
 ```
 
 然后直接用读图工具分析 `$env:TEMP\shot.png`。**截图必须真的看**，不能凭代码推断"应该是对的"。

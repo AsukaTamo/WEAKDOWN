@@ -22,6 +22,7 @@ import androidx.compose.ui.graphics.layer.drawLayer
 import androidx.compose.ui.node.CompositionLocalConsumerModifierNode
 import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
+import androidx.compose.ui.node.UnplacedAwareModifierNode
 import androidx.compose.ui.node.invalidateDraw
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireLayoutCoordinates
@@ -92,7 +93,7 @@ internal class ScrollEdgeNode(
     private var color: Color,
     isTopHidden: Boolean,
     isBottomHidden: Boolean,
-) : Modifier.Node(), DrawModifierNode, CompositionLocalConsumerModifierNode {
+) : Modifier.Node(), DrawModifierNode, UnplacedAwareModifierNode, CompositionLocalConsumerModifierNode {
 
     private var style by mutableStateOf(style)
     private var bars by mutableStateOf(Bars.None)
@@ -150,9 +151,10 @@ internal class ScrollEdgeNode(
         veils.clear()
     }
 
-    // Compose 1.7.5 没有 UnplacedAwareModifierNode（1.9 才引入）。
-    // 本项目强制指定 GlassAppearance，不启用按背景亮度自动选材质，
-    // 因此这里不暂停 ToneReader 即可；背景层常驻，不会被 unplace。
+    // Unplaced content is not drawn, so there is nothing to read until it is placed again.
+    override fun onUnplaced() {
+        reader.pause()
+    }
 
     /** Draws this frame's veils again in backdrop coordinates, over the glass inside the content. */
     fun DrawScope.drawVeils(blendMode: BlendMode) {

@@ -14,6 +14,7 @@ import androidx.compose.ui.node.DrawModifierNode
 import androidx.compose.ui.node.GlobalPositionAwareModifierNode
 import androidx.compose.ui.node.ModifierNodeElement
 import androidx.compose.ui.node.TraversableNode
+import androidx.compose.ui.node.UnplacedAwareModifierNode
 import androidx.compose.ui.node.requireGraphicsContext
 import androidx.compose.ui.node.requireView
 import androidx.compose.ui.platform.InspectorInfo
@@ -42,7 +43,7 @@ internal class GlassBackdropElement(
 
 internal class BackdropNode(
     var backdrop: GlassBackdrop,
-) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode, TraversableNode {
+) : Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode, UnplacedAwareModifierNode, TraversableNode {
 
     override val traverseKey: Any get() = BackdropNode
 
@@ -93,9 +94,10 @@ internal class BackdropNode(
         backdrop.coordinates = coordinates
     }
 
-    // Compose 1.7.5 没有 UnplacedAwareModifierNode（1.9 才引入）。
-    // 本项目强制指定 GlassAppearance，不启用按背景亮度自动选材质，
-    // 因此这里不暂停 ToneReader 即可；背景层常驻，不会被 unplace。
+    // Unplaced content is not drawn, so there is nothing to read until it is placed again.
+    override fun onUnplaced() {
+        reader.pause()
+    }
 
     override fun onDetach() {
         backdrop.coordinates = null

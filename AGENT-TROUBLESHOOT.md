@@ -4,6 +4,10 @@
 
 ## Gradle Wrapper 启动失败
 
+> **现状（2026-10-27）**：wrapper 已用 Gradle 9.6 重新生成，`gradle-wrapper.jar` 换成标准包，
+> `.\gradlew.bat --version` / 构建均可直接运行，分发地址为腾讯镜像的 `gradle-9.6.0-bin.zip`。
+> 下面关于 8.7 的排障记录只用于「wrapper 再次损坏」或回退旧版本时参考。
+
 ### 典型现象
 
 运行 `.\gradlew.bat ...` 时出现以下任一错误：
@@ -53,7 +57,7 @@ jar tf gradle\wrapper\gradle-wrapper.jar | Select-Object -First 40
 Get-Content -Raw gradle\wrapper\gradle-wrapper.properties
 ```
 
-本仓库目前使用 Gradle `8.7`。
+本仓库现在使用 Gradle `9.6.0`；下面的 8.7 缓存路径仅用于回退旧版本或对照历史排障。
 
 6. 如果系统没有全局 `gradle`，先查本机 Gradle wrapper 缓存：
 
@@ -181,3 +185,20 @@ Material3 的 `Scaffold` 内部是一个全屏 `Surface`，而 `Surface` 会额�
 3. 页面视口若要在状态栏以下裁断，用布局留白（会同时裁掉命中测试），不要只做绘制裁剪。
 4. 验收时先截图看视觉，再用 `adb shell input swipe` 看内容是否位移、点一个普通 `clickable`
    看回调；**栏按钮能点不能证明页面命中正常**。
+
+## AGP 9 / Compose 1.12 升级踩点
+
+- **为什么必须升**：Compose 1.12.1 的 AAR 元数据写死 `minCompileSdk=37`、
+  `minAndroidGradlePluginVersion=9.1.0`。停留在 AGP 8.x 时 `checkDebugAarMetadata` 会直接失败。
+- **工具链**：Gradle 9.6.0 + AGP 9.4.1 + Kotlin（内置）2.4.21 + Compose BOM 2026.09.00。
+- **内置 Kotlin**：AGP 9 默认启用，必须移除 `org.jetbrains.kotlin.android` 插件；
+  `android.kotlinOptions {}` 换成 `kotlin.compilerOptions {}`，或直接删掉让 jvmTarget
+  跟随 `compileOptions.targetCompatibility`。
+- **KSP / Hilt**：AGP 9 下分别需要 KSP ≥ 2.3.6、Hilt ≥ 2.59.2（本仓库用 2.3.12 / 2.60.1）。
+- **wrapper**：原 wrapper jar 损坏，可在临时目录用新 Gradle 执行
+  `gradle wrapper --gradle-version 9.6.0 --distribution-type bin --gradle-distribution-url <镜像地址>`
+  后把 `gradlew.bat` 与 `gradle/wrapper/*` 拷回仓库。
+- **装机**：vivo 会为 `adb install` 弹「外部来源应用」确认框；改用
+  `adb push` + `adb shell pm install -r` 可绕过。
+- **验证**：升级后必须重新跑真机滚动/点击/翻周/主题，并对比玻璃静态外观与帧耗时；
+  仅编译通过不代表视觉或命中测试没变。

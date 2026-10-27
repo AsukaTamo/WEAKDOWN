@@ -28,7 +28,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.ui.components.AppSnackbar
@@ -562,7 +562,7 @@ private fun SemesterDialog(
                 }
 
                 if (showAddForm) {
-                    Divider(color = palette.divider)
+                    HorizontalDivider(color = palette.divider)
                     OutlinedTextField(
                         value = newName,
                         onValueChange = { newName = it },

@@ -102,10 +102,10 @@ android.util.Log.d("GlassSlice", "bitmap=${bitmap.width}x${bitmap.height}")
 | `app/src/main/java/io/github/itshedimisawi/vitro/` | **当前有效**：vendor 进来的 Vitro（液态玻璃材质），接线说明见 `docs/VITRO_LIQUID_GLASS.md` |
 | `ui/components/LiquidGlass.kt` | 已删除（自研着色器路线，见本文档历史记录） |
 | `MainActivity.kt` | 顶栏/底栏的玻璃材质（`glassBackdrop` + `glassEffect`）、主题切换揭示动画 |
-| `app/build.gradle.kts` | compileSdk 37 / Kotlin 2.0.21 / Compose 1.7.5 / KSP / Hilt 2.52；Gradle 8.7（见 AGENT-TROUBLESHOOT.md） |
+| `app/build.gradle.kts` | compileSdk 37 / Kotlin 2.4.21 / Compose 1.12.1（BOM 2026.09.00）/ KSP 2.3.12 / Hilt 2.60.1 / Room 2.8.5；Gradle 9.6 / AGP 9.4.1 |
 
 ## 七、参考资料
 
-- [Vitro](https://github.com/itshedimisawi/vitro)：Compose + AGSL 的液态玻璃库，架构为「`glassBackdrop` 采集 + `glassEffect` 渲染」，采集在渲染线程之外；要求 `compileSdk ≥ 37`，当前项目（36）暂时无法直接使用
+- [Vitro](https://github.com/itshedimisawi/vitro)：Compose + AGSL 的液态玻璃库，架构为「`glassBackdrop` 采集 + `glassEffect` 渲染」，采集在渲染线程之外；要求 `compileSdk ≥ 37` 与 AGP 9.1+，本项目已按这套基线接入
 - [webgl-apple-liquid-glass](https://github.com/Oliverrr2424/webgl-apple-liquid-glass)：WebGL2 复刻，材质默认值与边缘捕获算法可直接借鉴
 - [LiquidGlassKit](https://github.com/DnV1eX/LiquidGlassKit)：iOS 侧实现，API 语义参考

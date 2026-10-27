@@ -27,6 +27,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativePaint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -172,7 +173,7 @@ private fun DrawScope.drawPressedDepth(shapePath: Path, depth: Float) {
                 color = Color.Black
                 blendMode = BlendMode.DstOut
             }
-            hole.asFrameworkPaint().apply {
+            hole.nativePaint.apply {
                 isAntiAlias = true
                 maskFilter = android.graphics.BlurMaskFilter(
                     blurPx,

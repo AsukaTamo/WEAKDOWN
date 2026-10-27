@@ -85,16 +85,16 @@ app/src/main/java/com/example/courseapp/
 
 | 类别 | 技术 |
 |------|------|
-| 语言 | Kotlin 1.9.22 |
-| UI | Jetpack Compose（BOM 2024.01.00）+ Material3 |
+| 语言 | Kotlin 2.4.21 |
+| UI | Jetpack Compose 1.12.1（BOM 2026.09.00）+ Material3 1.4.0 |
 | 架构 | 单 Activity + MVVM + Repository |
-| 依赖注入 | Hilt 2.50 |
-| 数据库 | Room 2.6.1（Flow 响应式查询） |
+| 依赖注入 | Hilt 2.60.1 |
+| 数据库 | Room 2.8.5（Flow 响应式查询） |
 | 网页解析 | Jsoup 1.17.2 |
 | JSON | Gson 2.10.1 |
-| 异步 | Kotlin Coroutines 1.7.3 |
-| 注解处理 | KSP 1.9.22-1.0.17 |
-| 构建 | AGP 8.2.2 / Gradle 8.7 / JDK 21 |
+| 异步 | Kotlin Coroutines 1.11.0 |
+| 注解处理 | KSP 2.3.12 |
+| 构建 | AGP 9.4.1 / Gradle 9.6.0 / JDK 21 |
 | 启动页 | SplashScreen API 1.0.1 |
 | 测试 | JUnit 4.13.2（JVM 单元测试） |
 
@@ -153,15 +153,12 @@ Room `course_db`，版本 **5**，包含四段迁移（1→2→3→4→5）。
 ./gradlew installDebug
 ```
 
-> **本机 Gradle Wrapper 异常**：仓库中的 `gradle-wrapper.jar` 不是标准 wrapper 包，`.\gradlew.bat` 会报 `ClassNotFoundException: org.gradle.wrapper.GradleWrapperMain`。排障与替代命令见 [AGENT-TROUBLESHOOT.md](AGENT-TROUBLESHOOT.md)，本机可用缓存的 Gradle 8.7 分发包执行：
->
-> ```powershell
-> & 'C:\Users\HP\.gradle\wrapper\dists\gradle-8.7-all\549ctztx5g5jixmk70l9ykwir\gradle-8.7\bin\gradle.bat' :app:assembleDebug
-> ```
+> **Gradle Wrapper**：`gradle-wrapper.jar` 已用 Gradle 9.6 重新生成，`./gradlew` / `.\gradlew.bat`
+> 可直接使用，分发包走腾讯镜像。历史排障记录见 [AGENT-TROUBLESHOOT.md](AGENT-TROUBLESHOOT.md)。
 
 **环境要求：**
 
-- Android Studio Hedgehog (2023.1.1) 或更高版本
+- Android Studio 2026.1 或更高版本（需支持 AGP 9.4）
 - JDK 21
 - Android SDK 36
 
