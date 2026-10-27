@@ -52,6 +52,7 @@ import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -287,6 +288,31 @@ fun CourseApp(
     val showWeekSelector = currentScreen == Screen.Schedule
     val hasBackground = currentScreen == Screen.Schedule && backgroundUri.isNotEmpty()
     val palette = schedulePalette(isDarkMode, hasBackground)
+    val density = LocalDensity.current
+    val topInset = with(density) { WindowInsets.statusBars.getTop(density).toDp() }
+    val bottomInset = with(density) { WindowInsets.navigationBars.getBottom(density).toDp() }
+    var measuredTopBarPx by remember { mutableIntStateOf(0) }
+    var measuredBottomBarPx by remember { mutableIntStateOf(0) }
+    val fallbackTopBar = topInset + 16.dp + ScheduleDimensions.TopBarHeight
+    val fallbackBottomBar = bottomInset + 14.dp + 72.dp
+    val topBarContentPadding = maxOf(
+        fallbackTopBar,
+        with(density) { measuredTopBarPx.toDp() }
+    )
+    val bottomBarContentPadding = maxOf(
+        fallbackBottomBar,
+        with(density) { measuredBottomBarPx.toDp() }
+    )
+    // The bars remain floating overlays. Their occupied area is fed back to page content as
+    // scrollable padding, so course rows can pass behind the glass while the first/last rows stay
+    // reachable. This mirrors Scaffold's measured insets without putting the schedule in a
+    // clipped content slot.
+    val pagePadding = remember(topInset, bottomInset, measuredTopBarPx, measuredBottomBarPx) {
+        PaddingValues(
+            top = topBarContentPadding,
+            bottom = bottomBarContentPadding
+        )
+    }
 
     // ── 液态玻璃（Vitro）：背景层标成 backdrop，顶栏/底栏都以它为折射源 ──
     val glassBackdrop = rememberGlassBackdrop()
@@ -353,6 +379,79 @@ fun CourseApp(
                     isDarkMode = isDarkMode
                 )
             }
+
+            // Page content belongs to the backdrop recording. The bars below are siblings, so
+            // Vitro samples the actual scrolling course grid instead of a static wallpaper layer.
+            listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
+                key(screen) {
+                    val visible = currentScreen == screen
+                    val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .keepPlacedWhen(visible)
+                    ) {
+                        when (screen) {
+                            Screen.Schedule -> ScheduleScreen(
+                                viewModel = scheduleViewModel,
+                                onNavigateToAdd = {
+                                    currentScreen = Screen.Manage
+                                    manageViewModel.switchTab(1)
+                                },
+                                onNavigateToImport = { currentScreen = Screen.WebImport },
+                                drawBackground = false,
+                                contentPadding = pagePadding,
+                                entranceEpoch = homeEntranceEpoch
+                            )
+                            Screen.Manage -> Box(Modifier.fillMaxSize().padding(pagePadding)) {
+                                ManageScreen(
+                                    viewModel = manageViewModel,
+                                    isDarkMode = screenDarkMode,
+                                    onNavigateToImport = { currentScreen = Screen.WebImport }
+                                )
+                            }
+                            Screen.Profile -> Box(Modifier.fillMaxSize().padding(pagePadding)) {
+                                ProfileScreen(
+                                    onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
+                                    onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
+                                    isDarkMode = screenDarkMode,
+                                    showScheduleGuides = showScheduleGuides,
+                                    onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
+                                    onTimeSlotSettings = { showTimeSlotSettings = true }
+                                )
+                            }
+                            else -> Unit
+                        }
+                    }
+                }
+            }
+
+            if (currentScreen == Screen.WebImport) {
+                Box(Modifier.fillMaxSize().padding(pagePadding)) {
+                    WebImportScreen(
+                        isDarkMode = isDarkMode,
+                        onBack = { currentScreen = Screen.Schedule },
+                        onParseHtml = { html ->
+                            importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
+                            currentScreen = Screen.ImportPreview
+                        }
+                    )
+                }
+            }
+
+            if (currentScreen == Screen.ImportPreview) {
+                Box(Modifier.fillMaxSize().padding(pagePadding)) {
+                    ImportPreviewScreen(
+                        viewModel = importViewModel,
+                        isDarkMode = isDarkMode,
+                        onBack = { currentScreen = Screen.WebImport },
+                        onImportComplete = {
+                            currentScreen = Screen.Schedule
+                            importViewModel.clearState()
+                        }
+                    )
+                }
+            }
         }
 
     Scaffold(
@@ -371,6 +470,7 @@ fun CourseApp(
                     .fillMaxWidth()
                     .statusBarsPadding()
                     .padding(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 8.dp)
+                    .onGloballyPositioned { measuredTopBarPx = it.size.height }
             ) {
                 Box(
                     modifier = Modifier
@@ -569,6 +669,7 @@ fun CourseApp(
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(start = 28.dp, top = 4.dp, end = 28.dp, bottom = 10.dp)
+                    .onGloballyPositioned { measuredBottomBarPx = it.size.height }
             ) {
                 Box(
                     modifier = Modifier
@@ -657,77 +758,10 @@ fun CourseApp(
                 }
             }
         }
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(paddingValues)
-        ) {
-            // 三个主页面常驻组合：切 Tab 只切可见性，不再整屏重建（重建会有 ~200ms 首帧尖峰）。
-            // 隐藏页只 measure 不 place，所以既不绘制也不参与命中测试。
-            listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
-                key(screen) {
-                    val visible = currentScreen == screen
-                    // 可见页立刻跟主题，隐藏页用延迟值，避免一次切换让三整屏同时重组
-                    val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .keepPlacedWhen(visible)
-                    ) {
-                        when (screen) {
-                            Screen.Schedule -> ScheduleScreen(
-                                viewModel = scheduleViewModel,
-                                onNavigateToAdd = {
-                                    currentScreen = Screen.Manage
-                                    manageViewModel.switchTab(1)
-                                },
-                                onNavigateToImport = { currentScreen = Screen.WebImport },
-                                drawBackground = false,
-                                entranceEpoch = homeEntranceEpoch
-                            )
-                            Screen.Manage -> ManageScreen(
-                                viewModel = manageViewModel,
-                                isDarkMode = screenDarkMode,
-                                onNavigateToImport = { currentScreen = Screen.WebImport }
-                            )
-                            Screen.Profile -> ProfileScreen(
-                                onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                                onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
-                                isDarkMode = screenDarkMode,
-                                showScheduleGuides = showScheduleGuides,
-                                onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
-                                onTimeSlotSettings = { showTimeSlotSettings = true }
-                            )
-                            else -> Unit
-                        }
-                    }
-                }
-            }
-
-            if (currentScreen == Screen.WebImport) {
-                WebImportScreen(
-                    isDarkMode = isDarkMode,
-                    onBack = { currentScreen = Screen.Schedule },
-                    onParseHtml = { html ->
-                        importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
-                        currentScreen = Screen.ImportPreview
-                    }
-                )
-            }
-
-            if (currentScreen == Screen.ImportPreview) {
-                ImportPreviewScreen(
-                    viewModel = importViewModel,
-                    isDarkMode = isDarkMode,
-                    onBack = { currentScreen = Screen.WebImport },
-                    onImportComplete = {
-                        currentScreen = Screen.Schedule
-                        importViewModel.clearState()
-                    }
-                )
-            }
-        }
+    ) { _ ->
+        // Pages are rendered in the backdrop sibling above. Keep the Scaffold content slot empty
+        // (a full-size transparent node here can become the top hit-test target on some Compose
+        // versions even though it draws nothing).
     }
 
     // Time slot settings overlay

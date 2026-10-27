@@ -59,10 +59,11 @@ Vitro 用的是「`glassBackdrop` 把背景内容录进 `GraphicsLayer` + 着色
 val glassBackdrop = rememberGlassBackdrop()   // 折射源
 ...
 Box(Modifier.fillMaxSize()) {
-    // 1. 背景层：底色渐变 + 壁纸 + 遮罩，整块标成 backdrop
+    // 1. 场景层：底色、壁纸、遮罩和当前课表内容统一录入 backdrop
     Box(Modifier.fillMaxSize().glassBackdrop(glassBackdrop)) { ...背景... }
 
-    // 2. 栏是它的兄弟节点，玻璃从这里采样
+    // 2. 课表内容在同一场景层内滚动，允许课程色块经过两条栏的下方
+    // 3. 栏是 backdrop 的兄弟节点，玻璃从这里采样
     Scaffold(topBar = { ... .glassEffect(glassBackdrop, glassMaterial, RoundedCornerShape(28.dp)) ... })
 }
 ```
@@ -70,6 +71,13 @@ Box(Modifier.fillMaxSize()) {
 要点：
 
 - 玻璃必须画在 backdrop **之后**、且不在 backdrop 子树里，否则会自己采样自己；
+- 壁纸、遮罩、课程网格必须属于同一个 backdrop。课表的滚动内容不能被 Scaffold 的
+  `contentPadding` 截断，否则玻璃只能看到静态背景，无法折射课程色块和文字；
+- `ScheduleScreen` 接收来自外壳的 `contentPadding`，并把顶部/底部安全区留白放进同一个
+  纵向滚动容器。这样首节、末节可完整露出，中间课程可以真实地从顶栏和底栏后方经过；
+- 外壳在首次布局前使用现有尺寸令牌与系统 inset，布局完成后用 `onGloballyPositioned`
+  记录包含安全区的顶栏/底栏实际高度，并回填给课表滚动留白，适配不同设备的系统栏尺寸；
+- 时间轴和七天课程列共享滚动状态与留白，横向周分页仍保持原有行为；
 - 原来的 `.shadow()` + 磨砂渐变 + 彩虹描边全部删掉，Vitro 自带阴影 / 高光 / 色散；
 - 底色渐变从根 `Box` 挪进了 backdrop 层 —— 没有壁纸的页面（课程管理 / 我的）也要有东西可折射。
 
@@ -106,11 +114,19 @@ Box(Modifier.fillMaxSize()) {
 | 真机 `10CG5J0Q0F004E7` 冷启动截图 | 浅色 / 深色两套栏材质正常，数值与原型对齐（见上表） |
 | 滚动 1s 的 `gfxinfo` | p50 8ms / p90 17ms / p99 23ms，janky 4.77%，missed vsync 0，GPU p90 6ms |
 
+以上记录对应首次 Vitro 接线。课程内容纳入 backdrop 后，必须重新执行同一套构建、真机和
+滚动验证；没有连接设备时不得把静态截图当作动态折射通过的证据。重点检查：课程色块和文字
+随滚动实时移动、栏内没有黑块或固定纹理、首尾课程可完整露出、栏上的按钮优先响应触控。
+
+Android 13（API 33）及以上应使用 Vitro 的 AGSL 动态折射；Android 12 及以下使用库内的
+兼容渲染路径，只验证内容可见性、交互和无崩溃，不宣称与 AGSL 具有相同的边缘光学效果。
+
 ## 七、后续可做
 
 - 课程详情抽屉、周选择面板套同一个 `backdrop`（现在仍是实色面板）；
 - `glassEffectContainer` 让「顶栏 + 周数胶囊」融合成一整块玻璃；
-- `scrollEdgeEffect`（内容滚到栏下渐隐）暂时没接：课表内容本来就被 Scaffold 挡在栏外；
+- `scrollEdgeEffect`（内容滚到栏下渐隐）仍可作为后续增强；当前先保证课表内容确实进入
+  backdrop 并能从栏后方折射，避免用渐隐效果掩盖采样范围错误；
 - 想用上游 1.12 之后的新 API，需要把 Compose 升到对应版本，并撤回第四节的兼容改动。
 
 ## 八、更新上游的步骤
