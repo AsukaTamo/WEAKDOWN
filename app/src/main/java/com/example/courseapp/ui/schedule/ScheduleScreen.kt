@@ -4,6 +4,9 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.*
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.foundation.gestures.awaitLongPressOrCancellation
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.pager.HorizontalPager
@@ -18,6 +21,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -25,9 +29,16 @@ import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.zIndex
 import android.graphics.BitmapFactory
 import androidx.compose.ui.text.font.FontWeight
@@ -56,6 +67,7 @@ fun ScheduleScreen(
     viewModel: ScheduleViewModel = hiltViewModel(),
     onNavigateToAdd: () -> Unit = {},
     onNavigateToImport: () -> Unit = {},
+    onQuickAdd: (dayOfWeek: Int, startSlot: Int, slotCount: Int) -> Unit = { _, _, _ -> },
     drawBackground: Boolean = true,
     contentPadding: PaddingValues = PaddingValues(),
     entranceEpoch: Int = 1
@@ -205,6 +217,7 @@ fun ScheduleScreen(
                     timeSlots = timeSlots,
                     onCourseClick = { viewModel.onCourseClick(it) },
                     onCourseLongClick = { contextMenuCourse = it },
+                    onQuickAddRequest = onQuickAdd,
                     isCourseActive = { viewModel.isCourseActive(it, clock) },
                     isCourseUpcoming = { viewModel.isCourseUpcoming(it, clock) },
                     getCourseProgress = { viewModel.getCourseProgress(it, clock) },
@@ -365,6 +378,7 @@ private fun ScheduleGrid(
     timeSlots: List<TimeSlot>,
     onCourseClick: (Course) -> Unit,
     onCourseLongClick: (Course) -> Unit = {},
+    onQuickAddRequest: (dayOfWeek: Int, startSlot: Int, slotCount: Int) -> Unit = { _, _, _ -> },
     isCourseActive: (Course) -> Boolean = { false },
     isCourseUpcoming: (Course) -> Boolean = { false },
     getCourseProgress: (Course) -> Float = { 0f },
@@ -380,6 +394,12 @@ private fun ScheduleGrid(
     val headerSurface = palette.headerBackdrop
 
     val periodCount = timeSlots.size
+    val density = LocalDensity.current
+    val slotHeightPx = with(density) { SLOT_HEIGHT.toPx() }
+    val haptics = LocalHapticFeedback.current
+    // 正在拖选的空白格草稿：只在松手前存在，松手后交给快捷添加面板
+    var draftSelection by remember { mutableStateOf<CourseDraftSelection?>(null) }
+    val latestQuickAddRequest by rememberUpdatedState(onQuickAddRequest)
 
     Column(
         modifier = modifier
@@ -530,6 +550,64 @@ private fun ScheduleGrid(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(SLOT_HEIGHT * periodCount)
+                            .pointerInput(day, periodCount, dayCourses, slotHeightPx) {
+                                // 空白格长按 → 直接进入"拖选节次"：按下不动只选一节，
+                                // 往下/往上拖则从起点向两端延长；松手交给快捷添加面板。
+                                awaitEachGesture {
+                                    val down = awaitFirstDown(requireUnconsumed = true)
+                                    val longPress = awaitLongPressOrCancellation(down.id)
+                                        ?: return@awaitEachGesture
+                                    val anchor = slotIndexAtOffset(
+                                        offsetY = longPress.position.y,
+                                        slotHeightPx = slotHeightPx,
+                                        periodCount = periodCount
+                                    )
+                                    val occupied = dayCourses.any { course ->
+                                        anchor >= course.startSlot &&
+                                            anchor < course.startSlot + course.slotCount
+                                    }
+                                    // 已有课程的位置保持原有长按行为（上下文菜单）
+                                    if (occupied) return@awaitEachGesture
+
+                                    longPress.consume()
+                                    haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                    draftSelection = CourseDraftSelection(day, anchor, 1)
+
+                                    var finished = false
+                                    while (!finished) {
+                                        val change = awaitPointerEvent()
+                                            .changes
+                                            .firstOrNull { it.id == longPress.id }
+                                        if (change == null || change.changedToUpIgnoreConsumed()) {
+                                            finished = true
+                                            continue
+                                        }
+                                        val target = slotIndexAtOffset(
+                                            offsetY = change.position.y,
+                                            slotHeightPx = slotHeightPx,
+                                            periodCount = periodCount
+                                        )
+                                        val (start, count) = courseDraftRange(
+                                            anchorSlot = anchor,
+                                            targetSlot = target,
+                                            periodCount = periodCount
+                                        )
+                                        val next = CourseDraftSelection(day, start, count)
+                                        if (next != draftSelection) draftSelection = next
+                                        change.consume()
+                                    }
+
+                                    val result = draftSelection
+                                    draftSelection = null
+                                    result?.let {
+                                        latestQuickAddRequest(
+                                            it.dayOfWeek,
+                                            it.startSlot,
+                                            it.slotCount
+                                        )
+                                    }
+                                }
+                            }
                     ) {
                         // Subtle horizontal separators
                         if (showGuides) {
@@ -572,6 +650,12 @@ private fun ScheduleGrid(
                                 )
                             }
                         }
+
+                        // 拖选中的幽灵卡片：和课程卡同一套圆角/描边，虚线边框表示"还没保存"
+                        val selection = draftSelection
+                        if (selection != null && selection.dayOfWeek == day) {
+                            DraftSelectionBlock(selection = selection, palette = palette)
+                        }
                     }
                 }
             }
@@ -579,5 +663,77 @@ private fun ScheduleGrid(
         }
 
         Spacer(Modifier.height(contentPadding.calculateBottomPadding()))
+    }
+}
+
+/**
+ * 长按拖选时盖在空白格上的"幽灵课程"：
+ * 位置/高度跟随当前选区，实色强调块保证在壁纸背景上也看得清；
+ * 虚线描边表示还没保存，松手后会被快捷添加面板替换。
+ */
+@Composable
+private fun DraftSelectionBlock(
+    selection: CourseDraftSelection,
+    palette: SchedulePalette
+) {
+    val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
+    val accent = palette.weekChip
+    val content = palette.weekChipContent
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(SLOT_HEIGHT * selection.slotCount)
+            .offset(y = SLOT_HEIGHT * selection.startSlot)
+            .padding(horizontal = ScheduleDimensions.CourseInset, vertical = 2.dp)
+            .clip(shape)
+            .background(
+                brush = Brush.verticalGradient(
+                    listOf(accent.copy(alpha = 0.96f), accent.copy(alpha = 0.80f))
+                ),
+                shape = shape
+            )
+            .drawWithContent {
+                drawContent()
+                val stroke = 1.4.dp.toPx()
+                drawRoundRect(
+                    color = content.copy(alpha = 0.85f),
+                    topLeft = Offset(stroke / 2f, stroke / 2f),
+                    size = Size(size.width - stroke, size.height - stroke),
+                    cornerRadius = CornerRadius(ScheduleDimensions.CourseCorner.toPx()),
+                    style = Stroke(
+                        width = stroke,
+                        pathEffect = PathEffect.dashPathEffect(
+                            intervals = floatArrayOf(6.dp.toPx(), 4.dp.toPx()),
+                            phase = 0f
+                        )
+                    )
+                )
+            }
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 3.dp, vertical = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(
+                text = "${selection.slotCount}节",
+                color = content,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.Bold,
+                lineHeight = 14.sp,
+                maxLines = 1
+            )
+            Spacer(Modifier.height(3.dp))
+            Text(
+                text = "松开添加",
+                color = content.copy(alpha = 0.76f),
+                fontSize = 8.sp,
+                lineHeight = 9.sp,
+                maxLines = 1
+            )
+        }
     }
 }
