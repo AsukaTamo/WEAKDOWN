@@ -64,6 +64,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.ElasticTabIndicator
+import com.example.courseapp.ui.components.QuickAddCourseSheet
+import com.example.courseapp.ui.components.QuickAddDraft
 import com.example.courseapp.ui.components.WeekMorphOverlay
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.components.edgeBlur
@@ -250,6 +252,8 @@ fun CourseApp(
     val showScheduleGuides by scheduleViewModel.showScheduleGuides.collectAsStateWithLifecycle()
     var showWeekDialog by remember { mutableStateOf(false) }
     var showTimeSlotSettings by remember { mutableStateOf(false) }
+    // 首页空白格长按拖选后待填写的快捷添加草稿
+    var quickAddDraft by remember { mutableStateOf<QuickAddDraft?>(null) }
     // 周选择胶囊 → 面板的形变进度（0=胶囊，1=面板），胶囊与面板共用同一条曲线
     val weekMorphProgress = remember { Animatable(0f) }
     var weekChipBounds by remember { mutableStateOf(Rect.Zero) }
@@ -454,6 +458,16 @@ fun CourseApp(
                                         manageViewModel.switchTab(1)
                                     },
                                     onNavigateToImport = { currentScreen = Screen.WebImport },
+                                    onQuickAdd = { dayOfWeek, startSlot, slotCount ->
+                                        quickAddDraft = QuickAddDraft(
+                                            dayOfWeek = dayOfWeek,
+                                            startSlot = startSlot,
+                                            slotCount = slotCount,
+                                            week = visibleWeek,
+                                            semesterId = activeSemester?.id
+                                                ?: ScheduleViewModel.DEFAULT_SEMESTER_ID
+                                        )
+                                    },
                                     drawBackground = false,
                                     contentPadding = mainPagePadding,
                                     entranceEpoch = homeEntranceEpoch
@@ -900,6 +914,20 @@ fun CourseApp(
         onSave = { scheduleViewModel.updateCourse(it) },
         onDelete = { scheduleViewModel.deleteCourse(it) },
         onCopy = { scheduleViewModel.copyCourse(it) }
+    )
+
+    // 首页空白格长按 → 拖选节次 → 快捷添加面板（同样挂在根布局，玻璃和遮罩才完整）
+    QuickAddCourseSheet(
+        draft = quickAddDraft,
+        isDarkMode = isDarkMode,
+        timeSlotLabels = remember(timeSlots) { timeSlots.flatMap { listOf(it.start, it.end) } },
+        backdrop = glassBackdrop,
+        glass = glassMaterial,
+        onDismiss = { quickAddDraft = null },
+        onCheckConflicts = { scheduleViewModel.findConflictsForNewCourse(it) },
+        onSave = { course, replaceExisting ->
+            scheduleViewModel.addCourseQuickly(course, replaceExisting)
+        }
     )
 }
 

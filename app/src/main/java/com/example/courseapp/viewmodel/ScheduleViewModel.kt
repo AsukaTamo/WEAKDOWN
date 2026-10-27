@@ -374,6 +374,34 @@ class ScheduleViewModel @Inject constructor(
         }
     }
 
+    /** 首页长按快捷添加前的冲突查询：命中项会列在"是否替换"弹窗里。 */
+    suspend fun findConflictsForNewCourse(course: Course): List<Course> =
+        repository.getConflictingCourses(
+            semester = course.semester,
+            day = course.dayOfWeek,
+            startSlot = course.startSlot,
+            endSlot = course.startSlot + course.slotCount
+        )
+
+    /**
+     * 首页长按快捷添加课程。
+     * 冲突课程已由面板确认过：replaceExisting=true 时先删掉冲突项再插入，否则直接放弃。
+     */
+    fun addCourseQuickly(course: Course, replaceExisting: Boolean = false) {
+        viewModelScope.launch {
+            val conflicts = findConflictsForNewCourse(course)
+            if (conflicts.isNotEmpty()) {
+                if (!replaceExisting) {
+                    _snackbarMessage.emit("该时段已有课程，未添加" to "error")
+                    return@launch
+                }
+                conflicts.forEach { repository.deleteCourse(it) }
+            }
+            repository.insertCourse(course)
+            _snackbarMessage.emit("已添加「${course.name}」" to "success")
+        }
+    }
+
     fun isCourseActive(course: Course, clock: ScheduleClock): Boolean =
         CourseTimeStatus.isActive(course, _timeSlots.value, clock.dayIndex, clock.minuteOfDay)
 
