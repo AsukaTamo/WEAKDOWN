@@ -47,6 +47,7 @@ fun ProfileScreen(
     showScheduleGuides: Boolean = true,
     onScheduleGuidesChange: (Boolean) -> Unit = {},
     onTimeSlotSettings: () -> Unit = {},
+    contentPadding: PaddingValues = PaddingValues(),
     viewModel: ProfileViewModel = hiltViewModel()
 ) {
     val notificationsEnabled by viewModel.notificationsEnabled.collectAsStateWithLifecycle()
@@ -87,8 +88,12 @@ fun ProfileScreen(
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent)
-                .padding(top = 8.dp)
+                .background(Color.Transparent),
+            // 首尾留白跟着玻璃栏走：列表首项在顶栏下方，滚动时可以真实经过顶/底栏玻璃。
+            contentPadding = PaddingValues(
+                top = contentPadding.calculateTopPadding() + 8.dp,
+                bottom = contentPadding.calculateBottomPadding()
+            )
         ) {
             // User header
             item {

@@ -227,5 +227,6 @@ Material3 的 `Scaffold` 内部是一个全屏 `Surface`，而 `Surface` 会额�
    并确认点空白区域仍能关闭。
 4. `glassEffectContainer(spacing = 0.dp)` **不会融合**，官方 KDoc 明确零间距只是合并绘制；
    融合需要 `spacing > 0` 且材质相同，组内会使用 lead 的 `tint`，彩色胶囊会失去强调色。
-5. `scrollEdgeEffect` 的 veil 是**全宽矩形**：开顶边时会在圆角顶栏两侧、状态栏下方留下方角暗带。
-   本仓库因此用 `isTopHidden = true` 只开底边；要顶边必须先按顶栏轮廓裁剪 veil。
+5. 顶端不要加模糊/压暗：系统状态栏 / tag 栏有自己的底色，叠加会明显偏色。本仓库只在底部
+   200dp 做真正的高斯模糊（`ui/components/EdgeBlur.kt`：从 `backdrop.layer` 重录带状区域，
+   `BlurEffect` + 原生 DstIn 渐变），顶部保持圆角裁切 + 折射。

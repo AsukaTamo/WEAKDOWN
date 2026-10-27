@@ -60,6 +60,7 @@ import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.ElasticTabIndicator
 import com.example.courseapp.ui.components.WeekMorphOverlay
 import com.example.courseapp.ui.components.elasticPress
+import com.example.courseapp.ui.components.edgeBlur
 import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
@@ -75,11 +76,9 @@ import com.example.courseapp.viewmodel.ScheduleViewModel
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
 import io.github.itshedimisawi.vitro.LocalGlassDarkTheme
-import io.github.itshedimisawi.vitro.ScrollEdgeEffectStyle
 import io.github.itshedimisawi.vitro.glassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
 import io.github.itshedimisawi.vitro.rememberGlassBackdrop
-import io.github.itshedimisawi.vitro.scrollEdgeEffect
 import kotlinx.coroutines.launch
 import dagger.hilt.android.AndroidEntryPoint
 
@@ -401,11 +400,12 @@ fun CourseApp(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(top = pageViewportTop)
-                    // 内容滚到底栏下面时按 iOS 的 scroll edge 方式压暗渐隐。
-                    // 顶边先关掉：Shaded 遮罩是全宽矩形，会越过圆角顶栏在状态栏下方留下方角暗带。
-                    .scrollEdgeEffect(
-                        style = ScrollEdgeEffectStyle.Shaded,
-                        isTopHidden = true
+                    // 顶部按顶栏同款圆角裁切：内容上滑时在两侧以圆角消失，而不是一条直边。
+                    .clip(
+                        RoundedCornerShape(
+                            topStart = PageTopCorner,
+                            topEnd = PageTopCorner
+                        )
                     )
             ) {
                 listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
@@ -429,23 +429,21 @@ fun CourseApp(
                                     contentPadding = mainPagePadding,
                                     entranceEpoch = homeEntranceEpoch
                                 )
-                                Screen.Manage -> Box(Modifier.fillMaxSize().padding(mainPagePadding)) {
-                                    ManageScreen(
-                                        viewModel = manageViewModel,
-                                        isDarkMode = screenDarkMode,
-                                        onNavigateToImport = { currentScreen = Screen.WebImport }
-                                    )
-                                }
-                                Screen.Profile -> Box(Modifier.fillMaxSize().padding(mainPagePadding)) {
-                                    ProfileScreen(
-                                        onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                                        onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
-                                        isDarkMode = screenDarkMode,
-                                        showScheduleGuides = showScheduleGuides,
-                                        onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
-                                        onTimeSlotSettings = { showTimeSlotSettings = true }
-                                    )
-                                }
+                                Screen.Manage -> ManageScreen(
+                                    viewModel = manageViewModel,
+                                    isDarkMode = screenDarkMode,
+                                    onNavigateToImport = { currentScreen = Screen.WebImport },
+                                    contentPadding = mainPagePadding
+                                )
+                                Screen.Profile -> ProfileScreen(
+                                    onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
+                                    onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
+                                    isDarkMode = screenDarkMode,
+                                    showScheduleGuides = showScheduleGuides,
+                                    onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
+                                    onTimeSlotSettings = { showTimeSlotSettings = true },
+                                    contentPadding = mainPagePadding
+                                )
                                 else -> Unit
                             }
                         }
@@ -480,6 +478,13 @@ fun CourseApp(
                 }
             }
         }
+
+            // 底部高斯模糊渐变：只模糊底栏附近的一条带状区域，顶部保持干净（避免和系统状态栏颜色冲突）。
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .edgeBlur(glassBackdrop, radius = 20.dp, edgeHeight = 200.dp)
+            )
 
             // 顶栏 / 底栏不再放进 Material3 Scaffold：Scaffold 内部的 Surface 是全屏的，并且自带一个
             // pointerInput 节点，会在命中测试里赢得整屏，导致 backdrop 里的页面永远收不到触摸
@@ -933,3 +938,6 @@ private const val ThemeRevealDelayMillis = 520L
 
 /** 顶栏玻璃外壳与状态栏、屏幕左右边缘之间的留白；页面视口也从这个上沿开始裁断。 */
 private val TopBarTopGap = 8.dp
+
+/** 页面内容顶部裁切的圆角，与顶栏玻璃的 28dp 圆角呼应。 */
+private val PageTopCorner = 28.dp

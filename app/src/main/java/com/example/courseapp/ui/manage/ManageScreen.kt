@@ -6,9 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.automirrored.filled.MenuBook
@@ -36,11 +37,15 @@ import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ManageViewModel
 
+/** TabBar 48dp + 分隔线；列表顶部留白要加上它，首项才会落在 tab 栏下面。 */
+private val ManageTabBarHeight = 48.dp + 0.8.dp
+
 @Composable
 fun ManageScreen(
     viewModel: ManageViewModel = hiltViewModel(),
     isDarkMode: Boolean = false,
-    onNavigateToImport: () -> Unit = {}
+    onNavigateToImport: () -> Unit = {},
+    contentPadding: PaddingValues = PaddingValues()
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val orphanCourseCount by viewModel.orphanCourseCount.collectAsStateWithLifecycle()
@@ -55,18 +60,15 @@ fun ManageScreen(
         }
     }
 
-    Column(modifier = Modifier.fillMaxSize()) {
-        // Tab bar
-        TabBar(
-            selectedTab = viewModel.selectedTab,
-            onTabSelected = { viewModel.switchTab(it) },
-            isDarkMode = isDarkMode
-        )
-        HorizontalDivider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
+    val listContentPadding = PaddingValues(
+        top = contentPadding.calculateTopPadding() + ManageTabBarHeight,
+        bottom = contentPadding.calculateBottomPadding()
+    )
 
+    Box(modifier = Modifier.fillMaxSize()) {
         // Content：两个 Tab 都常驻组合，切 Tab 只切摆放。
-        // 之前用 AnimatedContent 时，切到「添加课程」要现场组合整张表单，会先卡一下再出现。
-        Box(modifier = Modifier.weight(1f)) {
+        // 列表铺满整页，顶部留白由 contentPadding 提供，所以滚动时会真实经过 tab 栏和顶栏玻璃。
+        Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -85,7 +87,8 @@ fun ManageScreen(
                     onDeleteSelected = { viewModel.deleteSelected() },
                     onDeleteCourse = { viewModel.deleteCourse(it) },
                     onDuplicateCourse = { viewModel.duplicateCourse(it) },
-                    onNavigateToImport = onNavigateToImport
+                    onNavigateToImport = onNavigateToImport,
+                    contentPadding = listContentPadding
                 )
             }
             Box(
@@ -95,9 +98,27 @@ fun ManageScreen(
             ) {
                 AddCoursePanel(
                     viewModel = viewModel,
-                    isDarkMode = isDarkMode
+                    isDarkMode = isDarkMode,
+                    contentPadding = listContentPadding
                 )
             }
+        }
+
+        // Tab 栏固定悬浮在顶栏下方；列表从它下面滚过，然后进入顶栏玻璃的采样区。
+        Column(
+            modifier = Modifier
+                .align(Alignment.TopCenter)
+                .fillMaxWidth()
+                .padding(top = contentPadding.calculateTopPadding())
+                // Tab 栏压在滚动内容上，必须完全不透明，否则列表文字会从 tab 背景里透出来。
+                .background(contentPalette(isDarkMode).canvasStart)
+        ) {
+            TabBar(
+                selectedTab = viewModel.selectedTab,
+                onTabSelected = { viewModel.switchTab(it) },
+                isDarkMode = isDarkMode
+            )
+            HorizontalDivider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
         }
     }
 
@@ -182,14 +203,24 @@ private fun AllCoursesPanel(
     onDeleteSelected: () -> Unit,
     onDeleteCourse: (Course) -> Unit,
     onDuplicateCourse: (Course) -> Unit,
-    onNavigateToImport: () -> Unit
+    onNavigateToImport: () -> Unit,
+    contentPadding: PaddingValues = PaddingValues()
 ) {
     val palette = contentPalette(isDarkMode)
     var showDeleteDialog by remember { mutableStateOf<Course?>(null) }
     var showCleanupDialog by remember { mutableStateOf(false) }
     var showBatchDeleteDialog by remember { mutableStateOf(false) }
 
-    Column(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            // 留白放进滚动内容：首项落在 tab 栏下面，滚动时可以经过 tab 栏和顶栏玻璃。
+            .padding(
+                top = contentPadding.calculateTopPadding(),
+                bottom = contentPadding.calculateBottomPadding() + 20.dp
+            )
+    ) {
         // 教务导入入口（原先挂在首页 FAB 上，FAB 移除后收进课程管理）
         Row(
             modifier = Modifier
@@ -272,9 +303,11 @@ private fun AllCoursesPanel(
         }
 
         if (courses.isEmpty()) {
-            // Empty state
+            // Empty state（在滚动内容里用固定高度，避免无限高度约束）
             Box(
-                modifier = Modifier.fillMaxSize(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(360.dp),
                 contentAlignment = Alignment.Center
             ) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -300,65 +333,63 @@ private fun AllCoursesPanel(
                 }
             }
         } else {
-            // Group courses by name
+            // Group courses by name；整个页面共用一个纵向滚动容器，列表和表头都会经过顶栏玻璃。
             val grouped = courses.groupBy { it.name }
             val expandedGroups = remember { mutableStateListOf<String>() }
-
-            LazyColumn(modifier = Modifier.fillMaxSize()) {
-                grouped.forEach { (name, groupCourses) ->
+            grouped.forEach { (name, groupCourses) ->
+                key(name) {
                     val isExpanded = expandedGroups.contains(name)
-                    item(key = "header_$name") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .elasticPress(RoundedCornerShape(10.dp))
-                                .clickable {
-                                    if (expandedGroups.contains(name)) expandedGroups.remove(name)
-                                    else expandedGroups.add(name)
-                                }
-                                .padding(horizontal = 16.dp, vertical = 10.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Icon(
-                                if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp),
-                                tint = palette.muted
-                            )
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(
-                                text = name,
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = palette.title,
-                                modifier = Modifier.weight(1f)
-                            )
-                            Text(
-                                text = "${groupCourses.sumOf { it.slotCount }} 节/周",
-                                fontSize = 12.sp,
-                                color = palette.muted
-                            )
-                        }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .elasticPress(RoundedCornerShape(10.dp))
+                            .clickable {
+                                if (expandedGroups.contains(name)) expandedGroups.remove(name)
+                                else expandedGroups.add(name)
+                            }
+                            .padding(horizontal = 16.dp, vertical = 10.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            if (isExpanded) Icons.Default.KeyboardArrowDown else Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                            contentDescription = null,
+                            modifier = Modifier.size(20.dp),
+                            tint = palette.muted
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = name,
+                            fontSize = 14.sp,
+                            fontWeight = FontWeight.SemiBold,
+                            color = palette.title,
+                            modifier = Modifier.weight(1f)
+                        )
+                        Text(
+                            text = "${groupCourses.sumOf { it.slotCount }} 节/周",
+                            fontSize = 12.sp,
+                            color = palette.muted
+                        )
                     }
 
                     if (isExpanded) {
-                        itemsIndexed(groupCourses, key = { _, c -> c.id }) { _, course ->
-                            val isSelected = selectedIds.contains(course.id)
-                            CourseListItem(
-                                course = course,
-                                isDarkMode = isDarkMode,
-                                isBatchMode = isBatchMode,
-                                isSelected = isSelected,
-                                onClick = {
-                                    if (isBatchMode) onToggleSelection(course.id)
-                                },
-                                onDelete = { showDeleteDialog = course },
-                                onDuplicate = { onDuplicateCourse(course) }
-                            )
+                        groupCourses.forEach { course ->
+                            key(course.id) {
+                                val isSelected = selectedIds.contains(course.id)
+                                CourseListItem(
+                                    course = course,
+                                    isDarkMode = isDarkMode,
+                                    isBatchMode = isBatchMode,
+                                    isSelected = isSelected,
+                                    onClick = {
+                                        if (isBatchMode) onToggleSelection(course.id)
+                                    },
+                                    onDelete = { showDeleteDialog = course },
+                                    onDuplicate = { onDuplicateCourse(course) }
+                                )
+                            }
                         }
                     }
                 }
-                item { Spacer(modifier = Modifier.height(20.dp)) }
             }
         }
     }
@@ -612,7 +643,8 @@ private fun CourseListItem(
 @Composable
 private fun AddCoursePanel(
     viewModel: ManageViewModel,
-    isDarkMode: Boolean
+    isDarkMode: Boolean,
+    contentPadding: PaddingValues = PaddingValues()
 ) {
     val palette = contentPalette(isDarkMode)
     val labelColor = palette.muted
@@ -626,7 +658,11 @@ private fun AddCoursePanel(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Transparent)
-            .padding(16.dp),
+            .padding(horizontal = 16.dp),
+        contentPadding = PaddingValues(
+            top = contentPadding.calculateTopPadding() + 16.dp,
+            bottom = contentPadding.calculateBottomPadding() + 16.dp
+        ),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {

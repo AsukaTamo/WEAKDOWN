@@ -89,9 +89,9 @@ android.util.Log.d("GlassSlice", "bitmap=${bitmap.width}x${bitmap.height}")
 
 - [ ] 用 `Modifier.blur(20.dp)` 把壁纸真正模糊后画进栏内（真磨砂，而不是半透明底）
 - [ ] 触摸高光：按下时轻微放大 + 提亮（`interactive` 语义）
-- [ ] 滚动边缘柔化：内容滚到栏下时做渐隐（`scrollEdgeEffect`）
-- [ ] 课程详情信息栏套用同一材质
-- [ ] 相邻玻璃融合（顶栏与周数胶囊）
+- [x] 滚动边缘柔化：底部 200dp 高斯模糊 + 渐变（`ui/components/EdgeBlur.kt`）；顶部不做，避免与系统状态栏/tag 栏颜色冲突
+- [x] 课程详情信息栏套用同一材质（玻璃 + 88% surface）
+- [ ] 相邻玻璃融合（顶栏与周数胶囊）：评估后不做，`glassEffectContainer(spacing = 0.dp)` 不会融合，且同组会丢掉胶囊强调色
 
 ---
 

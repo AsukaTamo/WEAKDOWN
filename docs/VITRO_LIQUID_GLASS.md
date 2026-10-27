@@ -98,11 +98,17 @@ Box(Modifier.fillMaxSize()) {
 - 时间轴和七天课程列共享滚动状态与留白，横向周分页仍保持原有行为；
 - 原来的 `.shadow()` + 磨砂渐变 + 彩虹描边全部删掉，Vitro 自带阴影 / 高光 / 色散；
 - 底色渐变从根 `Box` 挪进了 backdrop 层 —— 没有壁纸的页面（课程管理 / 我的）也要有东西可折射；
-- `scrollEdgeEffect(style = ScrollEdgeEffectStyle.Shaded, isTopHidden = true)` 挂在**页面视口**
-  （backdrop 内的内容层，不是壁纸层）：只让内容在**底栏**下面按 iOS 方式压暗渐隐。
-  顶边关闭的原因：Vitro 的 veil 是**全宽矩形**，会在圆角顶栏两侧和状态栏下方留下方角暗带，
-  与圆角玻璃/系统栏不和谐；要开顶边需要按顶栏圆角裁剪 veil（改 ScrollEdgeNode 或加遮罩），
-  当前先用“顶部保持真实折射、底部渐隐”的组合；
+- 页面视口顶部按 **28dp 圆角**裁切（`PageTopCorner`，与顶栏玻璃圆角呼应）：内容上滑时在左右两侧
+  以圆角消失，而不是一条横贯全屏的直边；顶部不叠加 `scrollEdgeEffect` 的顶边 veil（全宽矩形
+  会越过圆角栏在状态栏下方留方角），只保留圆角裁切；
+- 管理 / 我的页面也改成铺满视口的滚动内容 + `contentPadding`：列表首项落在栏下，滚动时可以真实经过
+  顶/底栏玻璃。管理的 Tab 栏固定在顶栏下方、用不透明底色压住滚动内容，列表从它下面经过后进入顶栏
+  玻璃的采样区；我的页面没有固定头部，整条 LazyColumn 直接滚过两条栏；
+- 深浅模式切换只做视觉过渡，不再额外弹“浅色/深色模式已开启”的 snackbar；
+- 页面**底部**用 `edgeBlur`（`ui/components/EdgeBlur.kt`）做真正的高斯模糊渐变：从
+  `backdrop.layer` 重录底部 200dp 带状区域到一个小图层，`BlurEffect` 模糊后用 DstIn 竖向渐变
+  把上沿淡出。顶部**不做模糊**：状态栏/系统 tag 栏本身有自己的底色，叠加模糊会与其产生色差冲突；
+  顶部只保留 28dp 圆角裁切 + 真实折射。API 31 以下跳过模糊（页面保持清晰）；
 - 周选择面板 / 课程详情抽屉复用同一个 backdrop 和玻璃材质，玻璃外再叠一层半透明 `surface`
   （面板 0.76、抽屉 0.88）保证正文可读；
 - **覆盖层的 scrim 必须是面板/抽屉的父层，不能是兄弟层**：非交互玻璃的
@@ -143,11 +149,17 @@ Box(Modifier.fillMaxSize()) {
 | 真机 `10CG5J0Q0F004E7` 冷启动截图 | 浅 / 深两套栏材质与 1.7.5 基线一致，数值仍与原型对齐（见上表） |
 | 真机交互回归（2026-10-27，Compose 1.12.1） | 首页/管理/我的页纵向滚动、课程点击与详情返回、长按菜单、底部 Tab、周面板、横向翻周、主题切换、作息设置页全部通过 |
 | 启动周数 | 冷启动直接显示「第 9 周」，不再先闪兜底日期的「第 18 周」 |
-| 滚动边缘渐隐 | 只开**底边**（`Shaded`）；顶边关闭，避免全宽 veil 在圆角顶栏两侧留下方角暗带 |
+| 底部高斯模糊 | 从 backdrop 底部带状区域做 `BlurEffect` + DstIn 渐变；顶部不模糊，避免与系统状态栏/tag 栏底色冲突 |
+| 顶部圆角裁切 | 页面视口用 28dp 顶部圆角裁切；内容上滑时左右两侧以圆角消失，红圈处的直边消失 |
+| 管理 / 我的滑动透感 | 两页都改成铺满视口 + `contentPadding`；列表可以真实滚过顶/底栏玻璃；管理 Tab 栏固定在栏下且不透明 |
+| 主题切换 | 浅/深切换不再弹 snackbar，只保留背景揭示与图标动画 |
 | 周选择面板玻璃 | 展开后玻璃 + 76% surface；周格选择、确认、外部点击关闭均正常（修复了玻璃抢命中后子控件点不到的问题） |
 | 课程详情抽屉玻璃 | 玻璃 + 88% surface；编辑进入/退出、复制/删除按钮、拖动关闭、外部点击关闭均正常 |
 | 滚动 + 玻璃动态折射 | 课程色块与文字从顶栏/底栏后方经过，玻璃内采样随内容移动，栏内无黑块或固定纹理 |
-| 纵向滚动的 `gfxinfo`（最终） | p50 11ms / p90 15ms / p99 17ms，janky 1.54%，missed vsync 0，GPU p90 8ms |
+| 首页纵向滚动 `gfxinfo` | p50 12ms / p90 16ms / p99 20ms，janky 1.71%，missed vsync 0，GPU p90 9ms |
+| 我的页滚动 `gfxinfo` | p50 7ms / p90 10ms / p99 15ms，janky 1.00%，missed vsync 0 |
+| 管理页（全部课程）`gfxinfo` | p50 9ms / p90 12ms / p99 14ms，janky 0.51%，missed vsync 0 |
+| 管理页（添加课程）`gfxinfo` | p50 9ms / p90 12ms / p99 15ms，janky 0.27%，missed vsync 0 |
 | 面板展开/收起（玻璃） | p50 12ms / p90 17ms / p99 40ms，janky 3.35%，missed vsync 0；无玻璃的旧动画也在同一量级，玻璃不是瓶颈 |
 | `logcat -b crash` | 无本应用 FATAL / ANR |
 
@@ -163,9 +175,14 @@ Android 13（API 33）及以上应使用 Vitro 的 AGSL 动态折射；Android 1
 
 ## 七、后续可做（2026-10-27 已落地）
 
-- [x] **`scrollEdgeEffect`（底边）**：页面视口用 `ScrollEdgeEffectStyle.Shaded` + `isTopHidden = true`。
-  底边内容滚到玻璃栏下面时压暗渐隐；顶边关闭，因为 veil 是全宽矩形，会越过圆角顶栏在状态栏
-  下方形成方角暗带，和圆角玻璃不和谐。若以后要顶边，需要先按顶栏轮廓裁剪 veil。
+- [x] **顶部圆角裁切**：页面视口加 `RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)`，
+  内容上滑时以圆角退出，替代顶边 veil 留下的方角；这比直接开 `scrollEdgeEffect` 顶边更干净。
+- [x] **管理 / 我的滑动透感**：两页都改为铺满视口的滚动内容 + `contentPadding`；管理 Tab 栏固定在
+  顶栏下方并用不透明底色压住列表，列表从 Tab 栏下方经过后进入顶栏玻璃采样区；我的页直接整条 LazyColumn
+  滚过两条栏。
+- [x] **主题切换不再弹 snackbar**：`ScheduleViewModel.setDarkMode` 只更新 override，不再 emit 提示。
+- [x] **底部高斯模糊**：`ui/components/EdgeBlur.kt` 从 `backdrop.layer` 重录底部 200dp 带状区域，
+  `BlurEffect` 后用 DstIn 渐变淡出；顶部不模糊（避免和状态栏/tag 栏颜色冲突），只保留 28dp 圆角裁切。
 - [x] **周选择面板玻璃**：同一个 `backdrop` + 玻璃，surface 染色 76%；形变容器用
   `glassEffect(... RoundedCornerShape(cornerDp))`，外层的 `clip` 跟着 spring 形变。
 - [x] **课程详情抽屉玻璃**：同一个 `backdrop` + 玻璃，surface 染色 88%；按钮、拖动、外部点击都正常。

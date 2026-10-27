@@ -308,12 +308,8 @@ class ScheduleViewModel @Inject constructor(
 
     fun setDarkMode(enabled: Boolean) {
         if (isDarkMode.value == enabled) return
+        // 深浅切换本身就是即时视觉反馈，不再额外弹 snackbar。
         darkModeOverride.value = enabled
-        viewModelScope.launch {
-            _snackbarMessage.emit(
-                (if (enabled) "深色模式已开启" else "浅色模式已开启") to "info"
-            )
-        }
     }
 
     fun setScheduleGuidesEnabled(enabled: Boolean) {
