@@ -60,21 +60,25 @@ val glassBackdrop = rememberGlassBackdrop()   // 折射源
 ...
 Box(Modifier.fillMaxSize()) {
     // 1. 场景层：底色、壁纸、遮罩和当前课表内容统一录入 backdrop
-    Box(Modifier.fillMaxSize().glassBackdrop(glassBackdrop)) { ...背景... }
+    Box(Modifier.fillMaxSize().glassBackdrop(glassBackdrop)) { ...背景 + 页面... }
 
-    // 2. 课表内容在同一场景层内滚动，允许课程色块经过两条栏的下方
-    // 3. 栏是 backdrop 的兄弟节点，玻璃从这里采样
-    Scaffold(topBar = { ... .glassEffect(glassBackdrop, glassMaterial, RoundedCornerShape(28.dp)) ... })
+    // 2. 两条栏是 backdrop 的兄弟节点、直接放在根 Box 里；玻璃从这里采样
+    Box(Modifier.align(Alignment.TopCenter)...) { ... .glassEffect(glassBackdrop, glassMaterial, RoundedCornerShape(28.dp)) ... }
+    Box(Modifier.align(Alignment.BottomCenter)...) { ... .glassEffect(glassBackdrop, glassMaterial, RoundedCornerShape(28.dp)) ... }
 }
 ```
 
 要点：
 
 - 玻璃必须画在 backdrop **之后**、且不在 backdrop 子树里，否则会自己采样自己；
-- 壁纸、遮罩、课程网格必须属于同一个 backdrop。课表的滚动内容不能被 Scaffold 的
-  `contentPadding` 截断，否则玻璃只能看到静态背景，无法折射课程色块和文字；
-- `ScheduleScreen` 接收来自外壳的 `contentPadding`，并把顶部/底部安全区留白放进同一个
-  纵向滚动容器。这样首节、末节可完整露出，中间课程可以真实地从顶栏和底栏后方经过；
+- **不要用 Material3 `Scaffold` 摆栏**。Scaffold 内部的全屏 `Surface` 会附加一个
+  `Modifier.pointerInput(Unit) {}` 节点；Compose 命中测试里它是最上层的直接命中，下面的兄弟页面
+  （backdrop 子树）就再也收不到 down/move/up，表现为整页不能滚动、除栏按钮外全部失效。
+  用普通 `Box` + `Alignment` 摆放即可，既保留玻璃层级，也不挡页面；
+- 壁纸、遮罩、课程网格必须属于同一个 backdrop；课表的滚动内容放进自己的纵向滚动容器，
+  首尾留白也作为滚动内容，这样首尾课程可完整露出，中间课程可以真实地从顶栏和底栏后方经过；
+- 页面视口在顶部裁到顶栏外壳上沿（状态栏 + 顶栏 8dp 外边距），顶部留白相应扣除：
+  初始布局位置不变，滚动内容仍从玻璃后方经过，但不会画到状态栏图标底下；
 - 外壳在首次布局前使用现有尺寸令牌与系统 inset，布局完成后用 `onGloballyPositioned`
   记录包含安全区的顶栏/底栏实际高度，并回填给课表滚动留白，适配不同设备的系统栏尺寸；
 - 时间轴和七天课程列共享滚动状态与留白，横向周分页仍保持原有行为；
@@ -112,11 +116,17 @@ Box(Modifier.fillMaxSize()) {
 | `:app:assembleDebug`（compileSdk 37） | 通过 |
 | `:app:testDebugUnitTest` | 通过 |
 | 真机 `10CG5J0Q0F004E7` 冷启动截图 | 浅色 / 深色两套栏材质正常，数值与原型对齐（见上表） |
-| 滚动 1s 的 `gfxinfo` | p50 8ms / p90 17ms / p99 23ms，janky 4.77%，missed vsync 0，GPU p90 6ms |
+| 真机交互回归（2026-10-27，修复 Scaffold 命中测试后） | 首页/管理/我的页纵向滚动、课程点击与返回、底部 Tab、周面板、横向翻周、主题切换、作息设置页全部通过 |
+| 滚动 + 玻璃动态折射 | 课程色块与文字从顶栏/底栏后方经过，玻璃内采样随内容移动，栏内无黑块或固定纹理 |
+| 纵向滚动的 `gfxinfo` | p50 11ms / p90 16ms / p99 19ms，janky 2.81%，missed vsync 0，GPU p90 7ms |
+| 滚动 + 横向翻周的 `gfxinfo` | p50 12ms / p90 18ms / p99 32ms，janky 6.70%，missed vsync 1，GPU p90 7ms |
 
-以上记录对应首次 Vitro 接线。课程内容纳入 backdrop 后，必须重新执行同一套构建、真机和
-滚动验证；没有连接设备时不得把静态截图当作动态折射通过的证据。重点检查：课程色块和文字
-随滚动实时移动、栏内没有黑块或固定纹理、首尾课程可完整露出、栏上的按钮优先响应触控。
+最后两组数字是当前布局（课程内容已纳入 backdrop）的实测；横向翻周那一组包含页面切换动画，
+不代表纯滚动性能。旧记录中的 p50 8ms / p90 17ms 只代表首次接线、页面尚未进入 backdrop 时的历史基线。
+
+交互回归必须连同命中测试一起验：栏虽然能点，不代表页面能收到触摸。验收时至少覆盖首页滚动、
+课程点击/返回、管理/我的页列表滚动、普通设置按钮、横向翻周和玻璃内动态采样；没有连接设备时
+不得把静态截图当作动态折射或交互通过的证据。
 
 Android 13（API 33）及以上应使用 Vitro 的 AGSL 动态折射；Android 12 及以下使用库内的
 兼容渲染路径，只验证内容可见性、交互和无崩溃，不宣称与 AGSL 具有相同的边缘光学效果。

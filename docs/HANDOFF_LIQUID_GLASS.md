@@ -1,7 +1,9 @@
 # 交接：顶栏/底栏液态玻璃（Vitro 方案）
 
-> 一句话现状：**顶栏 / 底栏已接入 Vitro 液态玻璃，浅深材质的静态外观正常；
-> 但当前真机仍报告页面无法纵向移动、除顶栏和底栏外的按钮无响应，交互验收未通过。**
+> 一句话现状：**顶栏 / 底栏已接入 Vitro 液态玻璃；交互回归已定位并修复——
+> 两条栏原先放在 Material3 `Scaffold` 里，Scaffold 的全屏 `Surface` 自带 pointerInput 节点，
+> 在命中测试里盖住了 backdrop 内的页面内容。改为普通 `Box` 直接摆放两条栏后，滚动、课程点击、
+> 普通按钮、横向翻周、周面板与主题切换均已真机验证通过；玻璃材质和滚动折射效果保持原样。**
 > 改动全部在分支 `Lingfan666/feature-liquid-glass` 上，**没有合入 main**。
 >
 > 材质细节、参数标定依据、更新上游的步骤在 [VITRO_LIQUID_GLASS.md](VITRO_LIQUID_GLASS.md)；
@@ -35,7 +37,7 @@ git switch Lingfan666/feature-liquid-glass
 | 文件 | 改动 | 为什么 |
 |---|---|---|
 | `app/src/main/java/io/github/itshedimisawi/vitro/**` | 新增（34 个 `.kt` + `LICENSE-vitro.txt`） | vendor 上游 Vitro 0.1.0，顶栏/底栏的玻璃材质 |
-| `app/src/main/java/com/example/courseapp/MainActivity.kt` | 背景、壁纸和当前可见课表统一进入 `glassBackdrop`；顶栏/底栏改 `.glassEffect(...)`；页面内容不再被栏的整体避让区域隔开；删掉原磨砂渐变/彩虹描边/`.shadow()`；次级文字色换 `textSecondary`；`LocalGlassDarkTheme` 跟随 App 主题 | 玻璃要采样真实滚动内容，且亮玻璃上 muted 灰只有 2.6:1 |
+| `app/src/main/java/com/example/courseapp/MainActivity.kt` | 背景、壁纸和当前可见课表统一进入 `glassBackdrop`；顶栏/底栏改 `.glassEffect(...)`；页面内容不再被栏的整体避让区域隔开；**顶栏/底栏从 `Scaffold` 移出，改为根 `Box` 的直接子节点**；页面视口下移到顶栏外壳上沿；删掉原磨砂渐变/彩虹描边/`.shadow()`；次级文字色换 `textSecondary`；`LocalGlassDarkTheme` 跟随 App 主题 | 玻璃要采样真实滚动内容，且亮玻璃上 muted 灰只有 2.6:1；栏不能再用带全屏 `Surface` 的 `Scaffold`，否则页面收不到触摸 |
 | `app/src/main/java/com/example/courseapp/ui/schedule/ScheduleScreen.kt` | 增加 `contentPadding` 参数；把顶/底安全区留白放入统一纵向滚动内容；时间轴和七天课程列共享滚动范围 | 课程首尾可完整露出，中间课程可以经过顶栏/底栏并被 Vitro 实时折射 |
 | `ui/components/LiquidGlass.kt` | **删除** | 自研着色器的真折射一直没打通，改走 Vitro；历史在 `404d2ee` 里可找回 |
 | `app/build.gradle.kts` | `compileSdk 36 → 37` | 与 Vitro 的编译基线一致（`targetSdk` 仍 36） |
@@ -44,10 +46,11 @@ git switch Lingfan666/feature-liquid-glass
 | `docs/LIQUID_GLASS_TODO.md` | 顶部加状态说明，文件清单更新 | 旧的自研路线归档为历史记录 |
 | `docs/PROJECT_STRUCTURE.md` | 补 vendor 小节、compileSdk 更新 | 结构说明别过期 |
 
-本轮继续保留首页表头避让和滚动布局调整：`ScheduleGrid` 使用一个纵向滚动容器，
-并把顶/底栏避让作为滚动内容的 spacer；`MainActivity` 的页面留白取栏位实测尺寸与
-系统 inset/尺寸令牌兜底值中的较大值，`Scaffold` 内容槽保持空。调整后截图中日期表头
-位于顶栏下方。**以上调整没有解决真机纵向手势与页面按钮无响应问题，不要据此标记交互通过。**
+页面表头避让和滚动布局继续保留：`ScheduleGrid` 使用一个纵向滚动容器，并把顶/底栏避让
+作为滚动内容的 spacer；`MainActivity` 的页面留白取栏位实测尺寸与系统 inset/尺寸令牌
+兜底值中的较大值。栏不再使用 `Scaffold`：两条栏现在是根 `Box` 的直接子节点，页面视口
+整体下移到顶栏外壳上沿（状态栏 + 顶栏 8dp 外边距），初始布局位置与修复前一致；滚动内容
+可以经过顶栏/底栏玻璃，但不会画到状态栏图标底下。**本轮已在真机复验交互，见第四节。**
 
 刻意**没有**提交：`.idea/deviceManager.xml`（你本机的 IDE 状态）。
 
@@ -65,37 +68,41 @@ git switch Lingfan666/feature-liquid-glass
 
 ## 四、验证记录（本轮实际跑过的）
 
-| 命令 | 结果 |
+| 命令 / 验收项 | 结果 |
 |---|---|
-| `gradle :app:assembleDebug` | ✅（compileSdk 37，无 error） |
-| `gradle :app:testDebugUnitTest` | ✅ |
-| `:app:assembleDebug :app:testDebugUnitTest --offline`（本轮布局调整后） | ✅ 通过；使用本机缓存 Gradle 8.7 |
-| 装机 + 冷启动 + 截图 | ✅ 页面可启动；玻璃质感正常，调整后日期表头位于顶栏下方 |
-| 浅/深主题 | ⚠️ 有静态画面；本轮未完成系统化交互回归 |
-| 首页课表纵向拖动 | ❌ 真机截图中未观察到内容位移；用户也报告首页及后续页面均无法上下滑动 |
-| 页面按钮 | ❌ 用户报告除顶栏、底栏按钮外，其余按钮无响应；本轮未定位根因 |
-| 课程穿过玻璃的动态折射 | ⏸ 未验收；由于滚动未工作，不能用静态截图判定通过 |
-| 本轮帧耗时与卡顿率 | ⏸ 未测；历史首次接线数据不代表当前布局 |
-| 首尾课程可达、横向翻周、课程点击/长按、弹层返回 | ⏸ 未完成回归 |
+| `gradle :app:assembleDebug --offline`（本轮修复后） | ✅ 通过；使用本机缓存 Gradle 8.7 |
+| `gradle :app:testDebugUnitTest --offline`（本轮修复后） | ✅ 通过 |
+| 装机 + 冷启动 + 截图 | ✅ 页面可启动；初始布局与修复前一致，日期表头仍在顶栏下方 |
+| 首页课表纵向拖动 | ✅ 内容真实位移，时间轴和七天课程列同步滚动 |
+| 管理页 / 我的页列表滚动 | ✅ 均恢复 |
+| 页面普通按钮 | ✅ 课程点击弹出详情、返回关闭、底部 Tab 切换、「作息时间设置」打开/返回、周数胶囊打开选择面板 |
+| 横向翻周 | ✅ 第 9 周滑到第 10 周，出现「回本周」，课程分布随周变化 |
+| 课程穿过玻璃的动态折射 | ✅ 滚动时课程色块和文字从顶栏/底栏玻璃后方经过，玻璃内采样随内容移动 |
+| 首尾课程可达 | ✅ 滚到底可见第 12 节；底部留白把最后一行托在底栏之上 |
+| 浅 / 深主题 | ✅ 两套材质外观正常，顶栏主题按钮切换后玻璃材质与文字色同步 |
+| 本轮帧耗时（仅纵向滚动） | p50 11ms / p90 16ms / p99 19ms，janky 2.81%，missed vsync 0，GPU p90 7ms |
+| 本轮帧耗时（滚动 + 横向翻周混合） | p50 12ms / p90 18ms / p99 32ms，janky 6.70%，missed vsync 1，GPU p90 7ms |
+| `logcat -b crash` | ✅ 无本应用 FATAL / ANR |
 
-旧记录中的 p50 8ms / p90 17ms / p99 23ms、janky 4.77%、missed vsync 0，
-只代表首次 Vitro 接线的历史基线。当前版本没有新的性能测量结果。
+旧记录中的 p50 8ms / p90 17ms / p99 23ms、janky 4.77%、missed vsync 0 是首次 Vitro 接线的历史基线；
+本轮纵向滚动的 p90 已回到 16ms、janky 2.81%，翻周动画仍是混合测量里更高的那一档。
 
-### 本轮交接问题：页面纵向手势和普通控件无响应
+### 已修复：页面纵向手势和普通控件无响应
 
-- **现象**：用户报告首页课表及后续页面均无法上下滑动，除顶栏/底栏按钮外其余按钮失去原有功能。
-  本轮真机课表前后截图没有观察到纵向位移；具体普通控件点击是否全部失效尚未逐项确认。
-- **环境**：设备 `10CG5J0Q0F004E7`（V2520A，Android 版本以设备为准），应用包名 `com.example.courseapp`；
-  本轮 APK 已安装并可启动。
-- **已尝试但未证实有效的改动**：课表网格合为单一纵向滚动容器；顶/底栏避让改为滚动内容 spacer；
-  页面留白使用测量值与系统安全区兜底值的较大者；移除 Scaffold 内容槽中的全屏透明 `Spacer`。
-  构建和单测通过，但装机后仍未观察到滚动位移，不能把这些改动记为问题修复。
-- **当前判断**：根因未定位。页面移入全屏 `glassBackdrop` 并与 `Scaffold` 分为兄弟层后，视觉层级与输入命中
-  层级需要继续核对；这是排查方向，不是已确认原因。勿先归咎于 Vitro shader 或继续叠加手势补丁。
-- **下次排查建议**：先用可重复的交互测试确认触摸事件是否到达当前页面（记录 ScrollState 的 `value/maxValue`，
-  并用应用内日志或 Compose 测试确认普通 `clickable` 回调）；检查 root `Box`、backdrop、常驻隐藏页的
-  placement/hit-test 和 Scaffold 空槽的节点层级；再按最小结构复现并修复。修复后重新验收首页滚动、
-  管理/我的页列表滚动、普通设置按钮、课表点击/长按、横向翻周及玻璃内动态采样。
+- **现象**：首页课表及后续页面无法上下滑动，除顶栏/底栏按钮外其余按钮无响应。
+- **根因**：两条栏当时放在 Material3 `Scaffold` 里，而页面内容（`glassBackdrop` 子树）是 `Scaffold` 的兄弟节点、
+  画在它下面。Material3 1.3.1 的 `Scaffold` 内部是一个全屏 `Surface`，`Surface` 会额外挂一个
+  `Modifier.pointerInput(Unit) {}` 节点（用于阻止点击穿透）。Compose 命中测试里，这个全屏
+  pointerInput 节点是最上层的直接命中，命中结果不再落到下面的兄弟页面，于是页面收不到任何
+  down/move/up，滚动和 clickable 全部失效；栏按钮因为在这个 `Surface` 内部，反而正常。
+  这不是 Vitro shader 或手势冲突问题。
+- **修复**：去掉 `Scaffold`，把顶栏/底栏改成根 `Box` 的直接子节点，用 `Alignment.TopCenter` /
+  `Alignment.BottomCenter` 保持原位置；玻璃仍然画在 `glassBackdrop` 之后、页面内容之外。
+  页面视口整体下移 `statusBar + 顶栏 8dp 外边距`（顶部留白相应扣除），初始位置不变，滚动内容
+  仍可从顶栏玻璃后方经过，但不会再画到状态栏图标底下和系统时钟重叠。
+- **证据**：`app/build/outputs/apk/debug/app-debug.apk` 装机后按上表逐项验收；修复前后的滚动截图、
+  课程点击详情、横向翻周、我的页列表滚动均已核对。修复仅改 `MainActivity.kt` 的栏外层结构、
+  页面容器和顶部留白，没有改 Vitro 材质参数、`glassBackdrop` 采样关系或 `ScheduleScreen` 的滚动模型。
 
 材质与原型图的数值对齐（真机截图像素）：
 
@@ -106,13 +113,13 @@ git switch Lingfan666/feature-liquid-glass
 
 ## 五、已知差距与下一步（按性价比排序）
 
-1. **先解决上方的交互回归**：在真机上确认纵向手势和页面控件恢复，再继续动态折射与性能验收。
-2. **彩色边（原型的美术化「色彩溢出」）**：Vitro 的 `dispersion` 是物理 RGB 分离，背景越平越看不出彩色；
+1. **彩色边（原型的美术化「色彩溢出」）**：Vitro 的 `dispersion` 是物理 RGB 分离，背景越平越看不出彩色；
    要那种沿边一圈的彩虹，得在玻璃外再叠一层极淡的 `sweepGradient` 描边（~0.6dp）。
-3. **其它面板没换材质**：周选择面板、作息设置、课程详情抽屉还是实色面板，可以复用同一个 `backdrop`。
-4. **顶栏 + 周数胶囊融合**：用 `glassEffectContainer` + `spacing = 0.dp` 能做成一块玻璃。
-5. **性能贴线**：历史首次接线 p90 = 17ms；当前课表采样布局需要重新测量。若仍贴线，可以只在有壁纸时开玻璃、其它页面回到纯色/磨砂。
-6. **要用 Vitro 1.12+ 的新 API**：得把 Compose 升上去，并撤回第四节的兼容改动。
+2. **其它面板没换材质**：周选择面板、作息设置、课程详情抽屉还是实色面板，可以复用同一个 `backdrop`。
+3. **顶栏 + 周数胶囊融合**：用 `glassEffectContainer` + `spacing = 0.dp` 能做成一块玻璃。
+4. **动画档性能**：纵向滚动 p90 16ms / janky 2.81% 已经达标；包含横向翻周的混合测量 p90 18ms / janky 6.70%，
+   若要继续压，优先看翻周动画期间的重组/绘制，而不是玻璃本身（GPU p90 仅 7ms）。
+5. **要用 Vitro 1.12+ 的新 API**：得把 Compose 升上去，并撤回第四节的兼容改动。
 
 ## 六、回滚
 
@@ -127,6 +134,8 @@ git revert <commit>
 ## 七、五分钟上手
 
 1. 打开 `MainActivity.CourseApp()`，找到 `glassMaterial`（材质参数都在这一处）；
-2. 需要调手感就改 `brightness` / `tint` / `dispersion` / `blurRadius`，字段含义见 `Glass.kt` 的 KDoc；
-3. 构建 → 装机 → 冷启动 → 截图（命令见 `AGENT.md`「真机调试方法」）；
-4. 对着原型图看三件事：玻璃体的亮度、边缘高光是否成圈、背景是否被真正折射（拖动课表时看栏下方的课程色块、文字和壁纸有没有随内容移动并产生边缘折射）。
+2. 顶栏/底栏是根 `Box` 的直接子节点（`Alignment.TopCenter` / `Alignment.BottomCenter`），**不要**再把它们放回
+   Material3 `Scaffold`：Scaffold 的全屏 `Surface` 会挡住 backdrop 里页面的命中测试；
+3. 需要调手感就改 `brightness` / `tint` / `dispersion` / `blurRadius`，字段含义见 `Glass.kt` 的 KDoc；
+4. 构建 → 装机 → 冷启动 → 截图（命令见 `AGENT.md`「真机调试方法」）；
+5. 对着原型图看三件事：玻璃体的亮度、边缘高光是否成圈、背景是否被真正折射（拖动课表时看栏下方的课程色块、文字和壁纸有没有随内容移动并产生边缘折射）。

@@ -158,3 +158,26 @@ git diff --name-only
 - 遇到“明明页面里有字段，但解析结果为空”时，优先查输入结构，而不是先怪展示层。
 - 片段类 HTML 尤其要注意 `tbody` 和 `table` 的边界，`body` 级解析和 `table` 级解析不是一回事。
 - 只改正则不一定够，必要时先把 HTML 结构补回去，再让原有解析逻辑工作。
+
+## Compose 页面收不到触摸 / 无法滚动（全屏 Surface 抢命中测试）
+
+### 典型现象
+
+- 页面整体不能上下滑动，页面里的普通按钮全部无响应。
+- 同一屏的顶栏/底栏按钮却正常（它们是那个全屏 `Surface` 的子节点，处在命中路径内）。
+
+### 已确认根因
+
+Material3 的 `Scaffold` 内部是一个全屏 `Surface`，而 `Surface` 会额外挂一个空的
+`Modifier.pointerInput(Unit) {}` 节点（用于阻止点击穿透）。Compose 的命中测试在某个子节点
+拿到直接命中后就不再测试它的兄弟节点：如果页面内容是这个全屏 `Surface` 的兄弟、又画在它下面，
+就完全收不到 down / move / up，滚动和 `clickable` 一起失效。与 Vitro shader、手势冲突无关。
+
+### 处理线路
+
+1. 不要把需要交互的页面内容放在全屏 `Surface` / `Scaffold` 的下面当兄弟层。
+2. 页面必须留在 `glassBackdrop` 子树里采样时，去掉 `Scaffold`，用普通 `Box` + `Alignment`
+   摆放顶栏/底栏浮层（`docs/HANDOFF_LIQUID_GLASS.md` 第四节）。
+3. 页面视口若要在状态栏以下裁断，用布局留白（会同时裁掉命中测试），不要只做绘制裁剪。
+4. 验收时先截图看视觉，再用 `adb shell input swipe` 看内容是否位移、点一个普通 `clickable`
+   看回调；**栏按钮能点不能证明页面命中正常**。

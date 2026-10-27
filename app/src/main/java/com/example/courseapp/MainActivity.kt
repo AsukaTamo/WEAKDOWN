@@ -313,6 +313,16 @@ fun CourseApp(
             bottom = bottomBarContentPadding
         )
     }
+    // 主页面视口整体下移到顶栏外壳的上沿（状态栏 + 顶栏外边距），并相应扣掉顶部留白：
+    // 滚动内容仍然可以从顶栏玻璃后面经过，但不会画到状态栏图标底下，也不会在玻璃上方露出被裁断的卡片。
+    // 初始布局位置与之前完全一致：视口偏移 + (顶部留白 - 视口偏移)。
+    val pageViewportTop = topInset + TopBarTopGap
+    val mainPagePadding = remember(pagePadding, pageViewportTop) {
+        PaddingValues(
+            top = (pagePadding.calculateTopPadding() - pageViewportTop).coerceAtLeast(0.dp),
+            bottom = pagePadding.calculateBottomPadding()
+        )
+    }
 
     // ── 液态玻璃（Vitro）：背景层标成 backdrop，顶栏/底栏都以它为折射源 ──
     val glassBackdrop = rememberGlassBackdrop()
@@ -382,45 +392,54 @@ fun CourseApp(
 
             // Page content belongs to the backdrop recording. The bars below are siblings, so
             // Vitro samples the actual scrolling course grid instead of a static wallpaper layer.
-            listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
-                key(screen) {
-                    val visible = currentScreen == screen
-                    val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
-                    Box(
-                        modifier = Modifier
-                            .fillMaxSize()
-                            .keepPlacedWhen(visible)
-                    ) {
-                        when (screen) {
-                            Screen.Schedule -> ScheduleScreen(
-                                viewModel = scheduleViewModel,
-                                onNavigateToAdd = {
-                                    currentScreen = Screen.Manage
-                                    manageViewModel.switchTab(1)
-                                },
-                                onNavigateToImport = { currentScreen = Screen.WebImport },
-                                drawBackground = false,
-                                contentPadding = pagePadding,
-                                entranceEpoch = homeEntranceEpoch
-                            )
-                            Screen.Manage -> Box(Modifier.fillMaxSize().padding(pagePadding)) {
-                                ManageScreen(
-                                    viewModel = manageViewModel,
-                                    isDarkMode = screenDarkMode,
-                                    onNavigateToImport = { currentScreen = Screen.WebImport }
+            // The viewport starts at the floating bar's outer top edge (below the status bar), so
+            // scrolled content never collides with the system status icons; it still passes behind
+            // the glass bar and is sampled by Vitro.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(top = pageViewportTop)
+            ) {
+                listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
+                    key(screen) {
+                        val visible = currentScreen == screen
+                        val screenDarkMode = if (visible) isDarkMode else delayedDarkMode
+                        Box(
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .keepPlacedWhen(visible)
+                        ) {
+                            when (screen) {
+                                Screen.Schedule -> ScheduleScreen(
+                                    viewModel = scheduleViewModel,
+                                    onNavigateToAdd = {
+                                        currentScreen = Screen.Manage
+                                        manageViewModel.switchTab(1)
+                                    },
+                                    onNavigateToImport = { currentScreen = Screen.WebImport },
+                                    drawBackground = false,
+                                    contentPadding = mainPagePadding,
+                                    entranceEpoch = homeEntranceEpoch
                                 )
+                                Screen.Manage -> Box(Modifier.fillMaxSize().padding(mainPagePadding)) {
+                                    ManageScreen(
+                                        viewModel = manageViewModel,
+                                        isDarkMode = screenDarkMode,
+                                        onNavigateToImport = { currentScreen = Screen.WebImport }
+                                    )
+                                }
+                                Screen.Profile -> Box(Modifier.fillMaxSize().padding(mainPagePadding)) {
+                                    ProfileScreen(
+                                        onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
+                                        onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
+                                        isDarkMode = screenDarkMode,
+                                        showScheduleGuides = showScheduleGuides,
+                                        onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
+                                        onTimeSlotSettings = { showTimeSlotSettings = true }
+                                    )
+                                }
+                                else -> Unit
                             }
-                            Screen.Profile -> Box(Modifier.fillMaxSize().padding(pagePadding)) {
-                                ProfileScreen(
-                                    onDarkModeToggle = { scheduleViewModel.toggleDarkMode() },
-                                    onDarkModeChange = { scheduleViewModel.setDarkMode(it) },
-                                    isDarkMode = screenDarkMode,
-                                    showScheduleGuides = showScheduleGuides,
-                                    onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
-                                    onTimeSlotSettings = { showTimeSlotSettings = true }
-                                )
-                            }
-                            else -> Unit
                         }
                     }
                 }
@@ -454,10 +473,10 @@ fun CourseApp(
             }
         }
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        containerColor = Color.Transparent,
-        topBar = {
+            // 顶栏 / 底栏不再放进 Material3 Scaffold：Scaffold 内部的 Surface 是全屏的，并且自带一个
+            // pointerInput 节点，会在命中测试里赢得整屏，导致 backdrop 里的页面永远收不到触摸
+            // （只有 Surface 内部的栏按钮能响应）。直接作为根 Box 的子节点摆放，位置与原来一致，
+            // 页面重新拿到命中测试。
             var themeIconRotation by remember { mutableFloatStateOf(0f) }
             val animatedThemeIconRotation by animateFloatAsState(
                 targetValue = themeIconRotation,
@@ -467,9 +486,10 @@ fun CourseApp(
 
             Box(
                 modifier = Modifier
+                    .align(Alignment.TopCenter)
                     .fillMaxWidth()
                     .statusBarsPadding()
-                    .padding(start = 14.dp, top = 8.dp, end = 14.dp, bottom = 8.dp)
+                    .padding(start = 14.dp, top = TopBarTopGap, end = 14.dp, bottom = 8.dp)
                     .onGloballyPositioned { measuredTopBarPx = it.size.height }
             ) {
                 Box(
@@ -646,8 +666,8 @@ fun CourseApp(
                     }
                 }
             }
-        },
-        bottomBar = {
+
+            // 底栏
             // 指示器矩形换到底栏内部坐标：原点未知（首帧）或 Tab 未测量时先给 Rect.Zero，
             // 组件会先不绘制，等测量完成后再落位，避免第一帧闪一个错误位置。
             val tabBounds = remember(bottomTabBoundsInWindow.toList(), bottomBarOrigin) {
@@ -666,6 +686,7 @@ fun CourseApp(
             }
             Box(
                 modifier = Modifier
+                    .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
                     .padding(start = 28.dp, top = 4.dp, end = 28.dp, bottom = 10.dp)
@@ -757,12 +778,6 @@ fun CourseApp(
                     }
                 }
             }
-        }
-    ) { _ ->
-        // Pages are rendered in the backdrop sibling above. Keep the Scaffold content slot empty
-        // (a full-size transparent node here can become the top hit-test target on some Compose
-        // versions even though it draws nothing).
-    }
 
     // Time slot settings overlay
     AnimatedVisibility(
@@ -903,3 +918,6 @@ private fun Modifier.keepPlacedWhen(visible: Boolean): Modifier = this.layout { 
 
 /** 揭示动画时长（spring 收尾），隐藏页在这之后才跟着换主题。 */
 private const val ThemeRevealDelayMillis = 520L
+
+/** 顶栏玻璃外壳与状态栏、屏幕左右边缘之间的留白；页面视口也从这个上沿开始裁断。 */
+private val TopBarTopGap = 8.dp
