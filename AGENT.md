@@ -152,7 +152,7 @@ Start-Sleep -Seconds 7                                   # 4. 等启动动画结
 & $adb logcat -c
 & $adb shell am start -n com.example.courseapp/.MainActivity
 & $adb logcat -d -b crash -t 40 | Select-String 'FATAL|Caused by'
-& $adb logcat -d | Select-String '<自己的 TAG>'      # 例如 LiquidGlass / GlassCapture
+& $adb logcat -d | Select-String '<自己的 TAG>'      # 例如 EdgeBlur / GlassBackdrop
 ```
 
 ### 调试用实验的纪律

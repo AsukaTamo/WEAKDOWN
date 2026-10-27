@@ -4,9 +4,10 @@
 > Gradle 9.6 + AGP 9.4.1 + Kotlin 2.4.21 + Compose 1.12.1（BOM 2026.09.00），并撤回了 Vitro 的
 > Compose 1.7 兼容改动。真机滚动、点击、长按、翻周、主题、设置页与玻璃折射全部通过，帧耗时比 1.7.5 基线更低。**
 > 本轮又落地了底部高斯模糊渐变、周选择面板玻璃、课程详情抽屉玻璃（含覆盖层命中修复）、
-> 页面顶部圆角裁切，以及管理/我的页面的滚动透感；顶栏+周数胶囊融合经评估未采用，原因见
-> [VITRO_LIQUID_GLASS.md](VITRO_LIQUID_GLASS.md) 第七节。
-> 当前 `main` 已包含液态玻璃、交互修复与 Compose 升级（`8197b9b`，已推 origin/gitee）；本轮增强仍在工作区，待提交。
+> 页面顶部圆角裁切、管理/我的页面的滚动透感，以及**彩色描边和玻璃厚度（视觉近似）**；
+> 顶栏+周数胶囊融合经评估未采用，原因见 [VITRO_LIQUID_GLASS.md](VITRO_LIQUID_GLASS.md) 第七节。
+> 当前 `main` 已包含液态玻璃、交互修复、Compose 升级与上一轮增强（`99940fe`，已推 origin/gitee）；
+> 本轮彩色边、玻璃厚度与文档清理已提交并同步远端。
 >
 > 材质细节、参数标定依据、更新上游的步骤在 [VITRO_LIQUID_GLASS.md](VITRO_LIQUID_GLASS.md)；
 > 本文只讲「交接要做的事」。
@@ -14,25 +15,26 @@
 ## 一、分支与推送关系
 
 ```
-main (8197b9b, == origin/main == gitee/main)
- ├─ 液态玻璃 + Scaffold 命中测试修复 + Compose 1.12.1 升级 + 面板/抽屉玻璃（已推送）
- └─ 底部高斯模糊 + 顶部圆角 + 管理/我的滚动透感（工作区改动，待提交）
+main (99940fe, == origin/main == gitee/main)
+ ├─ 液态玻璃 + Scaffold 命中测试修复 + Compose 1.12.1 升级 + 面板/抽屉玻璃（8197b9b）
+ ├─ 底部高斯模糊 + 顶部圆角 + 管理/我的滚动透感（99940fe，已推送）
+ └─ 彩色边 + 玻璃厚度 + 文档清理（本轮提交）
 ```
 
 | 项 | 值 |
 |---|---|
-| 当前分支 | `main`（本轮增强未提交） |
+| 当前分支 | `main` |
 | 推送目标 | `origin` = `github.com/AsukaTamo/WEAKDOWN`，分支 `main` |
-| 镜像远端 | `gitee` = `gitee.com/lingfan555/weakdown`，`main` 已同步到 `8197b9b` |
-| 已推送 | `8197b9b`（面板/抽屉玻璃基线）已推两个远端 |
-| 本轮待办 | 增强改动提交后，再推 `main` 到 origin / gitee |
+| 镜像远端 | `gitee` = `gitee.com/lingfan555/weakdown`，`main` |
+| 已推送 | `99940fe`（底部模糊/顶部圆角/管理我的滚动透感）已推两个远端 |
+| 本轮 | 彩色边 + 厚度 + 文档清理，提交后同步两个远端 |
 
 ## 二、改了哪些东西
 
 | 文件 | 改动 | 为什么 |
 |---|---|---|
 | `app/src/main/java/io/github/itshedimisawi/vitro/**` | 新增（34 个 `.kt` + `LICENSE-vitro.txt`）；本轮恢复 `UnplacedAwareModifierNode` / `onUnplaced()` | vendor 上游 Vitro 0.1.0，顶栏/底栏的玻璃材质；恢复后与上游 commit 完全一致 |
-| `app/src/main/java/com/example/courseapp/MainActivity.kt` | 背景、壁纸和当前可见课表统一进入 `glassBackdrop`；顶栏/底栏改 `.glassEffect(...)`；页面内容不再被栏的整体避让区域隔开；**顶栏/底栏从 `Scaffold` 移出，改为根 `Box` 的直接子节点**；页面视口下移到顶栏外壳上沿；页面视口顶部 28dp 圆角裁切；`edgeBlur` 只对底部做高斯模糊渐变；删掉原磨砂渐变/彩虹描边/`.shadow()`；次级文字色换 `textSecondary`；`LocalGlassDarkTheme` 跟随 App 主题 | 玻璃要采样真实滚动内容，且亮玻璃上 muted 灰只有 2.6:1；栏不能再用带全屏 `Surface` 的 `Scaffold`，否则页面收不到触摸；顶部模糊会与系统状态栏/tag 栏底色冲突，所以只做底部 |
+| `app/src/main/java/com/example/courseapp/MainActivity.kt` | 背景、壁纸和当前可见课表统一进入 `glassBackdrop`；顶栏/底栏改 `.glassEffect(...)`，并加 18/34dp 折射厚度、1dp 彩虹描边、玻璃面渐变、5dp+1.8dp 倒角、12dp 投影；**顶栏/底栏从 `Scaffold` 移出，改为根 `Box` 的直接子节点**；页面视口下移到顶栏外壳上沿；页面视口顶部 28dp 圆角裁切；`edgeBlur` 只对底部做高斯模糊渐变；删掉原磨砂渐变/彩虹描边/`.shadow()`；次级文字色换 `textSecondary`；`LocalGlassDarkTheme` 跟随 App 主题 | 玻璃要采样真实滚动内容，且亮玻璃上 muted 灰只有 2.6:1；栏不能再用带全屏 `Surface` 的 `Scaffold`，否则页面收不到触摸；顶部模糊会与系统状态栏/tag 栏底色冲突，所以只做底部 |
 | `ui/components/EdgeBlur.kt` | **新增**：从 `backdrop.layer` 重录底部 200dp 带状区域，`BlurEffect` + DstIn 渐变，形成真正的高斯模糊渐隐；API 31 以下跳过 | 用户要求顶/底滚动边缘有柔和模糊，但顶部会与系统栏颜色冲突，因此只实现底部 |
 | `ui/components/WeekMorphPanel.kt` | 形变容器加 `glassEffect(backdrop, glass, cornerDp)` + 76% surface 叠色；遮罩改为面板/箭头的父层 | 周面板与顶栏使用同一块 backdrop 的玻璃；父层结构避免玻璃的 sibling 分享把点击送给遮罩 |
 | `ui/components/CourseDetailSheet.kt` | 抽屉表面加 `glassEffect(backdrop, glass, 顶部圆角)` + 88% surface 叠色；遮罩改为抽屉父层，视觉遮罩单独一层 | 详情抽屉复用同一块玻璃，同时保证正文可读；父层结构修复编辑/复制/删除按钮被遮罩抢点击 |
@@ -44,7 +46,7 @@ main (8197b9b, == origin/main == gitee/main)
 | `viewmodel/ScheduleViewModel.kt` | 先落 `semesterStartDate` 再发布 `_activeSemester` | 修复启动瞬间先显示兜底日期周数（第 18 周）、再跳回第 9 周的竞态 |
 | `ui/**` 若干文件 | `Divider` → `HorizontalDivider`；`hiltViewModel` 换新包 `androidx.hilt.lifecycle.viewmodel.compose`；`asFrameworkPaint()` → `nativePaint`；Room 用 `fallbackToDestructiveMigration(dropAllTables = true)` | 跟进新库 API、消除弃用警告，行为不变 |
 | `docs/VITRO_LIQUID_GLASS.md` | 更新编译基线、撤回兼容改动的说明、验证数据 | 方案、参数标定、验证、更新上游步骤 |
-| `docs/LIQUID_GLASS_TODO.md` | 顶部加状态说明，文件清单更新 | 旧的自研路线归档为历史记录 |
+| `docs/LIQUID_GLASS_TODO.md`、`docs/LIQUID_GLASS_tech.md`、`docs/superpowers/plans/2026-08-07-schedule-interactions.md` | **删除** | 自研着色器 TODO、旧光学规范、旧交互计划均已过期；现状以 VITRO / HANDOFF 为准 |
 | `docs/PROJECT_STRUCTURE.md` | 补 vendor 小节、compileSdk / 工具链版本更新 | 结构说明别过期 |
 
 页面表头避让和滚动布局继续保留：`ScheduleGrid` 使用一个纵向滚动容器，并把顶/底栏避让
@@ -89,10 +91,11 @@ main (8197b9b, == origin/main == gitee/main)
 | 底部高斯模糊 | ✅ 底栏附近 200dp 带状区域真实高斯模糊 + 渐变淡出；顶部不模糊，避免与系统 tag 栏颜色冲突 |
 | 管理 / 我的滑动透感 | ✅ 两页都铺满视口 + `contentPadding`；列表滚过顶/底栏玻璃；管理 Tab 栏固定且不透明 |
 | 主题切换 | ✅ 不再弹 snackbar，只保留背景揭示与图标动画 |
+| 彩色边 / 厚度 | ✅ 1dp 彩虹描边 + 玻璃面渐变 + 5dp 柔光倒角 + 1.8dp rim + 12dp 投影；浅/深都复验 |
 | 周选择面板玻璃 | ✅ 展开后玻璃 + 76% surface；点周格、确认、外部关闭、形态动画都正常 |
 | 课程详情抽屉玻璃 | ✅ 玻璃 + 88% surface；编辑进入/退出、复制/删除、拖动关闭、外部关闭都正常 |
 | 首尾课程可达 | ✅ 滚到底可见第 12 节，最后一行在底栏之上 |
-| 首页纵向滚动 `gfxinfo` | p50 12ms / p90 16ms / p99 20ms，janky 1.71%，missed vsync 0，GPU p90 9ms |
+| 首页纵向滚动 `gfxinfo` | p50 12ms / p90 16ms / p99 21ms，janky 2.04%，missed vsync 0，GPU p90 9ms |
 | 我的页滚动 `gfxinfo` | p50 7ms / p90 10ms / p99 15ms，janky 1.00%，missed vsync 0 |
 | 管理页（全部课程）`gfxinfo` | p50 9ms / p90 12ms / p99 14ms，janky 0.51%，missed vsync 0 |
 | 管理页（添加课程）`gfxinfo` | p50 9ms / p90 12ms / p99 15ms，janky 0.27%，missed vsync 0 |
@@ -145,6 +148,11 @@ main (8197b9b, == origin/main == gitee/main)
 - **管理 / 我的滚动透感**：两页都改为铺满视口的滚动内容 + `contentPadding`；管理 Tab 栏固定在顶栏下方，
   并用不透明底色压住列表，列表从 Tab 栏下方经过后进入顶栏玻璃采样区；我的页整条 LazyColumn 滚过两条栏。
 - **主题切换**：`ScheduleViewModel.setDarkMode` 不再 emit “深色/浅色模式已开启”的 snackbar。
+- **彩色边**：Vitro 的 `dispersion` 是物理 RGB 分离，平整背景上不明显；在玻璃外圈加 1dp
+  `sweepGradient` 描边（浅色 α 0.50 / 深色 α 0.60），近似原型的「色彩溢出」。
+- **厚度**：`refractionHeight / refractionAmount` 从默认 12/26dp 提到 18/34dp，配合 1.02 放大、
+  1.15 饱和度、更强的 rim highlight / shadow；应用层再加玻璃面渐变、5dp 柔光倒角、1.8dp rim
+  和 12dp 投影。这些都是 2D 视觉近似，没有改 Vitro 的 SDF/着色器。
 - **顶栏 + 周数胶囊融合未采用**：Vitro 的 `glassEffectContainer(spacing = 0.dp)` 官方语义是“不融合，
   只合并绘制”；融合需要 `spacing > 0` 且玻璃材质相同，组内会使用 lead 的 tint，胶囊会失去强调色。
   当前胶囊已经整体叠在顶栏里，没有需要靠融合消除的缝隙，保留现状。
@@ -158,13 +166,13 @@ main (8197b9b, == origin/main == gitee/main)
 
 ## 五、已知差距与下一步（按性价比排序）
 
-1. **彩色边（原型的美术化「色彩溢出」）**：Vitro 的 `dispersion` 是物理 RGB 分离，背景越平越看不出彩色；
-   要那种沿边一圈的彩虹，得在玻璃外再叠一层极淡的 `sweepGradient` 描边（~0.6dp）。
+1. **彩色边（已做视觉近似）**：1dp `sweepGradient` 描边 + 0.06 物理色散；如果要更接近原型的
+   折射彩虹，需要改 Vitro 的色散/边缘模型，而不是再加不透明度。
 2. **作息设置页还没套玻璃**：周选择面板、课程详情抽屉已完成；作息设置、导入页仍是实色，
    可以复用同一个 `backdrop`，但页面内容密度高，需要先确认正文可读性。
 3. **顶栏 + 周数胶囊融合（未采用）**：`spacing = 0.dp` 不会融合；融合需要同材质，胶囊会失去强调色。
    如果要做，建议先出 clear glass 胶囊 + 强调色文字的设计稿，再单独实现。
-4. **性能**：首页纵向滚动 p90 16ms / janky 1.71%（底部模糊约 +1ms），我的页 p90 10ms，
+4. **性能**：首页纵向滚动 p90 16ms / janky 2.04%（底部模糊 + 厚度层约 +1ms），我的页 p90 10ms，
    管理两页 p90 12ms；面板展开/收起 p90 17ms / janky 3.35%。玻璃和底部模糊都不是主要瓶颈
    （GPU p90 9ms），后续要压优先看面板形变期间的重组/渐变。
 5. **底部模糊参数**：当前底部 200dp / 20dp 半径；低端机若贴线，可先降 `edgeHeight` 或 `radius`，

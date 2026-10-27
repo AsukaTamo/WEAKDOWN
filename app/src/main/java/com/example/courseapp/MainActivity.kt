@@ -16,6 +16,7 @@ import androidx.core.view.WindowCompat
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -34,13 +35,18 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.asImageBitmap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.layout
@@ -330,20 +336,38 @@ fun CourseApp(
     val glassMaterial = remember(isDarkMode) {
         // 浅色：乳白玻璃（原型图里顶栏/底栏都是上白下淡的奶白玻璃），带一点色散
         // 深色：烟熏玻璃，用深色染色压下去，白字才有对比度
+        // 厚度：加大 refractionHeight / refractionAmount（默认 12/26dp 太平），
+        // 再加一点放大、高光和投影，边缘才有真正“玻璃块”的倒角感。
         if (isDarkMode) {
             Glass.Regular.copy(
                 appearance = GlassAppearance.Dark,
                 tint = Color(0xFF0B0B10).copy(alpha = 0.72f),
                 brightness = 0.55f,
-                dispersion = 0.05f,
-                blurRadius = 7.dp
+                dispersion = 0.06f,
+                blurRadius = 7.dp,
+                refractionHeight = 18.dp,
+                refractionAmount = 34.dp,
+                magnification = 1.02f,
+                saturation = 1.15f,
+                highlightIntensity = 1.3f,
+                shadowRadius = 34.dp,
+                shadowOffset = 12.dp,
+                shadowOpacity = 0.22f
             )
         } else {
             Glass.Regular.copy(
                 appearance = GlassAppearance.Light,
                 brightness = 0.30f,
-                dispersion = 0.05f,
-                blurRadius = 7.dp
+                dispersion = 0.06f,
+                blurRadius = 7.dp,
+                refractionHeight = 18.dp,
+                refractionAmount = 34.dp,
+                magnification = 1.02f,
+                saturation = 1.15f,
+                highlightIntensity = 1.25f,
+                shadowRadius = 34.dp,
+                shadowOffset = 12.dp,
+                shadowOpacity = 0.20f
             )
         }
     }
@@ -351,6 +375,11 @@ fun CourseApp(
     // 换成同色系压深一档的 textSecondary，暗玻璃继续用原来的 muted
     val barMutedInk = if (isDarkMode) palette.topMuted else appColors(false).textSecondary
     val navInactiveInk = if (isDarkMode) palette.navInactive else appColors(false).textSecondary
+
+    // 彩色描边：在玻璃外圈叠一层极淡的 sweepGradient，近似原型图的「色彩溢出 / Color Bleed」。
+    val colorBleed = remember(isDarkMode) { colorBleedBrush(isDarkMode) }
+    // 玻璃面：顶部提亮、底部压暗的极淡渐变，配合内侧倒角高光/阴影，避免像一块平的半透明板。
+    val glassFace = remember(isDarkMode) { glassFaceBrush(isDarkMode) }
 
     // 返回键：先关周选择弹层 / 回到首页，最后才交给系统退出。
     BackHandler(
@@ -509,12 +538,24 @@ fun CourseApp(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(ScheduleDimensions.TopBarHeight)
+                        // 悬浮投影：让玻璃块从背景上“浮”起来，而不是贴在上面
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = GlassBarShape,
+                            clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.10f),
+                            spotColor = Color.Black.copy(alpha = 0.20f)
+                        )
                         // 液态玻璃：折射 / 色散 / 高光 / 阴影全部由 Vitro 的着色器负责
                         .glassEffect(
                             backdrop = glassBackdrop,
                             glass = glassMaterial,
-                            shape = RoundedCornerShape(28.dp)
+                            shape = GlassBarShape
                         )
+                        // 玻璃面 → 彩色边 → 内侧倒角：三层一起才有“玻璃块”的厚度
+                        .background(glassFace, GlassBarShape)
+                        .border(1.dp, colorBleed, GlassBarShape)
+                        .glassBevel(isDarkMode)
                         .padding(horizontal = 18.dp, vertical = 6.dp)
                 ) {
                     IconButton(
@@ -709,11 +750,21 @@ fun CourseApp(
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(72.dp)
+                        .shadow(
+                            elevation = 12.dp,
+                            shape = GlassBarShape,
+                            clip = false,
+                            ambientColor = Color.Black.copy(alpha = 0.10f),
+                            spotColor = Color.Black.copy(alpha = 0.20f)
+                        )
                         .glassEffect(
                             backdrop = glassBackdrop,
                             glass = glassMaterial,
-                            shape = RoundedCornerShape(28.dp)
+                            shape = GlassBarShape
                         )
+                        .background(glassFace, GlassBarShape)
+                        .border(1.dp, colorBleed, GlassBarShape)
+                        .glassBevel(isDarkMode)
                         .onGloballyPositioned { coords ->
                             val origin = coords.positionInWindow()
                             if (bottomBarOrigin != origin) bottomBarOrigin = origin
@@ -941,3 +992,69 @@ private val TopBarTopGap = 8.dp
 
 /** 页面内容顶部裁切的圆角，与顶栏玻璃的 28dp 圆角呼应。 */
 private val PageTopCorner = 28.dp
+
+private val GlassBarShape = RoundedCornerShape(28.dp)
+
+/** 玻璃面渐变：顶部受光、底部略暗，给平整的半透明面一点体积感。 */
+private fun glassFaceBrush(isDarkMode: Boolean): Brush = Brush.verticalGradient(
+    0f to Color.White.copy(alpha = if (isDarkMode) 0.14f else 0.18f),
+    0.45f to Color.Transparent,
+    1f to Color.Black.copy(alpha = if (isDarkMode) 0.24f else 0.07f)
+)
+
+/**
+ * 内侧倒角：沿外轮廓再画一圈 1.8dp 的竖向渐变描边。
+ * 顶边亮、底边先暗再带一道细高光，模拟玻璃边缘的厚度，而不是只有一圈细边框。
+ */
+private fun Modifier.glassBevel(isDarkMode: Boolean): Modifier = drawWithContent {
+    drawContent()
+    // 内侧柔光带：顶部微亮、底部微暗，先铺一层 5dp 的软过渡，让倒角不是只有一条硬线
+    val soft = 5.dp.toPx()
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            0f to Color.White.copy(alpha = if (isDarkMode) 0.07f else 0.08f),
+            0.35f to Color.Transparent,
+            0.70f to Color.Transparent,
+            1f to Color.Black.copy(alpha = if (isDarkMode) 0.14f else 0.07f)
+        ),
+        topLeft = Offset(soft / 2f, soft / 2f),
+        size = Size(size.width - soft, size.height - soft),
+        cornerRadius = CornerRadius((28.dp.toPx() - soft / 2f).coerceAtLeast(0f)),
+        style = Stroke(soft)
+    )
+    // 清晰的倒角线：顶边亮、底边先暗再带一道细高光
+    val stroke = 1.8.dp.toPx()
+    val inset = stroke / 2f
+    val radius = (28.dp.toPx() - inset).coerceAtLeast(0f)
+    drawRoundRect(
+        brush = Brush.verticalGradient(
+            0f to Color.White.copy(alpha = if (isDarkMode) 0.45f else 0.55f),
+            0.22f to Color.White.copy(alpha = 0.05f),
+            0.55f to Color.Transparent,
+            0.88f to Color.Black.copy(alpha = if (isDarkMode) 0.26f else 0.12f),
+            1f to Color.White.copy(alpha = if (isDarkMode) 0.30f else 0.32f)
+        ),
+        topLeft = Offset(inset, inset),
+        size = Size(size.width - stroke, size.height - stroke),
+        cornerRadius = CornerRadius(radius, radius),
+        style = Stroke(stroke)
+    )
+}
+
+/**
+ * 原型图的「色彩溢出」：玻璃外圈很淡的一圈光谱。Vitro 的 dispersion 是物理 RGB 分离，
+ * 在平整背景上几乎看不见，所以额外用 sweepGradient 描边做视觉近似。
+ */
+private fun colorBleedBrush(isDarkMode: Boolean): Brush {
+    val alpha = if (isDarkMode) 0.60f else 0.50f
+    return Brush.sweepGradient(
+        listOf(
+            Color(0xFF7BD8FF).copy(alpha = alpha),
+            Color(0xFF9C8CFF).copy(alpha = alpha * 0.9f),
+            Color(0xFF7CFFC4).copy(alpha = alpha * 0.75f),
+            Color(0xFFFFB1D9).copy(alpha = alpha * 0.9f),
+            Color(0xFFFF8CC8).copy(alpha = alpha),
+            Color(0xFF7BD8FF).copy(alpha = alpha)
+        )
+    )
+}

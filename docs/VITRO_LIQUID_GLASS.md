@@ -2,7 +2,8 @@
 
 > 结论：顶栏 / 底栏的材质改为 [Vitro](https://github.com/itshedimisawi/vitro) 的 AGSL 液态玻璃，
 > 源码已 vendor 进本仓库（`app/src/main/java/io/github/itshedimisawi/vitro/`）。
-> 上一版自研着色器 `ui/components/LiquidGlass.kt` 已删除，取舍过程见 [LIQUID_GLASS_TODO.md](LIQUID_GLASS_TODO.md)。
+> 上一版自研着色器 `ui/components/LiquidGlass.kt` 已删除，取舍过程见本文第一节；当前交接状态见
+> [HANDOFF_LIQUID_GLASS.md](HANDOFF_LIQUID_GLASS.md)。
 
 ## 一、为什么换成 Vitro
 
@@ -124,15 +125,34 @@ Box(Modifier.fillMaxSize()) {
 | appearance | `Light` | `Dark` |
 | brightness | **0.30**（默认 0.5） | 0.55 |
 | tint | 无 | `#0B0B10` α 0.72 |
-| dispersion | 0.05（默认 0） | 0.05 |
+| dispersion | 0.06（默认 0） | 0.06 |
 | blurRadius | 7.dp（默认 2.5dp） | 7.dp |
+| refractionHeight | 18.dp（默认 12dp） | 18.dp |
+| refractionAmount | 34.dp（默认 26dp） | 34.dp |
+| magnification | 1.02 | 1.02 |
+| saturation | 1.15 | 1.15 |
+| highlightIntensity | 1.25 | 1.3 |
+| shadowRadius / offset / opacity | 34dp / 12dp / 0.20 | 34dp / 12dp / 0.22 |
 
 - `brightness` 调低是因为默认 0.5 会把亮背景糊成一片死白：实测栏内 227，原型是 207；
   降到 0.30 后实测玻璃体 204 / 高光 231，和原型的 207 / 228 基本重合。
 - 深色上游默认材质对**亮背景**会留亮（实测 150+），加 72% 的深色染色后实测 60（顶栏）/ 33（底栏），
   与原型 57 / 25 一致，白字对比度也就够了。
-- `dispersion` 默认 0（完全没有色散），而原型标注了「边缘色散 / 色彩溢出」，所以开 0.05。
+- `dispersion` 默认 0（完全没有色散），而原型标注了「边缘色散 / 色彩溢出」，所以开 0.06。
 - `blurRadius` 从 2.5dp 提到 7dp，贴近原型的磨砂程度。
+- **厚度**：默认 `refractionHeight / refractionAmount = 12 / 26dp` 看起来像一块平的半透明板，
+  加到 18 / 34dp，并配 1.02 放大、1.15 饱和度和更强的 rim highlight / shadow；
+  边缘折射和倒角终于能看出来。
+
+### 彩色边与厚度（应用层视觉近似）
+
+- **彩色边**：Vitro 的 `dispersion` 是物理 RGB 分离，在平整背景上几乎看不见；应用层在玻璃外圈
+  再叠一条 **1dp 的 sweepGradient 描边**（`colorBleedBrush`，浅色 α 0.50 / 深色 α 0.60），
+  只做视觉接近，不参与折射。它是“沿边一圈的彩虹”，不是物理色散。
+- **玻璃面**：`glassFaceBrush` 在玻璃上叠一层极淡的竖向渐变（顶部白、底部黑），让面有受光/背光。
+- **倒角**：`Modifier.glassBevel` 先画 5dp 的柔光带（顶亮底暗），再画 1.8dp 的清晰 rim（顶白、
+  底暗、最底一道细高光）；配合 `Modifier.shadow(12dp)`，让玻璃块浮起来。
+  这些是 2D 近似，没有改 Vitro 的 SDF/着色器。
 
 ### 文字与主题
 
@@ -153,10 +173,11 @@ Box(Modifier.fillMaxSize()) {
 | 顶部圆角裁切 | 页面视口用 28dp 顶部圆角裁切；内容上滑时左右两侧以圆角消失，红圈处的直边消失 |
 | 管理 / 我的滑动透感 | 两页都改成铺满视口 + `contentPadding`；列表可以真实滚过顶/底栏玻璃；管理 Tab 栏固定在栏下且不透明 |
 | 主题切换 | 浅/深切换不再弹 snackbar，只保留背景揭示与图标动画 |
+| 彩色边 / 厚度 | 1dp sweepGradient 彩虹边 + 玻璃面渐变 + 5dp 柔光倒角 + 1.8dp rim + 12dp 投影；浅/深都复验 |
 | 周选择面板玻璃 | 展开后玻璃 + 76% surface；周格选择、确认、外部点击关闭均正常（修复了玻璃抢命中后子控件点不到的问题） |
 | 课程详情抽屉玻璃 | 玻璃 + 88% surface；编辑进入/退出、复制/删除按钮、拖动关闭、外部点击关闭均正常 |
 | 滚动 + 玻璃动态折射 | 课程色块与文字从顶栏/底栏后方经过，玻璃内采样随内容移动，栏内无黑块或固定纹理 |
-| 首页纵向滚动 `gfxinfo` | p50 12ms / p90 16ms / p99 20ms，janky 1.71%，missed vsync 0，GPU p90 9ms |
+| 首页纵向滚动 `gfxinfo` | p50 12ms / p90 16ms / p99 21ms，janky 2.04%，missed vsync 0，GPU p90 9ms |
 | 我的页滚动 `gfxinfo` | p50 7ms / p90 10ms / p99 15ms，janky 1.00%，missed vsync 0 |
 | 管理页（全部课程）`gfxinfo` | p50 9ms / p90 12ms / p99 14ms，janky 0.51%，missed vsync 0 |
 | 管理页（添加课程）`gfxinfo` | p50 9ms / p90 12ms / p99 15ms，janky 0.27%，missed vsync 0 |

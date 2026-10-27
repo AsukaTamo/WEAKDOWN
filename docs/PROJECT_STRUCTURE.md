@@ -17,7 +17,8 @@ E:\WEAKDOWN
 ├─ README.md                        # 产品介绍与使用说明
 ├─ docs/
 │  ├─ PROJECT_STRUCTURE.md          # 本文档
-│  └─ superpowers/plans/            # 历史实现计划
+│  ├─ VITRO_LIQUID_GLASS.md         # Vitro 接入、材质参数、验证与上游更新
+│  └─ HANDOFF_LIQUID_GLASS.md       # 液态玻璃交接状态与改动清单
 ├─ design/design.html               # 独立设计预览稿，不参与 Android 构建
 └─ app/
    ├─ build.gradle.kts              # :app 模块依赖与编译配置
@@ -68,6 +69,9 @@ WebImportScreen
 | `AGENT.md` | AI 协作规范，不参与 Android 编译。 |
 | `AGENT-TROUBLESHOOT.md` | Gradle wrapper、KSP、片段化 HTML 解析等排障线路。 |
 | `README.md` | 产品介绍、技术栈、构建与测试说明。 |
+| `docs/VITRO_LIQUID_GLASS.md` | Vitro 接入说明：材质参数、彩色边/厚度、底边模糊、验证数据与更新上游步骤。 |
+| `docs/HANDOFF_LIQUID_GLASS.md` | 交接文档：分支/推送关系、改动清单、真机验证与已知差距。 |
+| `docs/PROJECT_STRUCTURE.md` | 本文档：目录结构、运行链路、组件与第三方源码说明。 |
 | `design/design.html` | 设计稿/预览文件，不被 `:app` 模块引用。 |
 | `skills-lock.json` | 技能相关锁定文件，与 App 运行逻辑无关。 |
 
@@ -180,9 +184,13 @@ WebImportScreen
 | `ColorPickerRow.kt` | 课程颜色选择行。 |
 | `CourseCard.kt` | 课表课程卡片。含课程配色计算、进行中状态（旋转锥形渐变描边、弥散光晕、呼吸背光、进度条、剩余分钟）。 |
 | `CourseContextMenu.kt` | 课程长按菜单。 |
-| `CourseDetailSheet.kt` | 课程详情/编辑抽屉。自绘两档锚点、拖动阻尼、按速度吸附、编辑表单。 |
+| `CourseDetailSheet.kt` | 课程详情/编辑抽屉。自绘两档锚点、拖动阻尼、按速度吸附、编辑表单；玻璃 + 88% surface。 |
 | `CourseMoveSheet.kt` | 课程移动目标选择弹层。 |
-| `WeekSelectorDialog.kt` | 教学周选择面板。本周描边标记、总周数按学期收敛。 |
+| `EdgeBlur.kt` | 页面底部高斯模糊渐变：从 `backdrop.layer` 重录带状区域，`BlurEffect` + DstIn 渐变；顶部不模糊。 |
+| `ElasticPress.kt` | 弹性按压反馈。 |
+| `ElasticTabIndicator.kt` | 底栏液态拉伸指示器。 |
+| `KeepAliveModifier.kt` | Tab 页面常驻组合、只切换摆放的修饰符。 |
+| `WeekMorphPanel.kt` | 周选择形变面板；玻璃 + 76% surface，遮罩作为父层。 |
 
 ### ui/splash
 
