@@ -17,6 +17,10 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -390,7 +394,22 @@ private fun ScheduleGrid(
             modifier = Modifier
                 .width(TIME_AXIS_WIDTH)
                 .verticalScroll(scrollState)
-                .background(palette.headerBackdrop)
+                // 节次栏做成和星期胶囊同一套圆角卡片：顶部留 7dp 与胶囊对齐，
+                // 左右各留 3dp；底部留 2dp，让最后一行时间和圆角都收得下。
+                .drawBehind {
+                    val insetX = 3.dp.toPx()
+                    val insetTop = 7.dp.toPx()
+                    val insetBottom = 2.dp.toPx()
+                    drawRoundRect(
+                        color = palette.headerBackdrop,
+                        topLeft = Offset(insetX, insetTop),
+                        size = Size(
+                            width = size.width - insetX * 2f,
+                            height = size.height - insetTop - insetBottom
+                        ),
+                        cornerRadius = CornerRadius(12.dp.toPx())
+                    )
+                }
         ) {
             // Header spacer
             Box(
