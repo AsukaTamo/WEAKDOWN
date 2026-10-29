@@ -1,178 +1,139 @@
-# CourseApp - Android 课程表应用
+<div align="center">
 
-一款面向大学生的课程表 Android 应用：课表展示、课程管理、教务系统导入、学期与作息管理。采用 Jetpack Compose + Material3 构建。
+<h1>WEAKDOWN</h1>
 
-- 应用包名：`com.example.courseapp`
-- 当前版本：`2.4.1`（versionCode 1）
-- 最低版本：Android 8.0（API 26）；目标/编译版本：API 36
+<p><strong>你的课程管家</strong><br/>让学习更有条理，让生活更轻松</p>
 
-## 功能
+<p>
+  <img alt="Open Source Non-Commercial" src="https://img.shields.io/badge/Open%20Source-Non--Commercial-2EA44F?style=flat-square">
+  <img alt="Buy Me a Coffee" src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95-FFDD00?style=flat-square&logo=buymeacoffee&logoColor=000000">
+  <img alt="Android 8.0+" src="https://img.shields.io/badge/Android-8.0%2B-3DDC84?style=flat-square&logo=android&logoColor=white">
+  <img alt="License" src="https://img.shields.io/badge/License-PolyForm%20Noncommercial%201.0.0-6F42C1?style=flat-square">
+</p>
 
-### 课表首页
+<p>
+  <strong>简体中文</strong> · <a href="README_EN.md">English</a>
+</p>
 
-- 按周横向翻页，左侧时间轴 + 7 天日期表头；「今日列」只在当前查看的周高亮
-- 课程卡片展示课程名、教师、地点、节次，颜色按课程名/类型/自定义色计算
-- **进行中课程**：旋转的锥形渐变描边 + 弥散光晕 + 底部呼吸背光，卡片底部显示进度条与剩余分钟
-- **即将开始**（60 分钟内）的课程显示「X 分后」
-- 周选择：点「第 X 周」展开/收起面板，面板内本周用描边标出，非本周时顶栏给出「回本周」入口
-- 长按课程卡片：编辑 / 复制 / 移动到其他时段（冲突时提示替换）/ 删除
-- 点击课程卡片：两档锚点的详情抽屉（拖动有阻尼橡皮筋、松手按速度吸附、下拉关闭），可切换到编辑表单
-- 教务系统导入入口在「添加」页顶部（原首页悬浮按钮已移除，避免遮挡课表）
-- 自定义课表背景图与遮罩透明度、课表辅助线开关
+<p>
+  <a href="#下载与安装">下载安装</a> ·
+  <a href="#功能展示">功能展示</a> ·
+  <a href="#使用说明">使用说明</a> ·
+  <a href="#开源声明">开源声明</a>
+</p>
 
-### 课程管理
+<img src="assets/readme/poster.png" width="320" alt="WEAKDOWN 课程表 App 海报">
 
-- 只展示**当前学期**的课程，按课程名分组折叠/展开，显示每周课时数
-- 批量管理：全选、批量删除（二次确认）
-- 新增课程：名称、教师、地点、学分、周次范围、星期、节次、节数、类型、自定义颜色、备注
-- 单个课程删除（二次确认）、复制到下一天
-- 「所属学期已删除」的孤儿课程检测与一键清理
+</div>
 
-### 数据导入
+## 下载与安装
 
-- 内嵌 WebView 打开学校教务系统，支持桌面/手机 UA 切换，抓取当前页面 HTML
-- Jsoup 多策略解析：表格布局（含 rowspan/colspan 重建）→ div 布局 → JSON 片段；兼容被截断成 `tbody`/`tr` 的片段 HTML
-- 导入预览：列出解析结果，整学期覆盖前二次确认
+<p align="center">
+  <a href="https://github.com/AsukaTamo/WEAKDOWN/releases">
+    <img src="https://img.shields.io/badge/下载-WEAKDOWN%202.4.1-0F64B5?style=for-the-badge&logo=android&logoColor=white" alt="下载 WEAKDOWN 2.4.1">
+  </a>
+</p>
 
-### 学期与作息
-
-- 学期：新增、编辑（名称/起始日期/总周数）、切换当前学期、删除（连带删除该学期课程并二次确认提示门数）
-- 作息：多套作息表保存、切换、删除；逐节编辑上下课时间（时间选择器 / 快捷时长）；恢复默认 12 节
-
-### 其他
-
-- 深色/浅色模式：冷启动跟随系统，顶栏太阳/月亮按钮可手动覆盖（仅本次运行有效）
-- 切换主题时：图标旋转缩放、从按钮位置扩散的圆形揭示、课表卡片按行列错峰回弹
-- 浅色「鸢尾蓝 #0F64B5 + 流光白 #FFFBEA」；深色「火山橙 #FF6047 + 藏蓝 #000035」
-- 课程卡：浅色蓝/青渐变 @92%，深色统一藏蓝底 + 彩色微光 + 彩色描边（4 组循环）
-- 全应用统一的青绿玻璃视觉体系
-- 示例数据只在首次安装播种一次，清空数据后不会复活
-
-## 尚未实现 / 计划中
-
-| 项目 | 现状 |
+| 项目 | 说明 |
 | --- | --- |
-| PDF 课表导入 | FAB 菜单中有入口，点击仅提示，未实现解析 |
-| 上课提醒 | 「我的」页开关仅界面状态，没有通知实现 |
-| JSON 备份导出/导入 | `ProfileViewModel` 已有读写逻辑，但没有任何 UI 入口 |
-| 导入逐条勾选 / 冲突合并 | 目前只能整学期覆盖导入 |
+| 最新版本 | v2.4.1 |
+| 系统要求 | Android 8.0（API 26）及以上 |
+| 安装包 | `WEAKDOWN-2.4.1.apk`（约 16 MB） |
+| 下载 | [GitHub Releases](https://github.com/AsukaTamo/WEAKDOWN/releases) |
 
-## 项目结构
+### 安装步骤
 
-```text
-app/src/main/java/com/example/courseapp/
-├── CourseApp.kt                    # @HiltAndroidApp Application
-├── MainActivity.kt                 # Activity 入口 + 唯一的应用壳（顶栏/底栏/页面切换/抽屉）
-├── data/
-│   ├── db/                         # Room 数据库 v5、DAO、TypeConverter
-│   ├── importer/CourseHtmlParser.kt# 教务 HTML 解析（Jsoup 三策略）
-│   ├── model/                      # Course / Semester / TimeSlotTemplate
-│   └── repository/                 # CourseRepository（含事务组合操作）
-├── di/AppModule.kt                 # Hilt：数据库与 DAO
-├── viewmodel/                      # Schedule / Manage / Import / Profile + 纯计算工具
-└── ui/
-    ├── components/                 # 课程卡片、详情抽屉、周选择、颜色选择等
-    ├── import/                     # 导入入口、WebView Activity、导入预览
-    ├── manage/ profile/ schedule/  # 三个主页面
-    ├── settings/                   # 作息时间设置
-    ├── splash/                     # 启动动画
-    └── theme/                      # 颜色、尺寸/动效令牌、Material3 主题
-```
+1. 打开 [Releases](https://github.com/AsukaTamo/WEAKDOWN/releases) 页面，下载最新 APK。
+2. 在系统提示时，允许浏览器或文件管理器「安装未知应用」。
+3. 点击 APK 完成安装，首次打开即可使用。
+4. 从旧版本升级时直接覆盖安装；卸载应用会清除本地数据。
 
-更细的文件职责与依赖关系见 [docs/PROJECT_STRUCTURE.md](docs/PROJECT_STRUCTURE.md)。
+> 所有课程、学期与个人信息都保存在本机。卸载应用或使用「清空数据」后无法恢复，重要课表请自行留存。
 
-## 技术栈
+## 功能展示
 
-| 类别 | 技术 |
-|------|------|
-| 语言 | Kotlin 2.4.21 |
-| UI | Jetpack Compose 1.12.1（BOM 2026.09.00）+ Material3 1.4.0 |
-| 架构 | 单 Activity + MVVM + Repository |
-| 依赖注入 | Hilt 2.60.1 |
-| 数据库 | Room 2.8.5（Flow 响应式查询） |
-| 网页解析 | Jsoup 1.17.2 |
-| JSON | Gson 2.10.1 |
-| 异步 | Kotlin Coroutines 1.11.0 |
-| 注解处理 | KSP 2.3.12 |
-| 构建 | AGP 9.4.1 / Gradle 9.6.0 / JDK 21 |
-| 启动页 | SplashScreen API 1.0.1 |
-| 测试 | JUnit 4.13.2（JVM 单元测试） |
+<p align="center">
+  <img src="assets/readme/liquid-glass.png" width="900" alt="WEAKDOWN 浅色与深色液态玻璃课表">
+</p>
 
-> 早期版本依赖的 Retrofit / OkHttp 已随未使用的网络层一并移除。
+| 课表 | 课程管理 | 个性设置 |
+| :---: | :---: | :---: |
+| 周次切换 · 今日高亮<br/>进行中课程进度 | 教务导入 · 批量管理<br/>复制 / 移动 / 冲突提示 | 液态玻璃 · 深浅主题<br/>背景图 · 作息模板 |
 
-## 数据库设计
+- **液态玻璃视觉**：浅色「鸢尾蓝 + 流光白」与深色「火山橙 + 藏蓝」双主题，卡片、顶栏、底栏使用统一的玻璃材质。
+- **本周一眼看清**：按周切换，今日列高亮；进行中的课程显示进度与剩余时间，即将开始的课程给出提醒。
+- **三种添加方式**：手动填写、空白格快捷添加、从学校教务系统抓取页面导入。
+- **课程管理**：按课程名折叠分组，支持批量删除、复制到下一天、移动到其他时段，冲突时二次确认。
+- **学期与作息**：多学期管理、自定义总周数、多套作息模板，逐节调整上下课时间。
+- **个性化**：课表背景图与遮罩、辅助线开关、深浅色切换；个人信息卡支持触摸 3D 倾斜与径向流光。
 
-Room `course_db`，版本 **5**，包含四段迁移（1→2→3→4→5）。
+## 使用说明
 
-### courses
+### 1. 先设置学期
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Long (PK) | 自增主键 |
-| name | String | 课程名称 |
-| teacher | String | 授课教师 |
-| location | String | 上课地点 |
-| dayOfWeek | Int | 星期（0=周一 .. 6=周日） |
-| startSlot | Int | 开始节次（0 基） |
-| slotCount | Int | 持续节数 |
-| type | CourseType | 必修 / 选修 / 实验 / 自定义 |
-| weekRange | String | 周次范围，如 `1-5,7-9周`、`1-5(单),7-9周` |
-| semester | String | 所属学期 id |
-| credits | Float | 学分 |
-| notes | String | 备注 |
-| examDate | String | 预留（当前无读写） |
-| customColor | String | 自定义卡片颜色（hex） |
-| colorIndex | Int | 预留（当前无读写） |
+进入「我的」→「学期」，新建或选择当前学期，填写起始日期和总周数。首页的周次、今日高亮和课程显示都以这里为准。
 
-### semesters
+### 2. 添加课程
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | String (PK) | 学期 id（如 `2025-2026-2`） |
-| name | String | 学期名称 |
-| startDate | String | 起始日期（`yyyy-MM-dd`） |
-| totalWeeks | Int | 总周数 |
-| isActive | Boolean | 是否为当前学期 |
-| backgroundUri | String | 课表背景图路径 |
-| scrimAlpha | Float | 背景遮罩不透明度 |
+- **快捷添加**：在首页空白格长按并拖选节次，弹出快捷添加表单。
+- **手动添加**：点底栏「+」→「手动添加」，可填写名称、教师、地点、学分、周次、节次、类型、颜色和备注。
+- **教务导入**：点底栏「+」→「从教务系统导入」，从学校教务页面抓取课表。
 
-### time_slot_templates
+### 3. 查看与整理
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| id | Long (PK) | 自增主键 |
-| name | String | 作息表名称 |
-| slotsJson | String | 节次时间段 JSON 数组 |
-| isActive | Boolean | 是否为当前使用模板（同一时刻只会有一条激活） |
+- 点击课程卡片查看详情、教师、地点与时间。
+- 长按课程卡片可以编辑、复制、移动到其他时段或删除。
+- 点底栏「+」→「本学期课程」可按课程名折叠、批量选择和批量删除。
 
-## 构建与运行
+### 4. 导入教务课表
 
-```bash
-# 使用 Android Studio 打开项目后直接 Run，或命令行构建
-./gradlew assembleDebug
-./gradlew installDebug
-```
+1. 点底栏「+」→「从教务系统导入」。
+2. 在页面内登录学校教务系统，进入本学期课表页。
+3. 点击抓取当前页面，确认识别结果后导入。
 
-> **Gradle Wrapper**：`gradle-wrapper.jar` 已用 Gradle 9.6 重新生成，`./gradlew` / `.\gradlew.bat`
-> 可直接使用，分发包走腾讯镜像。历史排障记录见 [AGENT-TROUBLESHOOT.md](AGENT-TROUBLESHOOT.md)。
+> 不同学校的教务页面结构差异较大。当前支持表格、div 与 JSON 结构；如果导入失败，欢迎在 [Issues](https://github.com/AsukaTamo/WEAKDOWN/issues) 附上脱敏后的 HTML 片段。
 
-**环境要求：**
+### 5. 个性化
 
-- Android Studio 2026.1 或更高版本（需支持 AGP 9.4）
-- JDK 21
-- Android SDK 36
+- 顶栏的太阳 / 月亮按钮切换浅色与深色主题。
+- 「我的」→「课表背景」可设置学期背景图、遮罩透明度与辅助线。
+- 「我的」→「作息时间」可管理多套作息模板，并逐节修改上下课时间。
+- 个人信息卡支持跟随触摸位置的 3D 透视倾斜与径向反射流光，松手后弹性回正。
 
-## 测试
+### 6. 数据与隐私
 
-JVM 单元测试共 7 个类 / 30 个用例，覆盖 HTML 解析、课程时间状态、周次换算、作息迁移、学期过滤、导入覆盖策略，以及浅/深两套配色的对比度。
+- 课程、学期、作息和个人信息保存在本机 Room 数据库，不需要账号登录。
+- 教务导入只在应用内 WebView 中进行，不会把课表上传到第三方服务器。
+- 使用「我的」页底部的「清空数据」会删除全部本地数据，操作不可撤销。
 
-```bash
-./gradlew testDebugUnitTest
-```
+## 开源声明
 
-## 已知限制
+<p align="center">
+  <img src="https://img.shields.io/badge/Open%20Source-Non--Commercial-2EA44F?style=for-the-badge" alt="Open Source Non-Commercial">
+</p>
 
-- 数据库同时配置了明确迁移与 `fallbackToDestructiveMigration()`，若后续漏写迁移会静默清库，正式发布前需重新评估。
-- 导入为整学期覆盖，暂不支持逐条勾选或冲突合并。
-- 课程管理、我的、导入预览等页面只按当前学期工作，跨学期数据需切换学期后查看。
-- `examDate`、`colorIndex` 为预留字段，暂无读写。
+WEAKDOWN 的源码公开，供学习、研究与个人使用。项目采用 **[PolyForm Noncommercial License 1.0.0](LICENSE)**：
+
+- **允许**：个人学习、研究、教学、非商业项目使用、修改与分发。
+- **禁止**：任何商业用途，包括售卖、付费分发、商业产品集成，以及以盈利为目的的二次发布。
+- 分发或修改时，请保留 [LICENSE](LICENSE) 与版权声明。
+
+> 说明：PolyForm Noncommercial 是「源码公开、禁止商用」的许可证，不属于 OSI 定义的开源许可证。README 顶部的 Open Source 徽章用于表达源码公开，不改变许可证的实际条款。
+
+第三方组件（Jetpack Compose、AndroidX、Vitro 等）遵循各自许可证；Vitro 的 Apache 2.0 许可文本见 [LICENSE-vitro.txt](app/src/main/java/io/LICENSE-vitro.txt)。
+
+## 支持 WEAKDOWN
+
+如果 WEAKDOWN 帮到了你，欢迎把它分享给同学，或请作者喝杯咖啡。
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95%20Support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000" alt="Buy Me a Coffee">
+</p>
+
+> Buy Me a Coffee 支持入口准备中；在那之前，分享项目或提交反馈就是最好的支持。
+
+遇到问题或有功能建议，欢迎提交 [GitHub Issue](https://github.com/AsukaTamo/WEAKDOWN/issues)。
+
+<div align="center">
+  <sub>WEAKDOWN · 让学习更有条理，让生活更轻松</sub>
+</div>
