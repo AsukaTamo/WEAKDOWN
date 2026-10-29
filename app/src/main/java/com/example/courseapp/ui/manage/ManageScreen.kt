@@ -42,11 +42,9 @@ import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.layout.boundsInRoot
 import androidx.compose.ui.layout.onGloballyPositioned
 
-/** TabBar 48dp + 分隔线；列表顶部留白要加上它，首项才会落在 tab 栏下面。 */
-private val ManageTabBarHeight = 48.dp + 0.8.dp
-
 @Composable
 fun ManageScreen(
+    tab: Int,
     viewModel: ManageViewModel = hiltViewModel(),
     isDarkMode: Boolean = false,
     onNavigateToImport: () -> Unit = {},
@@ -67,18 +65,19 @@ fun ManageScreen(
     }
 
     val listContentPadding = PaddingValues(
-        top = contentPadding.calculateTopPadding() + ManageTabBarHeight,
+        // 顶部只需要让第一项落在顶栏玻璃下方；页内 Tab 栏已由底栏 + 号面板取代。
+        top = contentPadding.calculateTopPadding() + 8.dp,
         bottom = contentPadding.calculateBottomPadding()
     )
 
     Box(modifier = Modifier.fillMaxSize()) {
-        // Content：两个 Tab 都常驻组合，切 Tab 只切摆放。
-        // 列表铺满整页，顶部留白由 contentPadding 提供，所以滚动时会真实经过 tab 栏和顶栏玻璃。
+        // 两个页面都常驻组合，只按当前页面摆放：切换时滚动位置和表单状态都不丢。
+        // 列表铺满整页，顶部留白由 contentPadding 提供，所以滚动时会真实经过顶栏玻璃。
         Box(modifier = Modifier.fillMaxSize()) {
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .keepPlacedWhen(viewModel.selectedTab == 0)
+                    .keepPlacedWhen(tab == 0)
             ) {
                 AllCoursesPanel(
                     courses = courses,
@@ -100,7 +99,7 @@ fun ManageScreen(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .keepPlacedWhen(viewModel.selectedTab == 1)
+                    .keepPlacedWhen(tab == 1)
             ) {
                 AddCoursePanel(
                     viewModel = viewModel,
@@ -109,23 +108,6 @@ fun ManageScreen(
                     onOpenFieldPicker = onOpenFieldPicker
                 )
             }
-        }
-
-        // Tab 栏固定悬浮在顶栏下方；列表从它下面滚过，然后进入顶栏玻璃的采样区。
-        Column(
-            modifier = Modifier
-                .align(Alignment.TopCenter)
-                .fillMaxWidth()
-                .padding(top = contentPadding.calculateTopPadding())
-                // Tab 栏压在滚动内容上，必须完全不透明，否则列表文字会从 tab 背景里透出来。
-                .background(contentPalette(isDarkMode).canvasStart)
-        ) {
-            TabBar(
-                selectedTab = viewModel.selectedTab,
-                onTabSelected = { viewModel.switchTab(it) },
-                isDarkMode = isDarkMode
-            )
-            HorizontalDivider(color = contentPalette(isDarkMode).divider, thickness = 0.8.dp)
         }
     }
 
@@ -146,55 +128,6 @@ private data class SnackbarState(
     val type: String = "info",
     val visible: Boolean = false
 )
-
-@Composable
-private fun TabBar(
-    selectedTab: Int,
-    onTabSelected: (Int) -> Unit,
-    isDarkMode: Boolean
-) {
-    val tabs = listOf("本学期课程", "添加课程")
-    val palette = contentPalette(isDarkMode)
-    val inactiveColor = palette.muted
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(48.dp)
-            .background(Color.Transparent)
-    ) {
-        tabs.forEachIndexed { index, title ->
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxHeight()
-                    .elasticPress(RoundedCornerShape(12.dp))
-                    .clickable { onTabSelected(index) },
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = title,
-                    fontSize = 15.sp,
-                    fontWeight = FontWeight.Medium,
-                    color = if (selectedTab == index) palette.accent else inactiveColor,
-                    letterSpacing = 0.3.sp
-                )
-                Spacer(modifier = Modifier.height(4.dp))
-                if (selectedTab == index) {
-                    Box(
-                        modifier = Modifier
-                            .width(32.dp)
-                            .height(3.dp)
-                            .background(palette.accent, RoundedCornerShape(2.dp))
-                    )
-                } else {
-                    Spacer(modifier = Modifier.height(3.dp))
-                }
-            }
-        }
-    }
-}
 
 @Composable
 private fun AllCoursesPanel(
@@ -333,7 +266,7 @@ private fun AllCoursesPanel(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = "点击「添加课程」标签页开始添加",
+                        text = "点击底栏 + 号手动添加课程",
                         fontSize = 13.sp,
                         color = palette.muted.copy(alpha = 0.7f)
                     )
@@ -759,8 +692,9 @@ private fun AddCoursePanel(
                 onClick = { viewModel.saveCourse() },
                 modifier = Modifier
                     .fillMaxWidth()
+                    // 和上一个字段多留一点呼吸，按钮整体略往下；高度保持在 48dp。
+                    .padding(top = 14.dp)
                     .height(48.dp)
-                    .padding(top = 4.dp)
                     .elasticPress(RoundedCornerShape(12.dp)),
                 shape = RoundedCornerShape(12.dp),
                 colors = ButtonDefaults.buttonColors(containerColor = palette.accent)

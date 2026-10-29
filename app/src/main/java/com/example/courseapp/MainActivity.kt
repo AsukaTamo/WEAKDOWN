@@ -71,7 +71,11 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.ElasticTabIndicator
+import com.example.courseapp.ui.components.FabActionModalHost
+import com.example.courseapp.ui.components.FabSheetAction
+import com.example.courseapp.ui.components.FabSheetOverlay
 import com.example.courseapp.ui.components.FieldMorphOverlay
+import com.example.courseapp.ui.components.fabModalPageBlur
 import com.example.courseapp.ui.components.FieldPickerRequest
 import com.example.courseapp.ui.components.QuickAddCourseSheet
 import com.example.courseapp.ui.components.QuickAddDraft
@@ -104,9 +108,7 @@ import dagger.hilt.android.AndroidEntryPoint
 
 sealed class Screen {
     data object Schedule : Screen()
-    data object Manage : Screen()
     data object Profile : Screen()
-    data object WebImport : Screen()
     data object ImportPreview : Screen()
 }
 
@@ -290,24 +292,42 @@ fun CourseApp(
     // 保证太阳/月亮动画不会被快照盖住。
     var themeButtonCenter by remember { mutableStateOf(Offset.Zero) }
 
+    // 底栏固定三个位置：首页 / 加号 / 我的。首页与我的按钮保持不变，
+    // 中间只留图标并稍微放大，作为加号「悬浮按钮」；它不参与页面切换。
     val navItems = listOf(
         NavItem(Screen.Schedule, "首页", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth),
-        NavItem(Screen.Manage, "添加", Icons.Filled.AddCircle, Icons.Outlined.AddCircle),
         NavItem(Screen.Profile, "我的", Icons.Filled.Person, Icons.Outlined.Person)
     )
+    // 三个槽位：首页=0、加号=1、我的=2。加号槽不记录矩形，指示器不会落到它上面。
+    val bottomTabSlots = 3
+    val scheduleTabSlot = 0
+    val profileTabSlot = 2
 
-    // 底栏指示器：先记录每个 Tab 胶囊在窗口中的矩形，再换算成底栏内部的相对坐标。
+    // 底栏指示器：先记录每个 Tab 按钮在窗口中的矩形，再换算成底栏内部的相对坐标。
     // 用窗口坐标做基线，底栏上下移动（导航栏 inset 变化）时也不会错位。
     val bottomTabBoundsInWindow = remember {
-        mutableStateListOf<Rect>().apply { repeat(navItems.size) { add(Rect.Zero) } }
+        mutableStateListOf<Rect>().apply { repeat(bottomTabSlots) { add(Rect.Zero) } }
     }
     var bottomBarOrigin by remember { mutableStateOf<Offset?>(null) }
 
+    // FAB → Sheet：加号按钮的真实矩形、底栏玻璃矩形，以及整段形变共用的进度。
+    var bottomBarBounds by remember { mutableStateOf(Rect.Zero) }
+    var fabButtonBounds by remember { mutableStateOf(Rect.Zero) }
+    var fabSheetVisible by remember { mutableStateOf(false) }
+    val fabMorphProgress = remember { Animatable(0f) }
+    // 面板里的三个入口不再切页，而是各自弹出一张毛玻璃浮层。
+    var actionModal by remember { mutableStateOf<FabSheetAction?>(null) }
+    val actionModalProgress = remember { Animatable(0f) }
+    // 26dp 整页模糊按 20 档更新：模糊半径每帧变化会反复重糊整页，档位变化才重建 RenderEffect。
+    val actionModalBlurProgress = remember {
+        derivedStateOf { (actionModalProgress.value * 20f).roundToInt() / 20f }
+    }
+    // 导入预览页返回时回到发起导入的页面（首页或我的）。
+    var sheetReturnScreen by remember { mutableStateOf<Screen>(Screen.Schedule) }
+
     val topBarTitle = when (currentScreen) {
         Screen.Schedule -> activeSemester?.name ?: "未设置学期"
-        Screen.Manage -> "课程管理"
         Screen.Profile -> "我的"
-        Screen.WebImport -> "教务系统导入"
         Screen.ImportPreview -> "导入预览"
     }
     val showWeekSelector = currentScreen == Screen.Schedule
@@ -374,13 +394,15 @@ fun CourseApp(
     // 玻璃面：顶部提亮、底部压暗的极淡渐变，配合内侧倒角高光/阴影，避免像一块平的半透明板。
     val glassFace = remember(themeDarkFraction) { glassFaceBrush(themeDarkFraction) }
 
-    // 返回键：先关周选择弹层 / 回到首页，最后才交给系统退出。
+    // 返回键：先关面板/浮层/周选择弹层，再从导入预览回到发起页，最后回首页。
+    // 加号面板与三个浮层各有自己的 BackHandler，避免两层同时响应。
     BackHandler(
-        enabled = !showTimeSlotSettings && (showWeekDialog || currentScreen != Screen.Schedule)
+        enabled = !showTimeSlotSettings && !fabSheetVisible && actionModal == null &&
+            (showWeekDialog || currentScreen != Screen.Schedule)
     ) {
         when {
             showWeekDialog -> showWeekDialog = false
-            currentScreen == Screen.ImportPreview -> currentScreen = Screen.WebImport
+            currentScreen == Screen.ImportPreview -> currentScreen = sheetReturnScreen
             else -> currentScreen = Screen.Schedule
         }
     }
@@ -392,6 +414,8 @@ fun CourseApp(
             modifier = Modifier
                 .fillMaxSize()
                 .glassBackdrop(glassBackdrop)
+                // 浮层打开时连同 backdrop 纹理一起变糊，底部玻璃采样到的也是模糊后的页面。
+                .fabModalPageBlur(actionModalBlurProgress)
         ) {
             Box(
                 modifier = Modifier
@@ -438,61 +462,37 @@ fun CourseApp(
                         )
                     )
             ) {
-                listOf(Screen.Schedule, Screen.Manage).forEach { screen ->
-                    key(screen) {
-                        val visible = currentScreen == screen
-                        val screenDarkMode = isDarkMode
-                        Box(
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .keepPlacedWhen(visible)
-                        ) {
-                            when (screen) {
-                                Screen.Schedule -> ScheduleScreen(
-                                    viewModel = scheduleViewModel,
-                                    onNavigateToAdd = {
-                                        currentScreen = Screen.Manage
-                                        manageViewModel.switchTab(1)
-                                    },
-                                    onNavigateToImport = { currentScreen = Screen.WebImport },
-                                    onQuickAdd = { dayOfWeek, startSlot, slotCount ->
-                                        quickAddDraft = QuickAddDraft(
-                                            dayOfWeek = dayOfWeek,
-                                            startSlot = startSlot,
-                                            slotCount = slotCount,
-                                            week = visibleWeek,
-                                            semesterId = activeSemester?.id
-                                                ?: ScheduleViewModel.DEFAULT_SEMESTER_ID
-                                        )
-                                    },
-                                    drawBackground = false,
-                                    contentPadding = mainPagePadding,
-                                    entranceEpoch = homeEntranceEpoch
+                key(Screen.Schedule) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .keepPlacedWhen(currentScreen == Screen.Schedule)
+                    ) {
+                        ScheduleScreen(
+                            viewModel = scheduleViewModel,
+                            onNavigateToAdd = {
+                                sheetReturnScreen = Screen.Schedule
+                                actionModal = FabSheetAction.AddCourse
+                            },
+                            onNavigateToImport = {
+                                sheetReturnScreen = Screen.Schedule
+                                actionModal = FabSheetAction.Import
+                            },
+                            onQuickAdd = { dayOfWeek, startSlot, slotCount ->
+                                quickAddDraft = QuickAddDraft(
+                                    dayOfWeek = dayOfWeek,
+                                    startSlot = startSlot,
+                                    slotCount = slotCount,
+                                    week = visibleWeek,
+                                    semesterId = activeSemester?.id
+                                        ?: ScheduleViewModel.DEFAULT_SEMESTER_ID
                                 )
-                                Screen.Manage -> ManageScreen(
-                                    viewModel = manageViewModel,
-                                    isDarkMode = screenDarkMode,
-                                    onNavigateToImport = { currentScreen = Screen.WebImport },
-                                    contentPadding = mainPagePadding,
-                                    onOpenFieldPicker = { fieldPickerRequest = it }
-                                )
-                                else -> Unit
-                            }
-                        }
+                            },
+                            drawBackground = false,
+                            contentPadding = mainPagePadding,
+                            entranceEpoch = homeEntranceEpoch
+                        )
                     }
-                }
-            }
-
-            if (currentScreen == Screen.WebImport) {
-                Box(Modifier.fillMaxSize().padding(pagePadding)) {
-                    WebImportScreen(
-                        isDarkMode = isDarkMode,
-                        onBack = { currentScreen = Screen.Schedule },
-                        onParseHtml = { html ->
-                            importViewModel.parseHtml(html, scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2")
-                            currentScreen = Screen.ImportPreview
-                        }
-                    )
                 }
             }
 
@@ -501,7 +501,7 @@ fun CourseApp(
                     ImportPreviewScreen(
                         viewModel = importViewModel,
                         isDarkMode = isDarkMode,
-                        onBack = { currentScreen = Screen.WebImport },
+                        onBack = { currentScreen = sheetReturnScreen },
                         onImportComplete = {
                             currentScreen = Screen.Schedule
                             importViewModel.clearState()
@@ -531,6 +531,8 @@ fun CourseApp(
                                 topEnd = PageTopCorner
                             )
                         )
+                        // 浮层打开时整页（含玻璃卡片的采样源）一起变糊。
+                        .fabModalPageBlur(actionModalBlurProgress)
                 ) {
                     ProfileScreen(
                         backdrop = glassBackdrop,
@@ -562,6 +564,10 @@ fun CourseApp(
                     .statusBarsPadding()
                     .padding(start = 14.dp, top = TopBarTopGap, end = 14.dp, bottom = 8.dp)
                     .onGloballyPositioned { measuredTopBarPx = it.size.height }
+                    // 浮层打开时顶栏快速退场：玻璃高光/橙色周数胶囊不会再透过面板形成色块。
+                    .graphicsLayer {
+                        alpha = 1f - (actionModalProgress.value * 6f).coerceIn(0f, 1f)
+                    }
             ) {
                 Box(
                     modifier = Modifier
@@ -760,7 +766,7 @@ fun CourseApp(
             val tabBounds = remember(bottomTabBoundsInWindow.toList(), bottomBarOrigin) {
                 val origin = bottomBarOrigin
                 if (origin == null) {
-                    List(navItems.size) { Rect.Zero }
+                    List(bottomTabSlots) { Rect.Zero }
                 } else {
                     bottomTabBoundsInWindow.map { rect ->
                         if (rect.width <= 0f) {
@@ -771,6 +777,21 @@ fun CourseApp(
                     }
                 }
             }
+            // 加号槽（1）永远不是选中项：点加号只开面板，不触发指示器换位。
+            val selectedTabSlot = when (currentScreen) {
+                Screen.Schedule -> scheduleTabSlot
+                Screen.Profile -> profileTabSlot
+                else -> -1
+            }
+            // 面板打开时加号变成向下的箭头（只保留两侧斜线，不带竖线）。
+            val fabIconProgress by animateFloatAsState(
+                targetValue = if (fabSheetVisible) 1f else 0f,
+                animationSpec = tween(
+                    durationMillis = 240,
+                    easing = CubicBezierEasing(0.2f, 0.9f, 0.22f, 1f)
+                ),
+                label = "fabIconProgress"
+            )
             Box(
                 modifier = Modifier
                     .align(Alignment.BottomCenter)
@@ -778,6 +799,10 @@ fun CourseApp(
                     .navigationBarsPadding()
                     .padding(start = 28.dp, top = 4.dp, end = 28.dp, bottom = 10.dp)
                     .onGloballyPositioned { measuredBottomBarPx = it.size.height }
+                    // 底栏同理快速退场，避免橙色加号/选中横线透过面板形成色块。
+                    .graphicsLayer {
+                        alpha = 1f - (actionModalProgress.value * 6f).coerceIn(0f, 1f)
+                    }
             ) {
                 Box(
                     modifier = Modifier
@@ -801,11 +826,13 @@ fun CourseApp(
                         .onGloballyPositioned { coords ->
                             val origin = coords.positionInWindow()
                             if (bottomBarOrigin != origin) bottomBarOrigin = origin
+                            val bounds = coords.boundsInRoot()
+                            if (bottomBarBounds != bounds) bottomBarBounds = bounds
                         }
                 ) {
-                    // 液态拉伸指示器放在内容下方：图标/文字始终压在胶囊之上。
+                    // 液态拉伸横线放在内容下方：图标/文字始终压在横线之上。
                     ElasticTabIndicator(
-                        selectedIndex = navItems.indexOfFirst { it.screen == currentScreen },
+                        selectedIndex = selectedTabSlot,
                         tabBounds = tabBounds,
                         color = palette.weekChip
                     )
@@ -816,65 +843,175 @@ fun CourseApp(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        navItems.forEachIndexed { index, item ->
-                            val isSelected = currentScreen == item.screen
+                        BottomBarTab(
+                            item = navItems[0],
+                            isSelected = currentScreen == Screen.Schedule,
+                            // 选中态现在只有底部横线，没有强调色胶囊垫底，
+                            // 所以图标/文字要用顶栏的主墨色，而不是胶囊里的反白色。
+                            selectedColor = palette.topContent,
+                            inactiveColor = navInactiveInk,
+                            onBoundsChange = { rect ->
+                                if (bottomTabBoundsInWindow[scheduleTabSlot] != rect) {
+                                    bottomTabBoundsInWindow[scheduleTabSlot] = rect
+                                }
+                            },
+                            onClick = {
+                                fabSheetVisible = false
+                                currentScreen = Screen.Schedule
+                            }
+                        )
+
+                        // 中间加号：去掉文字、只留图案，并稍微放大成 FAB。
+                        // 面板打开后图标换成向下的箭头，再点一次收起面板。
+                        Box(
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight(),
+                            contentAlignment = Alignment.Center
+                        ) {
                             Box(
                                 modifier = Modifier
-                                    .weight(1f)
-                                    .fillMaxHeight()
-                                    .padding(horizontal = 3.dp),
+                                    .size(44.dp)
+                                    // 放在按压缩放外层，面板的起点始终是未缩放的按钮矩形。
+                                    .onGloballyPositioned { coords ->
+                                        val rect = coords.boundsInRoot()
+                                        if (fabButtonBounds != rect) fabButtonBounds = rect
+                                    }
+                                    .elasticPress(CircleShape)
+                                    .clip(CircleShape)
+                                    .background(palette.weekChip)
+                                    // 两个图标叠在一起交叉淡入，语义只留一个，随开合切换说明。
+                                    .semantics {
+                                        contentDescription = if (fabSheetVisible) "收起" else "添加"
+                                    }
+                                    .clickable { fabSheetVisible = !fabSheetVisible },
                                 contentAlignment = Alignment.Center
                             ) {
-                                Column(
+                                Icon(
+                                    imageVector = Icons.Default.Add,
+                                    contentDescription = null,
+                                    tint = palette.weekChipContent,
                                     modifier = Modifier
-                                        // 记录胶囊真实矩形，供底栏指示器定位；放在按压缩放外层，
-                                        // 按下时 0.96 的缩放不会让指示器跟着抖。
-                                        .onGloballyPositioned { coords ->
-                                            val rect = coords.boundsInRoot()
-                                            if (bottomTabBoundsInWindow[index] != rect) {
-                                                bottomTabBoundsInWindow[index] = rect
-                                            }
+                                        .size(26.dp)
+                                        .graphicsLayer {
+                                            alpha = 1f - fabIconProgress
+                                            scaleX = 1f - 0.15f * fabIconProgress
+                                            scaleY = 1f - 0.15f * fabIconProgress
                                         }
-                                        .elasticPress(RoundedCornerShape(22.dp))
-                                        .clip(RoundedCornerShape(22.dp))
-                                        .clickable {
-                                            currentScreen = item.screen
-                                            // 底部「+」直接进添加表单，补上首页 FAB 移除后的添加入口
-                                            if (item.screen == Screen.Manage) {
-                                                manageViewModel.switchTab(1)
-                                            }
+                                )
+                                Icon(
+                                    imageVector = Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = palette.weekChipContent,
+                                    modifier = Modifier
+                                        .size(30.dp)
+                                        .graphicsLayer {
+                                            alpha = fabIconProgress
+                                            scaleX = 0.80f + 0.20f * fabIconProgress
+                                            scaleY = 0.80f + 0.20f * fabIconProgress
                                         }
-                                        // 选中态不再修改内边距：胶囊宽度保持稳定，
-                                        // 指示器只需要处理位置/宽度，不会因为选中而二次撑开。
-                                        .padding(horizontal = 18.dp, vertical = 6.dp),
-                                    horizontalAlignment = Alignment.CenterHorizontally,
-                                    verticalArrangement = Arrangement.Center
-                                ) {
-                                    Box(
-                                        modifier = Modifier.size(22.dp),
-                                        contentAlignment = Alignment.Center
-                                    ) {
-                                        Icon(
-                                            imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                                            contentDescription = item.label,
-                                            tint = if (isSelected) palette.weekChipContent else navInactiveInk,
-                                            modifier = Modifier.size(20.dp)
-                                        )
-                                    }
-                                    Spacer(modifier = Modifier.height(2.dp))
-                                    Text(
-                                        text = item.label,
-                                        fontSize = 10.sp,
-                                        fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
-                                        color = if (isSelected) palette.weekChipContent else navInactiveInk,
-                                        letterSpacing = 0.2.sp
-                                    )
-                                }
+                                )
                             }
                         }
+
+                        BottomBarTab(
+                            item = navItems[1],
+                            isSelected = currentScreen == Screen.Profile,
+                            // 选中态现在只有底部横线，没有强调色胶囊垫底，
+                            // 所以图标/文字要用顶栏的主墨色，而不是胶囊里的反白色。
+                            selectedColor = palette.topContent,
+                            inactiveColor = navInactiveInk,
+                            onBoundsChange = { rect ->
+                                if (bottomTabBoundsInWindow[profileTabSlot] != rect) {
+                                    bottomTabBoundsInWindow[profileTabSlot] = rect
+                                }
+                            },
+                            onClick = {
+                                fabSheetVisible = false
+                                currentScreen = Screen.Profile
+                            }
+                        )
                     }
                 }
             }
+
+    // 加号面板：同一颗 FAB 从圆形连续长成圆角卡片，收起时沿同一条曲线缩回原位。
+    // 选中入口时面板与上下栏一起快速隐去，避免它们的橙色玻璃块透过浮层形成色块/亮线。
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .graphicsLayer {
+                alpha = 1f - (actionModalProgress.value * 6f).coerceIn(0f, 1f)
+            }
+    ) {
+        FabSheetOverlay(
+            visible = fabSheetVisible,
+            progress = fabMorphProgress,
+            anchor = fabButtonBounds,
+            barBounds = bottomBarBounds,
+            fabColor = palette.weekChip,
+            fabContentColor = palette.weekChipContent,
+            isDarkMode = isDarkMode,
+            backdrop = glassBackdrop,
+            glass = glassMaterial,
+            onDismiss = { fabSheetVisible = false },
+            onAction = { action ->
+                fabSheetVisible = false
+                // 三个入口不再切页：记录发起页后弹出对应的毛玻璃浮层。
+                sheetReturnScreen = when (currentScreen) {
+                    Screen.Schedule, Screen.Profile -> currentScreen
+                    else -> Screen.Schedule
+                }
+                actionModal = action
+            }
+        )
+    }
+
+    // 三个入口共用的毛玻璃浮层；浮层里的内容仍沿用原来的页面布局。
+    FabActionModalHost(
+        action = actionModal,
+        progress = actionModalProgress,
+        isDarkMode = isDarkMode,
+        onDismiss = { actionModal = null }
+    ) { shownAction ->
+        when (shownAction) {
+            FabSheetAction.AllCourses -> ManageScreen(
+                tab = 0,
+                viewModel = manageViewModel,
+                isDarkMode = isDarkMode,
+                onNavigateToImport = {
+                    sheetReturnScreen = when (currentScreen) {
+                        Screen.Schedule, Screen.Profile -> currentScreen
+                        else -> Screen.Schedule
+                    }
+                    actionModal = FabSheetAction.Import
+                },
+                contentPadding = PaddingValues(0.dp),
+                onOpenFieldPicker = { fieldPickerRequest = it }
+            )
+            FabSheetAction.AddCourse -> ManageScreen(
+                tab = 1,
+                viewModel = manageViewModel,
+                isDarkMode = isDarkMode,
+                onNavigateToImport = {},
+                contentPadding = PaddingValues(0.dp),
+                onOpenFieldPicker = { fieldPickerRequest = it }
+            )
+            FabSheetAction.Import -> WebImportScreen(
+                isDarkMode = isDarkMode,
+                showHeader = false,
+                onBack = { actionModal = null },
+                onParseHtml = { html ->
+                    importViewModel.parseHtml(
+                        html,
+                        scheduleViewModel.activeSemester.value?.id ?: "2025-2026-2"
+                    )
+                    actionModal = null
+                    currentScreen = Screen.ImportPreview
+                }
+            )
+        }
+    }
 
     // 主题切换快照：盖在整屏最上层，只改一个 alpha，不拦截触摸，也不触发重组。
     // 在主题按钮处挖一个软边透明孔，按钮的变色/缩放/日月形变动画始终露在最上面。
@@ -989,6 +1126,64 @@ fun CourseApp(
     )
 }
 
+}
+
+/**
+ * 底栏「首页」「我的」按钮。
+ *
+ * 与改造前保持一致：图标 + 文字上下排列，选中时换实心图标与强调色。
+ * 唯一的改动是选中反馈交给底部的液态拉伸横线，按钮自身不再画胶囊底。
+ */
+@Composable
+private fun RowScope.BottomBarTab(
+    item: NavItem,
+    isSelected: Boolean,
+    selectedColor: Color,
+    inactiveColor: Color,
+    onBoundsChange: (Rect) -> Unit,
+    onClick: () -> Unit
+) {
+    Box(
+        modifier = Modifier
+            .weight(1f)
+            .fillMaxHeight()
+            .padding(horizontal = 3.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            modifier = Modifier
+                // 记录按钮真实矩形，供底部横线定位；放在按压缩放外层，
+                // 按下时 0.96 的缩放不会让指示器跟着抖。
+                .onGloballyPositioned { onBoundsChange(it.boundsInRoot()) }
+                .elasticPress(RoundedCornerShape(22.dp))
+                .clip(RoundedCornerShape(22.dp))
+                .clickable(onClick = onClick)
+                // 选中态不改内边距：按钮宽度稳定，横线只需要处理位置/宽度。
+                .padding(horizontal = 18.dp, vertical = 6.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier.size(22.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
+                    contentDescription = item.label,
+                    tint = if (isSelected) selectedColor else inactiveColor,
+                    modifier = Modifier.size(20.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = item.label,
+                fontSize = 10.sp,
+                fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
+                color = if (isSelected) selectedColor else inactiveColor,
+                letterSpacing = 0.2.sp
+            )
+        }
+    }
 }
 
 @Composable

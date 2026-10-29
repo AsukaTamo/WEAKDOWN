@@ -7,8 +7,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
@@ -32,12 +34,14 @@ private val schoolList = Schools.All
 @Composable
 fun WebImportScreen(
     isDarkMode: Boolean = false,
+    showHeader: Boolean = true,
     onBack: () -> Unit = {},
     onParseHtml: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
     var selectedSchool by remember { mutableStateOf(schoolList[0]) }
     var showSchoolDropdown by remember { mutableStateOf(false) }
+    var showHelp by remember { mutableStateOf(false) }
 
     val webImportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.StartActivityForResult()
@@ -56,34 +60,39 @@ fun WebImportScreen(
     val cardColor = palette.surfaceAlt
 
     Column(modifier = Modifier.fillMaxSize().background(Color.Transparent)) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(48.dp)
-                .background(cardColor)
-                .padding(horizontal = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            IconButton(
-                onClick = onBack,
+        if (showHeader) {
+            Row(
                 modifier = Modifier
-                    .size(36.dp)
-                    .elasticPress(CircleShape)
+                    .fillMaxWidth()
+                    .height(48.dp)
+                    .background(cardColor)
+                    .padding(horizontal = 8.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = textColor, modifier = Modifier.size(20.dp))
+                IconButton(
+                    onClick = onBack,
+                    modifier = Modifier
+                        .size(36.dp)
+                        .elasticPress(CircleShape)
+                ) {
+                    Icon(Icons.AutoMirrored.Filled.ArrowBack, "返回", tint = textColor, modifier = Modifier.size(20.dp))
+                }
+                Text(
+                    text = "教务系统导入",
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.SemiBold,
+                    color = textColor,
+                    modifier = Modifier.weight(1f)
+                )
             }
-            Text(
-                text = "教务系统导入",
-                fontSize = 16.sp,
-                fontWeight = FontWeight.SemiBold,
-                color = textColor,
-                modifier = Modifier.weight(1f)
-            )
         }
 
         Column(
             modifier = Modifier
-                .fillMaxSize()
+                .fillMaxWidth()
+                // 作为浮层内容时要能在固定高度的卡片里滚动；独立页面则铺满剩余高度。
+                .then(if (showHeader) Modifier.weight(1f) else Modifier.fillMaxSize())
+                .verticalScroll(rememberScrollState())
                 .padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
@@ -175,22 +184,45 @@ fun WebImportScreen(
                 Text("打开教务系统", fontSize = 16.sp, fontWeight = FontWeight.SemiBold)
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(10.dp))
 
-            Card(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(12.dp),
-                colors = CardDefaults.cardColors(containerColor = palette.accentSoft)
+            // 使用说明收成一个小文字按钮，不再占一大块卡片；点击后弹出提示。
+            TextButton(
+                onClick = { showHelp = true },
+                modifier = Modifier
+                    .elasticPress(RoundedCornerShape(12.dp))
+                    .clip(RoundedCornerShape(12.dp)),
+                colors = ButtonDefaults.textButtonColors(contentColor = palette.accent)
             ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("使用说明", fontSize = 14.sp, fontWeight = FontWeight.SemiBold, color = palette.accent)
-                    Spacer(modifier = Modifier.height(8.dp))
+                Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                Spacer(modifier = Modifier.width(6.dp))
+                Text("使用说明", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+            }
+
+            Spacer(modifier = Modifier.height(8.dp))
+        }
+    }
+
+    if (showHelp) {
+        AlertDialog(
+            onDismissRequest = { showHelp = false },
+            title = { Text("使用说明") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text("1. 点击上方按钮打开学校官网", fontSize = 13.sp, color = subColor)
                     Text("2. 登录教务系统并进入课表页面", fontSize = 13.sp, color = subColor)
                     Text("3. 页面加载完成后，点击底部\"导入到课表\"按钮", fontSize = 13.sp, color = subColor)
                     Text("4. 确认课程信息后完成导入", fontSize = 13.sp, color = subColor)
                 }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { showHelp = false },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) {
+                    Text("知道了")
+                }
             }
-        }
+        )
     }
 }

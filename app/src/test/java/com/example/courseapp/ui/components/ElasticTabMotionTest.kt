@@ -12,8 +12,8 @@ import org.junit.Test
  */
 class ElasticTabMotionTest {
 
-    /** 真机相邻 Tab 的近似几何：胶囊宽 71.5，相邻中心间距 92。 */
-    private val tabWidth = 71.5f
+    /** 真机相邻 Tab 的近似几何：底部横线宽 30dp，相邻按钮中心间距 92dp。 */
+    private val tabWidth = 30f
     private val centerGap = 92f
 
     /** 向右移动时：前沿是右沿、后沿是左沿，宽度 = 基础宽 + 两沿行程差 × 中心间距。 */
@@ -61,7 +61,7 @@ class ElasticTabMotionTest {
     }
 
     @Test
-    fun `back edge overshoots once at the end, compressing the pill slightly`() {
+    fun `back edge overshoots once at the end, compressing the line slightly`() {
         var maxTrail = 0f
         var minWidth = Float.MAX_VALUE
         var minWidthAt = 0
@@ -75,9 +75,9 @@ class ElasticTabMotionTest {
         }
         // 后沿越过目标 5% 以内：一次轻微超调，不是弹簧来回抖。
         assertTrue("后沿最大行程 $maxTrail", maxTrail > 1.02f && maxTrail < 1.08f)
-        // 超调表现为收尾时胶囊比目标宽度再窄一点，然后弹回。
+        // 超调表现为收尾时横线比目标宽度再窄一点，然后弹回。
         assertTrue("最窄 ${minWidth}px 出现在 ${minWidthAt}ms", minWidth < tabWidth - 1f)
-        assertTrue(minWidth > tabWidth * 0.9f)
+        assertTrue(minWidth > tabWidth * 0.8f)
     }
 
     @Test
