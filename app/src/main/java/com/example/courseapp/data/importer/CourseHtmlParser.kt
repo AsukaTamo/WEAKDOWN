@@ -613,7 +613,10 @@ object CourseHtmlParser {
         return when {
             text.contains("实验") || text.contains("实践") || text.contains("上机") || text.contains("课程设计") ->
                 CourseType.LAB
-            text.contains("选修") || text.contains("公选") ->
+            // 通选 / 通识 / 公选都是"公共选修"，和按专业培养方案的专业选修分开
+            text.contains("通选") || text.contains("通识") || text.contains("公选") ->
+                CourseType.PUBLIC_ELECTIVE
+            text.contains("选修") ->
                 CourseType.ELECTIVE
             text.contains("必修") || text.contains("必选") ->
                 CourseType.REQUIRED

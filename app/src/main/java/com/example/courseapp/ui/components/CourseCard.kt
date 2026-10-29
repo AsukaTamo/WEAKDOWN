@@ -1,15 +1,15 @@
 package com.example.courseapp.ui.components
 
 import android.os.Build
+import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.animateFloat
-import androidx.compose.animation.core.Animatable
-import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
@@ -28,29 +28,25 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.progressSemantics
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.draw.BlurredEdgeTreatment
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.lerp
-import androidx.compose.ui.graphics.drawscope.Stroke
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.draw.drawWithCache
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Shadow
+import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
@@ -62,94 +58,8 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.data.model.Course
-import com.example.courseapp.data.model.CourseType
-import com.example.courseapp.ui.theme.CourseCustomEnd
-import com.example.courseapp.ui.theme.CourseCustomEndDark
-import com.example.courseapp.ui.theme.CourseCustomStart
-import com.example.courseapp.ui.theme.CourseCustomStartDark
-import com.example.courseapp.ui.theme.CourseElectiveEnd
-import com.example.courseapp.ui.theme.CourseElectiveEndDark
-import com.example.courseapp.ui.theme.CourseElectiveStart
-import com.example.courseapp.ui.theme.CourseElectiveStartDark
-import com.example.courseapp.ui.theme.CourseLabEnd
-import com.example.courseapp.ui.theme.CourseLabEndDark
-import com.example.courseapp.ui.theme.CourseLabStart
-import com.example.courseapp.ui.theme.CourseLabStartDark
-import com.example.courseapp.ui.theme.CourseRequiredEnd
-import com.example.courseapp.ui.theme.CourseRequiredEndDark
-import com.example.courseapp.ui.theme.CourseRequiredStart
-import com.example.courseapp.ui.theme.CourseRequiredStartDark
 import com.example.courseapp.ui.theme.ScheduleDimensions
-import com.example.courseapp.ui.theme.ThemeFade
-import com.example.courseapp.ui.theme.schedulePalette
-
-fun courseGradientColors(course: Course, isDarkMode: Boolean): Pair<Color, Color> {
-    // 主题切换期间按同一进度在浅色/深色两套卡片配色之间插值，
-    // 每张卡片自己完成渐变，而不是靠整屏遮罩。
-    val t = ThemeFade.fractionFor(isDarkMode)
-    val light = lightCourseGradient(course)
-    val dark = darkCourseGradient(course)
-    return lerp(light.first, dark.first, t) to lerp(light.second, dark.second, t)
-}
-
-/** 浅色主题的卡片渐变：统一 92% 不透明度，壁纸背景也挡得住。 */
-private fun lightCourseGradient(course: Course): Pair<Color, Color> {
-    val seed = course.name.hashCode()
-    val start: Color
-    val end: Color
-    val custom = if (course.customColor.isNotEmpty()) parseCustomColor(course) else null
-    if (custom != null) {
-        start = custom
-        end = custom
-    } else {
-        val base = lightTypeGradient(course.type)
-        start = courseVariant(base.first, seed)
-        end = courseVariant(base.second, seed)
-    }
-    return start.copy(alpha = 0.92f) to end.copy(alpha = 0.92f)
-}
-
-/** 深色主题的卡片渐变：自定义色按透明度压暗，类型色直接使用深色基准。 */
-private fun darkCourseGradient(course: Course): Pair<Color, Color> {
-    val seed = course.name.hashCode()
-    val custom = if (course.customColor.isNotEmpty()) parseCustomColor(course) else null
-    if (custom != null) {
-        return custom.copy(alpha = 0.88f) to custom.copy(alpha = 0.70f)
-    }
-    val base = darkTypeGradient(course.type)
-    return courseVariant(base.first, seed) to courseVariant(base.second, seed)
-}
-
-private fun parseCustomColor(course: Course): Color? =
-    try {
-        Color(android.graphics.Color.parseColor(course.customColor))
-    } catch (_: Exception) {
-        null
-    }
-
-private fun lightTypeGradient(type: CourseType): Pair<Color, Color> = when (type) {
-    CourseType.REQUIRED -> CourseRequiredStart to CourseRequiredEnd
-    CourseType.ELECTIVE -> CourseElectiveStart to CourseElectiveEnd
-    CourseType.LAB -> CourseLabStart to CourseLabEnd
-    CourseType.CUSTOM -> CourseCustomStart to CourseCustomEnd
-}
-
-private fun darkTypeGradient(type: CourseType): Pair<Color, Color> = when (type) {
-    CourseType.REQUIRED -> CourseRequiredStartDark to CourseRequiredEndDark
-    CourseType.ELECTIVE -> CourseElectiveStartDark to CourseElectiveEndDark
-    CourseType.LAB -> CourseLabStartDark to CourseLabEndDark
-    CourseType.CUSTOM -> CourseCustomStartDark to CourseCustomEndDark
-}
-
-/** 在类型基准色上做确定性微调：色相 ±10°、饱和度 ±4%、亮度只降不升。 */
-private fun courseVariant(color: Color, seed: Int): Color {
-    val hsv = FloatArray(3)
-    android.graphics.Color.colorToHSV(color.toArgb(), hsv)
-    hsv[0] = (hsv[0] + ((seed % 5) - 2) * 5f + 360f) % 360f
-    hsv[1] = (hsv[1] * (1f + (((seed / 5) % 3) - 1) * 0.04f)).coerceIn(0f, 1f)
-    hsv[2] = (hsv[2] * (1f - ((seed / 15) % 3) * 0.04f)).coerceIn(0f, 1f)
-    return Color(android.graphics.Color.HSVToColor(hsv))
-}
+import com.example.courseapp.ui.theme.courseCardStyle
 
 /** 进行中课程专用的动画：描边旋转 + 光晕呼吸。只在 isActive 时才创建。 */
 private class ActiveCourseAnimation(
@@ -180,6 +90,19 @@ private fun rememberActiveCourseAnimation(): ActiveCourseAnimation {
     return ActiveCourseAnimation(rotation, breathe)
 }
 
+/**
+ * 首页课程卡：液态玻璃微磨砂色卡。
+ *
+ * 和顶栏/底栏同一套视觉语言（半透明染色 + 顶部受光 + 1px 描边 + 内倒角 + 柔和投影），
+ * 但卡片放在 backdrop 子树里、且数量多，所以不做逐卡折射采样，改用 2D 分层近似：
+ *
+ * 1. [com.example.courseapp.ui.theme.CourseCardStyle.base] 深色模式下的磨砂底；
+ * 2. 预设色卡染色（带 alpha，保持"能透出一点点壁纸"的玻璃感）；
+ * 3. 左上角高光晕 + 竖向受光/背光渐变（磨砂玻璃的漫反射）；
+ * 4. 1dp 描边 + 内侧 1.4dp 倒角高光，让边缘有厚度。
+ *
+ * 浅色模式正文用同色系深色，深色模式用同色系提亮色，不再一律白字。
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CourseCard(
@@ -196,28 +119,7 @@ fun CourseCard(
     onLongClick: (() -> Unit)? = null,
     modifier: Modifier = Modifier
 ) {
-    val palette = schedulePalette(isDarkMode, hasWallpaperBackground)
-    // 主题过渡进度：卡片自己的背景/描边/正文色全部按它插值，和页面其余元素同步
-    val themeFraction = ThemeFade.fractionFor(isDarkMode)
-    val (rawStart, rawEnd) = courseGradientColors(course, isDarkMode)
-    val darkBase = Color(0xD914141A)
-    // 浅色是彩色渐变、深色是藏蓝底 + 彩色微光：底色向 darkBase 收拢
-    val startColor = lerp(rawStart, darkBase, themeFraction)
-    val endColor = lerp(rawEnd, darkBase, themeFraction)
-    val cardAccent = lerp(rawStart, courseDarkAccent(course), themeFraction)
-    val bodyColor = lerp(
-        Color.White.copy(alpha = 0.88f),
-        Color(0xFFD1D5F0),
-        themeFraction
-    )
-    val textShadow = if (themeFraction < 0.5f) Shadow(
-        color = Color(0x33000000),
-        offset = Offset(0f, 1f),
-        blurRadius = 2f
-    ) else null
-    val lightOverlayAlpha = 1f - themeFraction
-    val darkOverlayAlpha = themeFraction
-    val baseTextStyle = LocalTextStyle.current.copy(shadow = textShadow)
+    val style = courseCardStyle(course, isDarkMode, hasWallpaperBackground)
     val shape = RoundedCornerShape(ScheduleDimensions.CourseCorner)
     val teacherLine = remember(course.teacher) { course.teacher.trim() }
     val locationLine = remember(course.location) { course.location.trim() }
@@ -258,7 +160,6 @@ fun CourseCard(
         label = "courseProgress"
     )
 
-
     // 只有进行中的课程才跑无限动画，其余卡片保持零额外开销。
     val activeAnimation = if (isActive) rememberActiveCourseAnimation() else null
 
@@ -277,7 +178,7 @@ fun CourseCard(
     ) {
         if (activeAnimation != null) {
             ActiveCourseGlow(
-                accent = rawStart,
+                accent = style.glow,
                 corner = ScheduleDimensions.CourseCorner,
                 breathe = activeAnimation.breathe
             )
@@ -293,35 +194,58 @@ fun CourseCard(
                         else -> 3.dp
                     },
                     shape = shape,
-                    ambientColor = Color.Black.copy(alpha = if (hasWallpaperBackground) 0.24f else 0.10f),
-                    spotColor = Color.Black.copy(alpha = if (hasWallpaperBackground) 0.28f else 0.12f)
+                    ambientColor = style.shadowInk.copy(alpha = style.shadowInk.alpha * 0.5f),
+                    spotColor = style.shadowInk
                 )
                 .clip(shape)
+                .then(
+                    if (style.base.alpha > 0f) {
+                        Modifier.background(style.base, shape)
+                    } else {
+                        Modifier
+                    }
+                )
+                // 色卡染色：上浅下深一点点，避免整块像一张纯色贴纸
                 .background(
-                    brush = Brush.linearGradient(listOf(startColor, endColor)),
+                    brush = Brush.verticalGradient(listOf(style.fillTop, style.fillBottom)),
                     shape = shape
                 )
-                // 浅色高光/压暗与深色彩色微光同时存在，只是透明度跟着过渡进度此消彼长
-                .background(
-                    brush = Brush.verticalGradient(
-                        listOf(
-                            Color.White.copy(
-                                alpha = (if (hasWallpaperBackground) 0.18f else 0.12f) * lightOverlayAlpha
-                            ),
-                            Color.Transparent,
-                            Color.Black.copy(
-                                alpha = (if (hasWallpaperBackground) 0.16f else 0.08f) * lightOverlayAlpha
-                            )
+                // 磨砂玻璃的三层光：左上角高光晕 + 顶部受光 + 底部背光
+                .drawWithCache {
+                    val bloom = Brush.radialGradient(
+                        colorStops = arrayOf(
+                            0f to Color.White.copy(alpha = if (isDarkMode) 0.10f else 0.20f),
+                            1f to Color.Transparent
+                        ),
+                        center = Offset(size.width * 0.12f, -size.height * 0.08f),
+                        radius = size.width * 1.15f
+                    )
+                    val sheen = Brush.verticalGradient(
+                        colorStops = arrayOf(
+                            0f to Color.White.copy(alpha = if (isDarkMode) 0.14f else 0.28f),
+                            0.22f to Color.White.copy(alpha = if (isDarkMode) 0.04f else 0.05f),
+                            0.52f to Color.Transparent,
+                            1f to Color.Black.copy(alpha = if (isDarkMode) 0.24f else 0.05f)
                         )
-                    ),
-                    shape = shape
-                )
-                .background(
-                    brush = Brush.linearGradient(
-                        listOf(cardAccent.copy(alpha = 0.18f * darkOverlayAlpha), Color.Transparent)
-                    ),
-                    shape = shape
-                )
+                    )
+                    // 内侧倒角：顶边亮、底边暗，玻璃边缘才有厚度而不是一圈细线
+                    val rim = 1.4.dp.toPx()
+                    val rimRadius = (ScheduleDimensions.CourseCorner.toPx() - rim / 2f).coerceAtLeast(0f)
+                    val rimBrush = Brush.verticalGradient(
+                        listOf(style.bevelTop, Color.Transparent, style.bevelBottom)
+                    )
+                    onDrawBehind {
+                        drawRect(bloom)
+                        drawRect(sheen)
+                        drawRoundRect(
+                            brush = rimBrush,
+                            topLeft = Offset(rim / 2f, rim / 2f),
+                            size = Size(size.width - rim, size.height - rim),
+                            cornerRadius = CornerRadius(rimRadius, rimRadius),
+                            style = Stroke(rim)
+                        )
+                    }
+                }
                 .then(
                     if (activeAnimation != null) {
                         // 旋转的锥形渐变描边（conic / sweep gradient）
@@ -329,25 +253,17 @@ fun CourseCard(
                             rotation = activeAnimation.borderRotation,
                             colors = listOf(
                                 Color.White,
-                                rawStart.copy(alpha = 0.9f),
+                                style.glow,
                                 Color.White.copy(alpha = 0.35f),
                                 Color.Transparent,
-                                Color.White.copy(alpha = 0.5f),
+                                style.glow.copy(alpha = 0.5f),
                                 Color.White
                             ),
                             width = 2.dp,
                             corner = ScheduleDimensions.CourseCorner
                         )
                     } else {
-                        Modifier.border(
-                            width = (1f + 0.5f * themeFraction).dp,
-                            color = lerp(
-                                palette.courseStroke,
-                                cardAccent.copy(alpha = 0.85f),
-                                themeFraction
-                            ),
-                            shape = shape
-                        )
+                        Modifier.border(width = 1.dp, color = style.border, shape = shape)
                     }
                 )
                 .combinedClickable(
@@ -355,7 +271,7 @@ fun CourseCard(
                     onLongClick = { onLongClick?.invoke() }
                 )
         ) {
-            // 进行中：底部内嵌胶囊进度条。必须离描边留出间距，否则白色进度会被白色高亮描边"吃掉"。
+            // 进行中：底部内嵌胶囊进度条。必须离描边留出间距，否则进度条会被倒角高光"吃掉"。
             if (isActive) {
                 Box(
                     modifier = Modifier
@@ -364,13 +280,13 @@ fun CourseCard(
                         .padding(start = 5.dp, end = 5.dp, bottom = 5.dp)
                         .height(3.dp)
                         .clip(RoundedCornerShape(1.5.dp))
-                        .background(Color.Black.copy(alpha = 0.22f))
+                        .background(style.progressTrack)
                 ) {
                     Box(
                         modifier = Modifier
                             .fillMaxWidth(animatedProgress)
                             .fillMaxHeight()
-                            .background(Color.White)
+                            .background(style.progress)
                             .progressSemantics(animatedProgress)
                     )
                 }
@@ -389,7 +305,7 @@ fun CourseCard(
             ) {
                 Text(
                     text = course.name,
-                    color = Color.White,
+                    color = style.ink,
                     fontSize = titleFontSize,
                     fontWeight = FontWeight.Bold,
                     lineHeight = if (course.slotCount <= 1) 11.sp else 12.sp,
@@ -401,8 +317,7 @@ fun CourseCard(
                 if (teacherLine.isNotBlank()) {
                     Text(
                         text = teacherLine,
-                        color = bodyColor,
-                        style = baseTextStyle,
+                        color = style.bodyInk,
                         fontSize = bodyFontSize,
                         fontWeight = FontWeight.Medium,
                         lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
@@ -415,8 +330,7 @@ fun CourseCard(
                 if (locationLine.isNotBlank()) {
                     Text(
                         text = "@$locationLine",
-                        color = bodyColor,
-                        style = baseTextStyle,
+                        color = style.bodyInk,
                         fontSize = bodyFontSize,
                         fontWeight = FontWeight.Medium,
                         lineHeight = if (course.slotCount <= 1) 9.sp else 10.sp,
@@ -430,8 +344,7 @@ fun CourseCard(
                     Spacer(modifier = Modifier.weight(1f))
                     Text(
                         text = statusText,
-                        color = bodyColor,
-                        style = baseTextStyle,
+                        color = style.bodyInk,
                         fontSize = 8.sp,
                         fontWeight = FontWeight.SemiBold,
                         lineHeight = 9.sp,
@@ -552,14 +465,3 @@ private fun Modifier.rotatingConicBorder(
         }
     }
 }
-
-// ── 深色模式课程卡彩色描边：4 组循环，按课程名确定性取色 ──
-private val darkCourseAccents = listOf(
-    Color(0xFFE8553D), // 火山橙
-    Color(0xFFFF9F43), // 琥珀金
-    Color(0xFF00D2D3), // 电光青
-    Color(0xFFA29BFE)  // 星云紫
-)
-
-internal fun courseDarkAccent(course: Course): Color =
-    darkCourseAccents[Math.floorMod(course.name.hashCode(), darkCourseAccents.size)]

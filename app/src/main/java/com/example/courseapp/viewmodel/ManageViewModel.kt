@@ -5,13 +5,12 @@ import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.toArgb
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.data.repository.CourseRepository
+import com.example.courseapp.ui.theme.CourseColorPreset
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.*
 import kotlinx.coroutines.launch
@@ -78,7 +77,8 @@ class ManageViewModel @Inject constructor(
         private set
     var selectedSlotCount by mutableIntStateOf(2)
         private set
-    var selectedColor by mutableStateOf<Color?>(null)
+    /** 卡片颜色：null = 跟随课程类型的默认色卡。 */
+    var selectedColorPreset by mutableStateOf<CourseColorPreset?>(null)
         private set
 
     private val _snackbarMessage = MutableSharedFlow<Pair<String, String>>()
@@ -98,7 +98,7 @@ class ManageViewModel @Inject constructor(
     fun updateType(value: CourseType) { selectedType = value }
     fun updateStartSlot(value: Int) { selectedStartSlot = value }
     fun updateSlotCount(value: Int) { selectedSlotCount = value }
-    fun updateColor(value: Color?) { selectedColor = value }
+    fun updateColor(value: CourseColorPreset?) { selectedColorPreset = value }
 
     // Batch operations
     fun toggleBatchMode() {
@@ -146,9 +146,7 @@ class ManageViewModel @Inject constructor(
                 semester = semesterId,
                 credits = credits.toFloatOrNull() ?: 0f,
                 notes = notes,
-                customColor = selectedColor?.let { color ->
-                    String.format("#%06X", 0xFFFFFF and color.toArgb())
-                } ?: ""
+                customColor = selectedColorPreset?.storageKey ?: ""
             )
             repository.insertCourse(course)
             clearForm()
@@ -194,6 +192,6 @@ class ManageViewModel @Inject constructor(
         selectedType = CourseType.REQUIRED
         selectedStartSlot = 0
         selectedSlotCount = 2
-        selectedColor = null
+        selectedColorPreset = null
     }
 }

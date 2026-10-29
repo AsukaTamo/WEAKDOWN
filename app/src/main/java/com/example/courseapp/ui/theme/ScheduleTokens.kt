@@ -15,7 +15,7 @@ object ScheduleDimensions {
     val SlotHeight = 64.dp
     val HeaderHeight = 54.dp
     val TimeAxisWidth = 46.dp
-    val CourseCorner = 7.dp
+    val CourseCorner = 10.dp
     val CourseHorizontalInset = 2.dp
     val CourseInset = CourseHorizontalInset
     val TopBarHeight = 74.dp
@@ -92,8 +92,8 @@ fun schedulePalette(isDarkMode: Boolean, hasWallpaper: Boolean): SchedulePalette
         mutedText = c.textMuted,
         dayText = c.textPrimary,
         headerText = c.textPrimary,
-        // 星期栏 / 时间轴底衬：底色 50% 铺一层，壁纸再花也不会吃掉文字
-        headerBackdrop = c.canvas.copy(alpha = 0.5f),
+        // 星期栏 / 时间轴底衬：亚克力底衬，78% 不透明确保滚动经过的课程不会顶掉文字
+        headerBackdrop = c.canvas.copy(alpha = 0.78f),
         // 今日高亮：实心强调色块
         todaySurface = c.accent,
         todayText = c.accentOn,

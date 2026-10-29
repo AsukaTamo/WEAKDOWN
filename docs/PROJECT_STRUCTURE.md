@@ -102,7 +102,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 | --- | --- |
-| `Course.kt` | Room `courses` 表实体：名称、教师、地点、星期、节次、课程类型、周次范围、学期 id、学分、备注、自定义颜色；同时定义 `CourseType` 枚举。`colorIndex`、`examDate` 为预留字段，当前无读写。 |
+| `Course.kt` | Room `courses` 表实体：名称、教师、地点、星期、节次、课程类型、周次范围、学期 id、学分、备注、自定义颜色；同时定义 `CourseType` 枚举（含通选课）。`customColor` 新数据存色卡 key（如 `ice`），老数据仍是 `#RRGGBB`，读取时按色相迁移。`colorIndex`、`examDate` 为预留字段，当前无读写。 |
 | `Semester.kt` | Room `semesters` 表实体：id、名称、开始日期、总周数、激活状态、背景图路径、遮罩透明度。 |
 | `TimeSlotTemplate.kt` | Room `time_slot_templates` 表实体：模板名称、节次 JSON、激活状态。 |
 
@@ -148,7 +148,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 |---|---|
-| `ScheduleScreen.kt` | 首页课表页。周分页横向滑动、日期表头（今日实心强调色块）、时间轴底衬、课程卡片布局、主题化壁纸遮罩、长按菜单、移动弹层与冲突对话框、Snackbar。首页 FAB 已移除。 |
+| `ScheduleScreen.kt` | 首页课表页。周分页横向滑动、日期表头（`Mon.` 英文缩写 + 亚克力矩形圆角，今日用强调色亚克力）、时间轴底衬、课程卡片布局、主题化壁纸遮罩、长按菜单、移动弹层与冲突对话框、Snackbar。首页 FAB 已移除。 |
 
 ### ui/manage
 
@@ -181,8 +181,9 @@ WebImportScreen
 | 文件 | 作用 |
 |---|---|
 | `AppSnackbar.kt` | 应用内 Snackbar。 |
-| `ColorPickerRow.kt` | 课程颜色选择行。 |
-| `CourseCard.kt` | 课表课程卡片。含课程配色计算、进行中状态（旋转锥形渐变描边、弥散光晕、呼吸背光、进度条、剩余分钟）。 |
+| `Acrylic.kt` | 亚克力修饰符：半透明底 + 竖向受光 + 确定性细噪点 + 1dp 描边，用于首页星期表头。 |
+| `CourseColorPicker.kt` | 课程卡颜色选择器（添加表单 / 编辑抽屉 / 快捷添加共用）：6 套色卡 + 「自动·跟随类型」+ 当前生效提示。 |
+| `CourseCard.kt` | 课表课程卡片：液态玻璃微磨砂色卡（半透明染色 + 磨砂高光 + 1dp 描边 + 内倒角），含进行中状态（旋转锥形渐变描边、弥散光晕、呼吸背光、进度条、剩余分钟）。 |
 | `CourseContextMenu.kt` | 课程长按菜单。 |
 | `CourseDetailSheet.kt` | 课程详情/编辑抽屉。自绘两档锚点、拖动阻尼、按速度吸附、编辑表单；玻璃 + 88% surface。 |
 | `CourseMoveSheet.kt` | 课程移动目标选择弹层。 |
@@ -209,7 +210,8 @@ WebImportScreen
 | 文件 | 作用 |
 |---|---|
 | `AppColors.kt` | **全应用唯一的颜色源**。约 20 个语义角色（canvas / surface / surfaceRaised / hairline / 文字三档 / accent 四档 / success-warning-danger / glass 五档），`LightAppColors` 与 `DarkAppColors` 两套实例：浅色为鸢尾蓝 + 流光白奶油底，深色为火山橙 + 藏蓝近黑底。 |
-| `Color.kt` | 课程卡配色：4 种课程类型 × 深浅两套基准色（白字全部过 4.5:1），外加 Snackbar/FAB 用的两个状态色常量。 |
+| `Color.kt` | Snackbar / FAB 用的两个状态色常量；课程卡配色已迁到 `CourseColors.kt`。 |
+| `CourseColors.kt` | 课程卡 6 套液态玻璃色卡（浅色淡彩底 / 深色低透明染色 + 描边高光）、课程类型默认色映射、`customColor` 的「色卡 key / 老 hex」双格式解析，以及卡片最终绘制参数 `CourseCardStyle`。 |
 | `ScheduleTokens.kt` | 尺寸/动效令牌；`schedulePalette`（首页，含壁纸玻璃层）与 `contentPalette`（其他页面/弹层）都由 `AppColors` 派生，不再各自写 hex。 |
 | `Theme.kt` | Compose `CourseAppTheme`，Material3 配色方案同样由 `AppColors` 派生，保证对话框/开关/菜单跟页面同色系。 |
 | `Type.kt` | Compose typography。 |
@@ -227,17 +229,20 @@ WebImportScreen
 
 ## 测试
 
-`app/src/test` 下为纯 JVM 单元测试（`junit:junit:4.13.2`），共 7 个类 30 个用例：
+`app/src/test` 下为纯 JVM 单元测试（`junit:junit:4.13.2`），共 10 个类 48 个用例：
 
 | 测试类 | 覆盖 |
 |---|---|
-| `CourseHtmlParserTest` | 表格解析、真实 `data.html` 样本 |
+| `CourseHtmlParserTest` | 表格解析、真实 `data.html` 样本、通选课类型识别 |
 | `CourseTimeStatusTest` | 时间槽解析、进行中/即将开始/进度/剩余分钟边界 |
 | `ScheduleWeekTest` | 开学日期到周次的换算边界 |
 | `ScheduleTimeSlotsTest` | 默认作息与旧版作息迁移 |
 | `ScheduleCourseFilterTest` | 按当前学期过滤 |
 | `ImportOverwritePolicyTest` | 覆盖导入策略 |
-| `ColorContrastTest` | 浅/深两套 token 的对比度（正文 4.5 / 标题 7 / 按钮文字 4.5 / 课程卡白字 4.5 / 选中态不许明显暗于未选中） |
+| `ElasticTabMotionTest` | 底栏指示器的弹簧位移换算 |
+| `CourseDraftSelectionTest` | 长按拖选节次的范围换算 |
+| `CourseColorPresetTest` | 课程类型默认色卡、色卡 key 往返、老 hex 颜色迁移、显式色优先、卡片圆角 10-12dp |
+| `ColorContrastTest` | 浅/深两套 token 的对比度（正文 4.5 / 标题 7 / 按钮文字 4.5 / 六套课程卡标题与正文 4.5 / 选中态不许明显暗于未选中） |
 
 ## 当前结构评估
 

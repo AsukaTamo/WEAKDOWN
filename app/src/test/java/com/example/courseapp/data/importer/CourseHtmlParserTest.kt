@@ -53,6 +53,46 @@ class CourseHtmlParserTest {
     }
 
     @Test
+    fun mapsPublicElectiveCourseType() {
+        val html = """
+            <table>
+              <tr>
+                <td colspan="9">header</td>
+              </tr>
+              <tr>
+                <td>时间段</td>
+                <td>节次</td>
+                <td>星期一</td>
+                <td>星期二</td>
+                <td>星期三</td>
+                <td>星期四</td>
+                <td>星期五</td>
+                <td>星期六</td>
+                <td>星期日</td>
+              </tr>
+              <tr>
+                <td rowspan="4">上午</td>
+                <td>1</td>
+                <td rowspan="2" class="td_wrap">
+                  <div class="timetable_con text-left">
+                    <p class="title">艺术鉴赏*</p>
+                    <p><span title="节/周"></span> (1-2节)1-8周</p>
+                    <p><span title="上课地点"></span> 公教1-101</p>
+                    <p><span title="教师"></span> 王老师</p>
+                    <p><span title="课程性质简称"></span> 通选</p>
+                  </div>
+                </td>
+              </tr>
+            </table>
+        """.trimIndent()
+
+        val parsed = CourseHtmlParser.parse(html)
+
+        assertEquals(1, parsed.size)
+        assertEquals(CourseType.PUBLIC_ELECTIVE, parsed[0].type)
+    }
+
+    @Test
     fun parsesRealDataHtmlWithTeacherAndFullLocation() {
         val dataFile = listOf(
             File("data.html"),

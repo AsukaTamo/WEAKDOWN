@@ -1,6 +1,7 @@
 package com.example.courseapp.ui.theme
 
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.max
@@ -86,24 +87,28 @@ class ColorContrastTest {
     }
 
     @Test
-    fun `课程卡白字在四种类型上都满足 AA`() {
-        val lightPairs = listOf(
-            "必修" to (CourseRequiredStart to CourseRequiredEnd),
-            "选修" to (CourseElectiveStart to CourseElectiveEnd),
-            "实验" to (CourseLabStart to CourseLabEnd),
-            "自定义" to (CourseCustomStart to CourseCustomEnd)
-        )
-        val darkPairs = listOf(
-            "必修" to (CourseRequiredStartDark to CourseRequiredEndDark),
-            "选修" to (CourseElectiveStartDark to CourseElectiveEndDark),
-            "实验" to (CourseLabStartDark to CourseLabEndDark),
-            "自定义" to (CourseCustomStartDark to CourseCustomEndDark)
-        )
-        for ((mode, pairs) in listOf("浅色" to lightPairs, "深色" to darkPairs)) {
-            for ((type, gradient) in pairs) {
-                assertContrast("$mode $type 起点白字", Color.White, gradient.first, 4.5)
-                assertContrast("$mode $type 终点白字", Color.White, gradient.second, 4.5)
-            }
+    fun `六套色卡的标题与正文在深浅模式下都满足 AA`() {
+        // 卡片是半透明染色：先按真实叠色顺序合到页面底色上，再算对比度。
+        val lightPage = light.canvas
+        val darkPage = DarkCourseCardBase.compositeOver(dark.canvas)
+        for (preset in CourseColorPreset.entries) {
+            val lightBg = preset.lightFill.compositeOver(lightPage)
+            assertContrast("浅色 ${preset.displayName} 标题", preset.lightInk, lightBg, 4.5)
+            assertContrast(
+                "浅色 ${preset.displayName} 正文",
+                preset.lightInk.copy(alpha = 0.86f).compositeOver(lightBg),
+                lightBg,
+                4.5
+            )
+
+            val darkBg = preset.darkFill.compositeOver(darkPage)
+            assertContrast("深色 ${preset.displayName} 标题", preset.darkInk, darkBg, 4.5)
+            assertContrast(
+                "深色 ${preset.displayName} 正文",
+                preset.darkInk.copy(alpha = 0.86f).compositeOver(darkBg),
+                darkBg,
+                4.5
+            )
         }
     }
 }
