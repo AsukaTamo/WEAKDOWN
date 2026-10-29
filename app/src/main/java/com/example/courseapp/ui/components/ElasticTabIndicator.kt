@@ -9,23 +9,19 @@ import androidx.compose.foundation.layout.offset
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
-import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.withTransform
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.dp
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.launch
 import kotlin.math.PI
@@ -41,7 +37,7 @@ import kotlin.math.sin
  * - 后沿延后 6 帧（100ms @60Hz）才起步，前段故意压慢，宽度因此被拉开，
  *   后段加速追赶，末端再多追 5% 后弹回，形成一次轻微超调；整个过程 280ms 收完。
  *
- * 指示器用 left + width 驱动，不碰 scaleX：横向缩放会把圆角和液体轮廓一起压扁。
+ * 指示器用 left + width 驱动，不碰 scaleX：横向缩放会把圆角压扁。
  */
 internal object ElasticTabMotion {
     /** 前沿从起步到抵达目标的时长。 */
@@ -90,51 +86,65 @@ internal object ElasticTabMotion {
     }
 }
 
+/** 指示器横线尺寸：短横线，拉伸时宽度会明显翻倍。 */
+private val TabLineWidth = 30.dp
+private val TabLineHeight = 3.dp
+
 /**
- * 底栏液态拉伸指示器。
+ * 底栏液态拉伸指示器（按钮底部横线）。
  *
  * 左侧位置与宽度分别由两条边沿的动画值驱动：
  * - 前沿（运动方向上的那条边）先走，后沿（被甩在后面的那条边）晚 6 帧追；
  * - 两条边之间距离就是宽度，因此中途会自然拉长到 2 倍以上，再随着后沿追上来收回；
- * - 后沿带一次轻微超调，收尾时指示器会比目标宽度稍窄一点再弹回。
+ * - 后沿带一次轻微超调，收尾时横线会比目标宽度稍窄一点再弹回。
  *
- * 轮廓不是固定的圆角矩形：宽度被拉开时，前沿一侧鼓成圆钝的“水滴头”，
- * 后沿一侧收细成拖尾，上下边用三次贝塞尔连接；宽度回到目标时形变归零，
- * 恢复成标准胶囊。这样看起来是一团液体被拉出去，而不是一块圆角矩形平移。
+ * 横线本身保持固定的 3dp 高度和圆形端头，只用 left/width 变形，
+ * 不用 scaleX：横向缩放会把圆角和线宽一起压扁。
  *
  * 位移放在 offset 的 lambda 里、宽度放在 layout 的 measure 里读取动画值，
  * 每一帧只失效放置/布局，不触发重组。
  *
- * @param selectedIndex 当前选中的 Tab；-1 表示当前页面不属于底栏（如导入页），此时不绘制。
- * @param tabBounds 每个 Tab 胶囊相对本组件父容器的矩形（px）。未知项用 [Rect.Zero]。
+ * @param selectedIndex 当前选中的 Tab；-1 表示当前页面不属于底栏（导入/课程管理页），此时不绘制。
+ * @param tabBounds 每个 Tab 按钮相对底栏的矩形（px）。中间加号与未知项用 [Rect.Zero]。
  */
 @Composable
 internal fun ElasticTabIndicator(
     selectedIndex: Int,
     tabBounds: List<Rect>,
     color: Color,
-    modifier: Modifier = Modifier,
-    sheenColor: Color = Color.White
+    modifier: Modifier = Modifier
 ) {
-    val target = tabBounds.getOrNull(selectedIndex) ?: return
-    if (target.width <= 0f || target.height <= 0f) return
+    val tab = tabBounds.getOrNull(selectedIndex) ?: return
+    if (tab.width <= 0f || tab.height <= 0f) return
+
+    val density = LocalDensity.current
+    val lineWidthPx = with(density) { TabLineWidth.toPx() }
+    val lineHeightPx = with(density) { TabLineHeight.toPx() }
+
+    // 横线贴在按钮底边、水平居中；左右沿的行程都基于这个矩形计算。
+    fun lineRect(bounds: Rect) = Rect(
+        left = bounds.center.x - lineWidthPx / 2f,
+        top = bounds.bottom - lineHeightPx,
+        right = bounds.center.x + lineWidthPx / 2f,
+        bottom = bounds.bottom
+    )
+
+    val initial = lineRect(tab)
 
     // 两条边沿各自一条 Animatable：中断时从当前可见位置续接，不会跳回起点。
-    val leftEdge = remember { Animatable(target.left) }
-    val rightEdge = remember { Animatable(target.right) }
+    val leftEdge = remember { Animatable(initial.left) }
+    val rightEdge = remember { Animatable(initial.right) }
     var lastIndex by remember { mutableIntStateOf(selectedIndex) }
-    // +1 = 向右（头在右），-1 = 向左（头在左）。只影响轮廓朝向，不改位置。
-    var direction by remember { mutableFloatStateOf(1f) }
 
     LaunchedEffect(selectedIndex) {
-        val next = tabBounds.getOrNull(selectedIndex) ?: return@LaunchedEffect
+        val nextTab = tabBounds.getOrNull(selectedIndex) ?: return@LaunchedEffect
         if (selectedIndex == lastIndex) return@LaunchedEffect
         lastIndex = selectedIndex
+        val next = lineRect(nextTab)
 
         // 以“眼睛看到的位置”判断方向：快速连点时也能正确换向。
         val visualCenter = (leftEdge.value + rightEdge.value) / 2f
         val toRight = next.center.x > visualCenter
-        direction = if (toRight) 1f else -1f
 
         val lead = if (toRight) rightEdge else leftEdge
         val trail = if (toRight) leftEdge else rightEdge
@@ -166,8 +176,8 @@ internal fun ElasticTabIndicator(
         }
     }
 
-    val heightPx = target.height.roundToInt()
-    val topPx = target.top
+    val heightPx = lineHeightPx.roundToInt()
+    val topPx = initial.top
 
     Box(
         modifier = modifier
@@ -187,114 +197,13 @@ internal fun ElasticTabIndicator(
                 }
             }
             .drawBehind {
-                val widthPx = size.width
-                val height = size.height
-                if (widthPx <= 1f || height <= 1f) return@drawBehind
-
-                // 拉伸量决定液体形变的幅度：宽度回到目标宽度时，形变归零 → 标准胶囊。
-                val fluid = ((widthPx - target.width) / (height * 1.15f)).coerceIn(0f, 1f)
-                val path = buildFluidTabPath(widthPx, height, fluid)
-
-                withTransform({
-                    // 向左移动时把轮廓水平镜像，水滴头始终朝着运动方向。
-                    if (direction < 0f) {
-                        translate(widthPx, 0f)
-                        scale(-1f, 1f, pivot = Offset.Zero)
-                    }
-                }) {
-                    drawPath(path, color)
-                    clipPath(path) {
-                        // 顶部一层薄高光：拉伸时仍能看出液面的体积。
-                        val sheenTop = -height * 0.16f
-                        val sheenHeight = height * 1.22f
-                        drawRect(
-                            brush = Brush.verticalGradient(
-                                0f to sheenColor.copy(alpha = 0.24f),
-                                0.5f to sheenColor.copy(alpha = 0.03f),
-                                1f to sheenColor.copy(alpha = 0f),
-                                startY = sheenTop,
-                                endY = sheenTop + sheenHeight
-                            ),
-                            topLeft = Offset(0f, sheenTop),
-                            size = Size(widthPx, sheenHeight)
-                        )
-                        // 湿润的“头部”高光：只在被拉长时出现，强化液体冲出去的方向感。
-                        if (fluid > 0.01f) {
-                            drawRect(
-                                brush = Brush.radialGradient(
-                                    colors = listOf(
-                                        sheenColor.copy(alpha = 0.18f * fluid),
-                                        sheenColor.copy(alpha = 0f)
-                                    ),
-                                    center = Offset(widthPx - height * 0.32f, height / 2f),
-                                    radius = height * 0.85f
-                                )
-                            )
-                        }
-                    }
-                }
+                if (size.width <= 1f) return@drawBehind
+                // 两端保持半圆；宽度被拉伸时线宽不变，圆角不会被压扁。
+                val radius = size.height / 2f
+                drawRoundRect(
+                    color = color,
+                    cornerRadius = CornerRadius(radius, radius)
+                )
             }
     )
-}
-
-private const val LiquidCircleK = 0.5522848f
-
-/**
- * 液态胶囊轮廓：头部（右侧）比基础高度鼓 7%，尾部收细 38%，中间用三次贝塞尔过渡。
- * 尾部还会从圆头逐渐收成更尖的拖尾，避免收细后仍像一个圆瓣。
- * `fluid = 0` 时头尾等高、端头为正圆，退化成标准胶囊；`fluid = 1` 时是最夸张的水滴形。
- */
-private fun buildFluidTabPath(width: Float, height: Float, fluid: Float): Path {
-    val cy = height / 2f
-    val headRadius = height * (1f + 0.07f * fluid) / 2f
-    val tailRadius = height * (1f - 0.62f * fluid) / 2f
-    val headTop = cy - headRadius
-    val headBottom = cy + headRadius
-    val tailTop = cy - tailRadius
-    val tailBottom = cy + tailRadius
-    val span = (width - headRadius - tailRadius).coerceAtLeast(0f)
-    val k = LiquidCircleK
-    // 尾端控制点从正圆（k）逐渐收向尖角，0.8 是保留一点圆润的折中值。
-    val tailSharp = 0.8f * fluid
-    val kx = k + (0.16f - k) * tailSharp
-    val ky = k + (0.38f - k) * tailSharp
-
-    return Path().apply {
-        moveTo(tailRadius, tailTop)
-        // 上边：尾 → 头
-        cubicTo(
-            tailRadius + span * 0.38f, tailTop,
-            tailRadius + span * 0.76f, headTop,
-            width - headRadius, headTop
-        )
-        // 水滴头：右半圆
-        cubicTo(
-            width - headRadius + k * headRadius, headTop,
-            width, cy - k * headRadius,
-            width, cy
-        )
-        cubicTo(
-            width, cy + k * headRadius,
-            width - headRadius + k * headRadius, headBottom,
-            width - headRadius, headBottom
-        )
-        // 下边：头 → 尾
-        cubicTo(
-            tailRadius + span * 0.76f, headBottom,
-            tailRadius + span * 0.38f, tailBottom,
-            tailRadius, tailBottom
-        )
-        // 拖尾：从圆头逐渐收尖
-        cubicTo(
-            tailRadius - kx * tailRadius, tailBottom,
-            0f, cy + ky * tailRadius,
-            0f, cy
-        )
-        cubicTo(
-            0f, cy - ky * tailRadius,
-            tailRadius - kx * tailRadius, tailTop,
-            tailRadius, tailTop
-        )
-        close()
-    }
 }

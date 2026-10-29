@@ -39,10 +39,11 @@ E:\WEAKDOWN
 CourseApp(Application)
   -> MainActivity
      -> CourseAppTheme
-        -> MainActivity.CourseApp（应用壳：顶栏 / 底栏 / 页面切换 / 周选择 / 作息设置 / 课程详情抽屉）
-           -> ScheduleScreen / ManageScreen / ProfileScreen / WebImportScreen / ImportPreviewScreen
-              -> ScheduleViewModel / ManageViewModel / ProfileViewModel / ImportViewModel
-                 -> CourseRepository
+        -> MainActivity.CourseApp（应用壳：顶栏 / 底栏 / 页面切换 / 加号面板 / 毛玻璃浮层 / 周选择 / 作息设置 / 课程详情抽屉）
+           -> ScheduleScreen / ProfileScreen / ImportPreviewScreen
+              -> 加号面板的三个入口复用 ManageScreen（本学期课程 / 手动添加）与 WebImportScreen（教务导入），放在浮层里
+                 -> ScheduleViewModel / ManageViewModel / ProfileViewModel / ImportViewModel
+                    -> CourseRepository
                     -> CourseDao / SemesterDao / TimeSlotTemplateDao
                        -> AppDatabase(Room)
 ```
@@ -142,7 +143,7 @@ WebImportScreen
 
 ## ui 界面层
 
-> 应用壳（顶栏 / 底栏 / 页面切换 / 周选择弹层 / 作息设置弹层 / 课程详情抽屉）目前直接写在 `MainActivity.kt` 的 `CourseApp()` 里。历史上曾有一份 `ui/navigation/` 的拆出版本，因与 `MainActivity` 内的实现重复且未接入而被删除；后续若要再次拆分，应直接把 `CourseApp()` 迁出，而不是并行维护两套。
+> 应用壳（顶栏 / 底栏 / 页面切换 / 加号面板 / 毛玻璃浮层 / 周选择弹层 / 作息设置弹层 / 课程详情抽屉）目前直接写在 `MainActivity.kt` 的 `CourseApp()` 里。底栏固定「首页 / 加号 / 我的」，加号面板上移露出底栏，三个入口（本学期课程 / 手动添加 / 从教务系统导入）各自弹出毛玻璃浮层而不是切页。历史上曾有一份 `ui/navigation/` 的拆出版本，因与 `MainActivity` 内的实现重复且未接入而被删除；后续若要再次拆分，应直接把 `CourseApp()` 迁出，而不是并行维护两套。
 
 ### ui/schedule
 
@@ -154,7 +155,7 @@ WebImportScreen
 
 | 文件 | 作用 |
 |---|---|
-| `ManageScreen.kt` | 课程管理页。按当前学期展示课程、按名称分组折叠、批量管理与删除确认、孤儿课程清理入口、添加课程表单与颜色选择。 |
+| `ManageScreen.kt` | 加号面板两个入口共用的内容页。按 `tab` 显示「本学期课程」或「手动添加」：按当前学期展示课程、按名称分组折叠、批量管理与删除确认、孤儿课程清理入口、添加课程表单与颜色选择。页内 TabBar 已移除，入口由底栏加号面板承担。 |
 
 ### ui/profile
 
@@ -189,7 +190,9 @@ WebImportScreen
 | `CourseMoveSheet.kt` | 课程移动目标选择弹层。 |
 | `EdgeBlur.kt` | 页面底部高斯模糊渐变：从 `backdrop.layer` 重录带状区域，`BlurEffect` + DstIn 渐变；顶部不模糊。 |
 | `ElasticPress.kt` | 弹性按压反馈。 |
-| `ElasticTabIndicator.kt` | 底栏液态拉伸指示器。 |
+| `ElasticTabIndicator.kt` | 底栏液态拉伸指示器：按钮底部的短横线，前沿先走、后沿延迟 6 帧追赶，用 left/width 驱动；中间加号不参与。 |
+| `FabSheet.kt` | 加号 → 底部面板的形变层：同一容器从圆形连续长成圆角玻璃卡片（cubic-bezier(.2,.9,.22,1) / 480ms），面板停在底栏上方、底栏完整露出，加号在面板展开时变成向下的箭头；选项在容器落定后按 4 帧交错淡入，关闭沿同一曲线收回。 |
+| `FabActionModal.kt` | 毛玻璃浮层（Frosted Glass Sheet）：背景页 blur 0→26dp，顶/底栏与加号面板快速隐去（避免玻璃色块透出），面板 0.94→1 浮起、近实色底（浅色白 / 深色烟熏），内容在 4 帧后从顶部向下填充，1s / cubic-bezier(.2,.7,.2,1)；三个入口共用同一个宿主。 |
 | `KeepAliveModifier.kt` | Tab 页面常驻组合、只切换摆放的修饰符。 |
 | `WeekMorphPanel.kt` | 周选择形变面板；玻璃 + 76% surface，遮罩作为父层。 |
 
@@ -239,7 +242,7 @@ WebImportScreen
 | `ScheduleTimeSlotsTest` | 默认作息与旧版作息迁移 |
 | `ScheduleCourseFilterTest` | 按当前学期过滤 |
 | `ImportOverwritePolicyTest` | 覆盖导入策略 |
-| `ElasticTabMotionTest` | 底栏指示器的弹簧位移换算 |
+| `ElasticTabMotionTest` | 底栏横线的前沿/后沿延迟、2 倍拉伸与末端超调曲线 |
 | `CourseDraftSelectionTest` | 长按拖选节次的范围换算 |
 | `CourseColorPresetTest` | 课程类型默认色卡、色卡 key 往返、老 hex 颜色迁移、显式色优先、卡片圆角 10-12dp |
 | `ColorContrastTest` | 浅/深两套 token 的对比度（正文 4.5 / 标题 7 / 按钮文字 4.5 / 六套课程卡标题与正文 4.5 / 选中态不许明显暗于未选中） |
@@ -257,7 +260,7 @@ WebImportScreen
 
 仍需后续优化的点：
 
-- `MainActivity.kt` 同时承载 Activity 入口和整个应用壳（约 650 行），后续可把 `CourseApp()` 拆到独立文件。
+- `MainActivity.kt` 同时承载 Activity 入口和整个应用壳（约 1360 行），后续可把 `CourseApp()` 拆到独立文件。
 - `CourseHtmlParser.kt`、`ProfileScreen.kt`、`ManageScreen.kt`、`ScheduleScreen.kt`、`CourseDetailSheet.kt` 体积偏大，可按解析策略、页面区块或表单组件继续拆分。
 - `ScheduleViewModel` 仍同时包含课程操作、作息模板、背景图、UI 消息等职责，可继续按"课表数据 / 外观设置 / 作息"拆分。
 - `Course.colorIndex`、`Course.examDate` 为预留字段，当前无读写；若确定不做考试/索引色，应在下次 schema 变更时移除。

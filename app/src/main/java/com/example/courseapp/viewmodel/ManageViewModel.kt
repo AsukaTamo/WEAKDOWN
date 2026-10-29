@@ -47,9 +47,6 @@ class ManageViewModel @Inject constructor(
         list.count { it.semester !in validSemesterIds }
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), 0)
 
-    var selectedTab by mutableIntStateOf(0)
-        private set
-
     // Batch selection
     private val _selectedIds = mutableStateListOf<Long>()
     val selectedIds: List<Long> get() = _selectedIds
@@ -83,10 +80,6 @@ class ManageViewModel @Inject constructor(
 
     private val _snackbarMessage = MutableSharedFlow<Pair<String, String>>()
     val snackbarMessage: SharedFlow<Pair<String, String>> = _snackbarMessage.asSharedFlow()
-
-    fun switchTab(index: Int) {
-        selectedTab = index
-    }
 
     fun updateCourseName(value: String) { courseName = value }
     fun updateTeacher(value: String) { teacher = value }
