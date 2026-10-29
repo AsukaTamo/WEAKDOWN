@@ -4,7 +4,6 @@ import com.example.courseapp.data.model.CourseType
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
-import java.io.File
 
 class CourseHtmlParserTest {
     @Test
@@ -93,21 +92,20 @@ class CourseHtmlParserTest {
     }
 
     @Test
-    fun parsesRealDataHtmlWithTeacherAndFullLocation() {
-        val dataFile = listOf(
-            File("data.html"),
-            File("..", "data.html"),
-            File("../..", "data.html")
-        ).firstOrNull { it.exists() }
-            ?: error("Cannot find data.html in the expected locations")
+    fun parsesTableFixtureWithTeacherAndFullLocation() {
+        val html = checkNotNull(javaClass.getResourceAsStream("/timetable_sample.html")) {
+            "Missing test resource: /timetable_sample.html"
+        }.bufferedReader(Charsets.UTF_8).use { it.readText() }
 
-        val html = dataFile.readText(Charsets.UTF_8)
         val parsed = CourseHtmlParser.parse(html)
 
-        assertTrue(parsed.isNotEmpty())
-        assertTrue(parsed.any { it.teacher.isNotBlank() })
-        assertTrue(parsed.any { it.location.contains("公教2-303") || it.location.contains("公教2-509") })
-        assertTrue(parsed.filter { it.name == "知识图谱" }.any { it.teacher == "姚宏" })
-        assertTrue(parsed.filter { it.name == "深度学习" }.any { it.teacher == "黄绍广" })
+        assertEquals(1, parsed.size)
+        val course = parsed.single()
+        assertEquals("高等数学", course.name)
+        assertEquals("张老师", course.teacher)
+        assertEquals("公教2-303", course.location)
+        assertEquals("未来城校区", course.campus)
+        assertEquals("1-5,7-9周", course.weekRange)
+        assertEquals(CourseType.REQUIRED, course.type)
     }
 }
