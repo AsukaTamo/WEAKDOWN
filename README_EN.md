@@ -130,6 +130,17 @@ If WEAKDOWN helps you, share it with a classmate or buy the author a coffee.
   <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95%20Support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000" alt="Buy Me a Coffee">
 </p>
 
+<details>
+<summary><strong>WeChat tip QR</strong> (mainland China)</summary>
+
+<p align="center">
+  <img src="assets/readme/wechat-tip.png" width="220" alt="WeChat tip QR">
+  <br/>
+  <sub>Scan with WeChat · voluntary tips only</sub>
+</p>
+
+</details>
+
 > The Buy Me a Coffee link is coming soon. Until then, sharing the project or sending feedback is the best support.
 
 Found a bug or have an idea? Open a [GitHub Issue](https://github.com/AsukaTamo/WEAKDOWN/issues).

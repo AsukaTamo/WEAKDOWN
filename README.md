@@ -130,7 +130,18 @@ WEAKDOWN 的源码公开，供学习、研究与个人使用。项目采用 **[P
   <img src="https://img.shields.io/badge/Buy%20Me%20a%20Coffee-%E2%98%95%20Support-FFDD00?style=for-the-badge&logo=buymeacoffee&logoColor=000000" alt="Buy Me a Coffee">
 </p>
 
-> Buy Me a Coffee 支持入口准备中；在那之前，分享项目或提交反馈就是最好的支持。
+<details>
+<summary><strong>微信赞赏码</strong>（点击展开）</summary>
+
+<p align="center">
+  <img src="assets/readme/wechat-tip.png" width="220" alt="微信赞赏码">
+  <br/>
+  <sub>微信扫一扫 · 仅用于自愿赞赏</sub>
+</p>
+
+</details>
+
+> Buy Me a Coffee 支持入口准备中；在此之前，国内用户可扫码赞赏，海外用户欢迎分享项目或提交反馈。
 
 遇到问题或有功能建议，欢迎提交 [GitHub Issue](https://github.com/AsukaTamo/WEAKDOWN/issues)。
 
