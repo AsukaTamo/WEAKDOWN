@@ -13,6 +13,8 @@ import androidx.compose.foundation.gestures.draggable
 import androidx.compose.foundation.gestures.rememberDraggableState
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -42,13 +44,19 @@ import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.theme.ContentPalette
+import com.example.courseapp.ui.theme.CourseColorPreset
 import com.example.courseapp.ui.theme.contentPalette
+import com.example.courseapp.ui.theme.courseAccentColor
+import com.example.courseapp.ui.theme.explicitColorPreset
+import com.example.courseapp.ui.theme.presetForType
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
@@ -114,6 +122,8 @@ fun CourseDetailSheet(
     var editType by remember(course) { mutableStateOf(course.type) }
     var editStartSlot by remember(course) { mutableIntStateOf(course.startSlot) }
     var editSlotCount by remember(course) { mutableIntStateOf(course.slotCount) }
+    // 卡片颜色：null = 跟随课程类型默认色卡；显式选择会存成色卡 key
+    var editColorPreset by remember(course) { mutableStateOf(course.explicitColorPreset()) }
 
     var offsetY by remember(course.id) { mutableFloatStateOf(Float.MAX_VALUE / 8f) }
     var sheetHeightPx by remember(course.id) { mutableFloatStateOf(0f) }
@@ -256,6 +266,7 @@ fun CourseDetailSheet(
             SheetHeader(
                 course = course,
                 isEditing = isEditing,
+                isDarkMode = isDarkMode,
                 palette = palette,
                 onToggleEdit = { isEditing = !isEditing }
             )
@@ -274,6 +285,7 @@ fun CourseDetailSheet(
                 if (isEditing) {
                     EditFields(
                         palette = palette,
+                        isDarkMode = isDarkMode,
                         editName = editName,
                         onNameChange = { editName = it },
                         editTeacher = editTeacher,
@@ -290,6 +302,8 @@ fun CourseDetailSheet(
                         onDayChange = { editDay = it },
                         editType = editType,
                         onTypeChange = { editType = it },
+                        editColorPreset = editColorPreset,
+                        onColorPresetChange = { editColorPreset = it },
                         editStartSlot = editStartSlot,
                         onStartSlotChange = { editStartSlot = it },
                         editSlotCount = editSlotCount,
@@ -334,7 +348,8 @@ fun CourseDetailSheet(
                                     dayOfWeek = editDay,
                                     type = editType,
                                     startSlot = editStartSlot,
-                                    slotCount = editSlotCount
+                                    slotCount = editSlotCount,
+                                    customColor = editColorPreset?.storageKey ?: ""
                                 )
                             )
                         },
@@ -406,10 +421,11 @@ private fun rubberBand(distance: Float, dimension: Float): Float {
 private fun SheetHeader(
     course: Course,
     isEditing: Boolean,
+    isDarkMode: Boolean,
     palette: ContentPalette,
     onToggleEdit: () -> Unit
 ) {
-    val accent = courseGradientColors(course, false).first
+    val accent = courseAccentColor(course, isDarkMode)
 
     Column(modifier = Modifier.fillMaxWidth()) {
         Box(
@@ -532,6 +548,7 @@ private fun DetailRow(label: String, value: String, palette: ContentPalette) {
 @Composable
 private fun EditFields(
     palette: ContentPalette,
+    isDarkMode: Boolean,
     editName: String,
     onNameChange: (String) -> Unit,
     editTeacher: String,
@@ -548,6 +565,8 @@ private fun EditFields(
     onDayChange: (Int) -> Unit,
     editType: CourseType,
     onTypeChange: (CourseType) -> Unit,
+    editColorPreset: CourseColorPreset?,
+    onColorPresetChange: (CourseColorPreset?) -> Unit,
     editStartSlot: Int,
     onStartSlotChange: (Int) -> Unit,
     editSlotCount: Int,
@@ -569,19 +588,31 @@ private fun EditFields(
             onSelected = onDayChange,
             palette = palette
         )
+        // 5 个类型（含通选课）在等宽 chip 里会挤成省略号，改成按内容宽度自动换行
         ChipRow(
             label = "课程类型",
             options = CourseType.entries.map { it.displayName },
             selectedIndex = CourseType.entries.indexOf(editType),
             onSelected = { onTypeChange(CourseType.entries[it]) },
-            palette = palette
+            palette = palette,
+            wrap = true
+        )
+        CourseColorPicker(
+            selected = editColorPreset,
+            typeDefault = presetForType(editType),
+            isDarkMode = isDarkMode,
+            labelColor = palette.muted,
+            accentColor = palette.accent,
+            onSelected = onColorPresetChange
         )
         ChipRow(
             label = "开始节次",
             options = (0 until periodCount).map { "第${it + 1}节" },
             selectedIndex = editStartSlot,
             onSelected = onStartSlotChange,
-            palette = palette
+            palette = palette,
+            // 12 个节次放不进一行等宽 chip，改成横向滚动：文字完整显示，左右滑动选择
+            scrollable = true
         )
         ChipRow(
             label = "持续节数",
@@ -623,44 +654,109 @@ private fun EditTextField(
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChipRow(
     label: String,
     options: List<String>,
     selectedIndex: Int,
     onSelected: (Int) -> Unit,
-    palette: ContentPalette
+    palette: ContentPalette,
+    wrap: Boolean = false,
+    scrollable: Boolean = false
 ) {
     Column {
         Text(label, fontSize = 12.sp, fontWeight = FontWeight.Medium, color = palette.muted)
         Spacer(modifier = Modifier.height(6.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            options.forEachIndexed { index, option ->
-                val selected = index == selectedIndex
-                Box(
-                    modifier = Modifier
-                        .weight(1f)
-                        .heightIn(min = 40.dp)
-                        .elasticPress(RoundedCornerShape(10.dp))
-                        .clip(RoundedCornerShape(10.dp))
-                        .background(if (selected) palette.accent else palette.inputSurface)
-                        .clickable { onSelected(index) }
-                        .padding(horizontal = 2.dp, vertical = 10.dp),
-                    contentAlignment = Alignment.Center
+        when {
+            wrap -> {
+                FlowRow(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    Text(
-                        text = option,
-                        fontSize = if (options.size > 6) 11.sp else 12.sp,
-                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                        color = if (selected) Color.White else palette.title,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis
-                    )
+                    options.forEachIndexed { index, option ->
+                        SelectionChip(
+                            text = option,
+                            selected = index == selectedIndex,
+                            palette = palette,
+                            onClick = { onSelected(index) }
+                        )
+                    }
+                }
+            }
+
+            scrollable -> {
+                // 从选中项前一项开始显示，编辑一个第 8 节开始的课程时不用先滑回开头
+                val listState = rememberLazyListState(
+                    initialFirstVisibleItemIndex = (selectedIndex - 1).coerceAtLeast(0)
+                )
+                LazyRow(
+                    state = listState,
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    items(options.size) { index ->
+                        SelectionChip(
+                            text = options[index],
+                            selected = index == selectedIndex,
+                            palette = palette,
+                            horizontalPadding = 14.dp,
+                            onClick = { onSelected(index) }
+                        )
+                    }
+                }
+            }
+
+            else -> {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    options.forEachIndexed { index, option ->
+                        SelectionChip(
+                            text = option,
+                            selected = index == selectedIndex,
+                            palette = palette,
+                            fontSize = if (options.size > 6) 11.sp else 12.sp,
+                            modifier = Modifier.weight(1f),
+                            horizontalPadding = 2.dp,
+                            onClick = { onSelected(index) }
+                        )
+                    }
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun SelectionChip(
+    text: String,
+    selected: Boolean,
+    palette: ContentPalette,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    fontSize: TextUnit = 12.sp,
+    horizontalPadding: Dp = 12.dp
+) {
+    Box(
+        modifier = modifier
+            .heightIn(min = 40.dp)
+            .elasticPress(RoundedCornerShape(10.dp))
+            .clip(RoundedCornerShape(10.dp))
+            .background(if (selected) palette.accent else palette.inputSurface)
+            .clickable(onClick = onClick)
+            .padding(horizontal = horizontalPadding, vertical = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = text,
+            fontSize = fontSize,
+            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+            color = if (selected) palette.onAccent else palette.title,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis
+        )
     }
 }

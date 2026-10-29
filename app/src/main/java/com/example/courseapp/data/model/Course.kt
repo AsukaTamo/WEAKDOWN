@@ -25,8 +25,9 @@ data class Course(
 )
 
 enum class CourseType(val displayName: String, val colorHex: String) {
-    REQUIRED("必修课", "#2196F3"),
-    ELECTIVE("选修课", "#9C27B0"),
-    LAB("实验课", "#4CAF50"),
-    CUSTOM("自定义", "#FF9800")
+    REQUIRED("必修课", "#1E40AF"),
+    ELECTIVE("专业选修课", "#92400E"),
+    PUBLIC_ELECTIVE("通选课", "#9F1239"),
+    LAB("实验课", "#065F46"),
+    CUSTOM("自定义", "#334155")
 }

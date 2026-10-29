@@ -31,8 +31,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.components.AppSnackbar
-import com.example.courseapp.ui.components.ColorPickerRow
-import com.example.courseapp.ui.components.courseGradientColors
+import com.example.courseapp.ui.components.CourseColorPicker
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.theme.*
@@ -525,7 +524,7 @@ private fun CourseListItem(
     val textColor = palette.title
     val detailColor = palette.muted
 
-    val indicatorColor: Color = courseGradientColors(course, isDarkMode).first
+    val indicatorColor: Color = courseAccentColor(course, isDarkMode)
 
     val dayText = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")[course.dayOfWeek]
     val slotLabels = listOf("第1节", "第2节", "第3节", "第4节", "第5节", "第6节", "第7节", "第8节", "第9节", "第10节")
@@ -689,10 +688,13 @@ private fun AddCoursePanel(
             }
         }
         item {
-            ColorPickerRow(
-                selectedColor = viewModel.selectedColor,
-                onColorSelected = { viewModel.updateColor(it) },
-                labelColor = labelColor
+            CourseColorPicker(
+                selected = viewModel.selectedColorPreset,
+                typeDefault = presetForType(viewModel.selectedType),
+                isDarkMode = isDarkMode,
+                labelColor = labelColor,
+                accentColor = palette.accent,
+                onSelected = { viewModel.updateColor(it) }
             )
         }
         item {

@@ -51,12 +51,13 @@ import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.CourseCard
 import com.example.courseapp.ui.components.CourseContextMenu
 import com.example.courseapp.ui.components.CourseMoveSheet
+import com.example.courseapp.ui.components.acrylicSurface
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import com.example.courseapp.viewmodel.TimeSlot
 
-private val dayLabels = listOf("周一", "周二", "周三", "周四", "周五", "周六", "周日")
+private val dayLabels = listOf("Mon.", "Tue.", "Wed.", "Thu.", "Fri.", "Sat.", "Sun.")
 private val SLOT_HEIGHT = ScheduleDimensions.SlotHeight
 private val HEADER_HEIGHT = ScheduleDimensions.HeaderHeight
 private val TIME_AXIS_WIDTH = ScheduleDimensions.TimeAxisWidth
@@ -519,37 +520,47 @@ private fun ScheduleGrid(
                     modifier = Modifier
                         .weight(1f)
                 ) {
-                    // Day header with date — glass style
+                    // Day header with date — acrylic chip
                     val isToday = isCurrentWeek && day == todayIndex
                     Box(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(HEADER_HEIGHT)
                             .padding(horizontal = 3.dp, vertical = 7.dp)
-                            .clip(RoundedCornerShape(18.dp))
-                            .background(
-                                if (isToday) {
-                                    palette.todaySurface
+                            // 矩形圆角 + 亚克力：比原来的 18dp 胶囊更方正，底色提到 78% 不透明
+                            .clip(RoundedCornerShape(10.dp))
+                            .acrylicSurface(
+                                tint = if (isToday) {
+                                    palette.todaySurface.copy(alpha = 0.90f)
                                 } else {
                                     headerSurface
-                                }
+                                },
+                                corner = 10.dp,
+                                borderColor = if (isToday) {
+                                    palette.todayText.copy(alpha = 0.35f)
+                                } else {
+                                    palette.headerText.copy(alpha = if (isDarkMode) 0.16f else 0.10f)
+                                },
+                                isDarkMode = isDarkMode
                             ),
                         contentAlignment = Alignment.Center
                     ) {
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text(
                                 text = dayLabels[day],
-                                fontSize = 12.sp,
-                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
+                                fontSize = 11.sp,
+                                fontWeight = if (isToday) FontWeight.Bold else FontWeight.SemiBold,
                                 color = if (isToday) palette.todayText else palette.headerText,
-                                letterSpacing = 0.3.sp
+                                letterSpacing = 0.2.sp,
+                                lineHeight = 13.sp
                             )
                             Text(
                                 text = weekDates.getOrElse(day) { "" },
-                                fontSize = 10.sp,
+                                fontSize = 9.sp,
                                 fontWeight = FontWeight.Light,
                                 color = if (isToday) palette.todayText.copy(alpha = 0.78f) else palette.mutedText,
-                                letterSpacing = 0.2.sp
+                                letterSpacing = 0.2.sp,
+                                lineHeight = 11.sp
                             )
                         }
                     }

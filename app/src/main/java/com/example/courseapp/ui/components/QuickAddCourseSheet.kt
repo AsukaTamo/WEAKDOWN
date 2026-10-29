@@ -53,7 +53,9 @@ import androidx.compose.ui.unit.sp
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.theme.ContentPalette
+import com.example.courseapp.ui.theme.CourseColorPreset
 import com.example.courseapp.ui.theme.contentPalette
+import com.example.courseapp.ui.theme.presetForType
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
@@ -87,6 +89,7 @@ data class QuickAddDraft(
  * 与课程详情抽屉共用视觉语言：液态玻璃底 + 顶部圆角 + 弹簧入场，
  * 遮罩透明度、拖拽手感也与详情抽屉一致；松手后已经选好的星期/节次以只读摘要呈现。
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun QuickAddCourseSheet(
     draft: QuickAddDraft?,
@@ -110,6 +113,8 @@ fun QuickAddCourseSheet(
     var location by remember(draft) { mutableStateOf("") }
     var weekRange by remember(draft) { mutableStateOf("${draft.week}周") }
     var type by remember(draft) { mutableStateOf(CourseType.REQUIRED) }
+    // 卡片颜色：null = 跟随课程类型默认色卡
+    var colorPreset by remember(draft) { mutableStateOf<CourseColorPreset?>(null) }
     var nameError by remember(draft) { mutableStateOf(false) }
     var saving by remember(draft) { mutableStateOf(false) }
     var pendingConflict by remember(draft) { mutableStateOf<Pair<Course, List<Course>>?>(null) }
@@ -130,6 +135,7 @@ fun QuickAddCourseSheet(
         slotCount = draft.slotCount,
         type = type,
         weekRange = weekRange.trim().ifEmpty { "${draft.week}周" },
+        customColor = colorPreset?.storageKey ?: "",
         semester = draft.semesterId
     )
 
@@ -412,21 +418,22 @@ fun QuickAddCourseSheet(
                             color = palette.muted
                         )
                         Spacer(modifier = Modifier.height(6.dp))
-                        Row(
+                        // 5 个类型（含通选课）按内容宽度自动换行，等宽排列会把"专业选修课"挤成省略号
+                        FlowRow(
                             modifier = Modifier.fillMaxWidth(),
-                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             CourseType.entries.forEach { option ->
                                 val selected = option == type
                                 Box(
                                     modifier = Modifier
-                                        .weight(1f)
                                         .heightIn(min = 40.dp)
                                         .elasticPress(RoundedCornerShape(10.dp))
                                         .clip(RoundedCornerShape(10.dp))
                                         .background(if (selected) palette.accent else palette.inputSurface)
                                         .clickable { type = option }
-                                        .padding(horizontal = 2.dp, vertical = 10.dp),
+                                        .padding(horizontal = 12.dp, vertical = 10.dp),
                                     contentAlignment = Alignment.Center
                                 ) {
                                     Text(
@@ -441,6 +448,15 @@ fun QuickAddCourseSheet(
                             }
                         }
                     }
+
+                    CourseColorPicker(
+                        selected = colorPreset,
+                        typeDefault = presetForType(type),
+                        isDarkMode = isDarkMode,
+                        labelColor = palette.muted,
+                        accentColor = palette.accent,
+                        onSelected = { colorPreset = it }
+                    )
 
                     QuickAddTextField(
                         label = "周次范围",
