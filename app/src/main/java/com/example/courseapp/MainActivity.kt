@@ -71,6 +71,8 @@ import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.ElasticTabIndicator
+import com.example.courseapp.ui.components.FieldMorphOverlay
+import com.example.courseapp.ui.components.FieldPickerRequest
 import com.example.courseapp.ui.components.QuickAddCourseSheet
 import com.example.courseapp.ui.components.QuickAddDraft
 import com.example.courseapp.ui.components.WeekMorphOverlay
@@ -81,12 +83,14 @@ import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
 import com.example.courseapp.ui.manage.ManageScreen
 import com.example.courseapp.ui.profile.ProfileScreen
+import com.example.courseapp.ui.profile.SchoolBackdrop
 import com.example.courseapp.ui.schedule.ScheduleScreen
 import com.example.courseapp.ui.settings.TimeSlotSettingsScreen
 import com.example.courseapp.ui.splash.WeakdownSplashOverlay
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ImportViewModel
 import com.example.courseapp.viewmodel.ManageViewModel
+import com.example.courseapp.viewmodel.ProfileViewModel
 import com.example.courseapp.viewmodel.ScheduleViewModel
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassAppearance
@@ -251,6 +255,10 @@ fun CourseApp(
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Schedule) }
     val manageViewModel: ManageViewModel = hiltViewModel()
     val importViewModel: ImportViewModel = hiltViewModel()
+    // 「我的」页的个人信息/学校要同时在 backdrop 层（背景水印）和页面层使用，
+    // 所以在这里提一个 activity 级的实例，再显式传给 ProfileScreen。
+    val profileViewModel: ProfileViewModel = hiltViewModel()
+    val userProfile by profileViewModel.profile.collectAsStateWithLifecycle()
 
     val visibleWeek by scheduleViewModel.visibleWeek.collectAsStateWithLifecycle()
     val activeSemester by scheduleViewModel.activeSemester.collectAsStateWithLifecycle()
@@ -262,6 +270,8 @@ fun CourseApp(
     val showScheduleGuides by scheduleViewModel.showScheduleGuides.collectAsStateWithLifecycle()
     var showWeekDialog by remember { mutableStateOf(false) }
     var showTimeSlotSettings by remember { mutableStateOf(false) }
+    // 课程表单的流体选择面板（节次/星期/类型/持续节数），由 ManageScreen 提供锚点。
+    var fieldPickerRequest by remember { mutableStateOf<FieldPickerRequest?>(null) }
     // 首页空白格长按拖选后待填写的快捷添加草稿
     var quickAddDraft by remember { mutableStateOf<QuickAddDraft?>(null) }
     // 周选择胶囊 → 面板的形变进度（0=胶囊，1=面板），胶囊与面板共用同一条曲线
@@ -402,6 +412,14 @@ fun CourseApp(
                     isDarkMode = isDarkMode
                 )
             }
+            // 「我的」页的学校水印画在 backdrop 里：它不参与页面滚动，
+            // 上面的磨砂卡片通过 Vitro 采样这一层，才有"背景不动、卡片模糊透底"的效果。
+            if (currentScreen == Screen.Profile) {
+                SchoolBackdrop(
+                    school = userProfile.school,
+                    isDarkMode = isDarkMode
+                )
+            }
 
             // Page content belongs to the backdrop recording. The bars below are siblings, so
             // Vitro samples the actual scrolling course grid instead of a static wallpaper layer.
@@ -420,7 +438,7 @@ fun CourseApp(
                         )
                     )
             ) {
-                listOf(Screen.Schedule, Screen.Manage, Screen.Profile).forEach { screen ->
+                listOf(Screen.Schedule, Screen.Manage).forEach { screen ->
                     key(screen) {
                         val visible = currentScreen == screen
                         val screenDarkMode = isDarkMode
@@ -455,14 +473,8 @@ fun CourseApp(
                                     viewModel = manageViewModel,
                                     isDarkMode = screenDarkMode,
                                     onNavigateToImport = { currentScreen = Screen.WebImport },
-                                    contentPadding = mainPagePadding
-                                )
-                                Screen.Profile -> ProfileScreen(
-                                    isDarkMode = screenDarkMode,
-                                    showScheduleGuides = showScheduleGuides,
-                                    onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
-                                    onTimeSlotSettings = { showTimeSlotSettings = true },
-                                    contentPadding = mainPagePadding
+                                    contentPadding = mainPagePadding,
+                                    onOpenFieldPicker = { fieldPickerRequest = it }
                                 )
                                 else -> Unit
                             }
@@ -505,6 +517,32 @@ fun CourseApp(
                     .fillMaxSize()
                     .edgeBlur(glassBackdrop, radius = 20.dp, edgeHeight = 200.dp)
             )
+
+            // 「我的」页放在 backdrop 之外：每张卡片都是独立的 Vitro 玻璃节点，
+            // 采样的是下面那层固定的学校背景，而不是页面自己。
+            if (currentScreen == Screen.Profile) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = pageViewportTop)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = PageTopCorner,
+                                topEnd = PageTopCorner
+                            )
+                        )
+                ) {
+                    ProfileScreen(
+                        backdrop = glassBackdrop,
+                        isDarkMode = isDarkMode,
+                        showScheduleGuides = showScheduleGuides,
+                        onScheduleGuidesChange = { scheduleViewModel.setScheduleGuidesEnabled(it) },
+                        onTimeSlotSettings = { showTimeSlotSettings = true },
+                        contentPadding = mainPagePadding,
+                        viewModel = profileViewModel
+                    )
+                }
+            }
 
             // 顶栏 / 底栏不再放进 Material3 Scaffold：Scaffold 内部的 Surface 是全屏的，并且自带一个
             // pointerInput 节点，会在命中测试里赢得整屏，导致 backdrop 里的页面永远收不到触摸
@@ -909,6 +947,18 @@ fun CourseApp(
             showWeekDialog = false
         },
         onDismiss = { showWeekDialog = false }
+    )
+
+    // 课程表单的字段选择：字段矩形 → 流体面板，位置优先在字段上方，空间不足时翻到下方。
+    FieldMorphOverlay(
+        request = fieldPickerRequest,
+        backdrop = glassBackdrop,
+        glass = glassMaterial,
+        isDarkMode = isDarkMode,
+        topSafePx = with(density) {
+            (pagePadding.calculateTopPadding() + 56.dp).toPx()
+        },
+        onDismiss = { fieldPickerRequest = null }
     )
 
     // 课程详情抽屉：放在根布局，遮罩才能覆盖顶栏与底部导航

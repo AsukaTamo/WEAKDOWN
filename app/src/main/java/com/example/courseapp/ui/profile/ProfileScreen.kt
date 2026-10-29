@@ -4,14 +4,16 @@ import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.outlined.*
@@ -21,27 +23,39 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.courseapp.data.model.Schools
 import com.example.courseapp.data.model.Semester
+import com.example.courseapp.data.model.UserProfile
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ProfileViewModel
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
+import io.github.itshedimisawi.vitro.GlassBackdrop
+import io.github.itshedimisawi.vitro.glassEffectContainer
 
+/**
+ * 「我的」页。
+ *
+ * 页面本身不画背景：学校水印在 MainActivity 的 backdrop 层里，固定不动；
+ * 这里的卡片逐个用 Vitro 玻璃采样那层背景，所以滚动时水印不会跟着走，
+ * 卡片里透出来的始终是同一块模糊底色。
+ */
 @Composable
 fun ProfileScreen(
+    backdrop: GlassBackdrop,
     isDarkMode: Boolean = false,
     showScheduleGuides: Boolean = true,
     onScheduleGuidesChange: (Boolean) -> Unit = {},
@@ -53,16 +67,18 @@ fun ProfileScreen(
     val semesters by viewModel.semesters.collectAsStateWithLifecycle()
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val activeSemester by viewModel.activeSemester.collectAsStateWithLifecycle()
+    val profile by viewModel.profile.collectAsStateWithLifecycle()
     val snackbarFlow = viewModel.snackbarMessage.collectAsStateWithLifecycle(initialValue = "" to "")
 
     var snackbarState by remember { mutableStateOf(SnackbarState()) }
     var showSemesterDialog by remember { mutableStateOf(false) }
     var showClearDialog by remember { mutableStateOf(false) }
-    var backgroundScrimAlpha by remember(activeSemester?.id, activeSemester?.scrimAlpha) {
-        mutableStateOf(activeSemester?.scrimAlpha ?: 0.4f)
-    }
+    var showPersonalInfo by remember { mutableStateOf(false) }
+    var showBackgroundSettings by remember { mutableStateOf(false) }
+    var showSupport by remember { mutableStateOf(false) }
+    var showAbout by remember { mutableStateOf(false) }
 
-    // Background image picker
+    // 背景图选择
     var backgroundPickTarget by remember { mutableStateOf<Semester?>(null) }
     val photoPickerLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.PickVisualMedia()
@@ -82,218 +98,113 @@ fun ProfileScreen(
     }
 
     val palette = contentPalette(isDarkMode)
+    val contentTop = contentPadding.calculateTopPadding() + 8.dp
+    val contentBottom = contentPadding.calculateBottomPadding()
 
-    Box(modifier = Modifier.fillMaxSize()) {
-        LazyColumn(
+    Box(modifier = Modifier.fillMaxSize().glassEffectContainer(spacing = 0.dp)) {
+        Column(
             modifier = Modifier
                 .fillMaxSize()
-                .background(Color.Transparent),
-            // 首尾留白跟着玻璃栏走：列表首项在顶栏下方，滚动时可以真实经过顶/底栏玻璃。
-            contentPadding = PaddingValues(
-                top = contentPadding.calculateTopPadding() + 8.dp,
-                bottom = contentPadding.calculateBottomPadding()
-            )
+                .verticalScroll(rememberScrollState())
+                .padding(
+                    start = 16.dp,
+                    end = 16.dp,
+                    top = contentTop,
+                    bottom = contentBottom + 12.dp
+                ),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // User header
-            item {
-                UserHeader(
-                    isDarkMode = isDarkMode,
-                    name = viewModel.userName,
-                    subtitle = viewModel.userSubtitle
-                )
-            }
+            ProfileHero(
+                profile = profile,
+                isDarkMode = isDarkMode,
+                onClick = { showPersonalInfo = true }
+            )
 
-            // Semester management
-            item {
-                SettingsGroup(isDarkMode = isDarkMode) {
-                    SettingsItem(
-                        icon = Icons.Outlined.CalendarMonth,
-                        title = "学期管理",
-                        subtitle = activeSemester?.name ?: "未设置",
-                        isDarkMode = isDarkMode,
-                        onClick = { showSemesterDialog = true }
-                    )
+            QuickActions(
+                backdrop = backdrop,
+                isDarkMode = isDarkMode,
+                semesterLabel = activeSemester?.name?.let(::shortSemesterName) ?: "未设置",
+                hasBackground = activeSemester?.backgroundUri?.isNotEmpty() == true,
+                onSemester = { showSemesterDialog = true },
+                onBackground = { showBackgroundSettings = true },
+                onSupport = { showSupport = true }
+            )
+
+            PreferenceCapsule(
+                backdrop = backdrop,
+                isDarkMode = isDarkMode,
+                notificationsEnabled = notificationsEnabled,
+                onNotificationsChange = { viewModel.toggleNotifications() },
+                onTimeSlotSettings = onTimeSlotSettings
+            )
+
+            SettingsGlassCard(
+                backdrop = backdrop,
+                isDarkMode = isDarkMode,
+                appVersion = viewModel.appVersion,
+                onCheckUpdate = {
+                    viewModel.showMessage("已检查更新，当前为最新版本", "success")
+                },
+                onAbout = { showAbout = true },
+                onFeedback = {
+                    viewModel.showMessage("反馈已提交，感谢您的建议！", "success")
                 }
-            }
+            )
 
-            // Background settings
-            item {
-                val semester = activeSemester
-                SettingsGroup(isDarkMode = isDarkMode) {
-                    SettingsItem(
-                        icon = Icons.Outlined.Image,
-                        title = "课表背景",
-                        subtitle = when {
-                            semester == null -> "请先选择或创建学期"
-                            semester.backgroundUri.isEmpty() -> "未设置，点击选择图片"
-                            else -> "已设置，点击更换图片"
-                        },
-                        isDarkMode = isDarkMode,
-                        onClick = {
-                            if (semester == null) {
-                                viewModel.showMessage("请先选择或创建学期", "info")
-                            } else {
-                                backgroundPickTarget = semester
-                                photoPickerLauncher.launch(
-                                    PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
-                                )
-                            }
-                        }
-                    )
-
-                    if (semester?.backgroundUri?.isNotEmpty() == true) {
-                        val bgFile = java.io.File(semester.backgroundUri)
-                        if (bgFile.exists()) {
-                            val bitmap = remember(semester.backgroundUri) {
-                                android.graphics.BitmapFactory.decodeFile(semester.backgroundUri)?.asImageBitmap()
-                            }
-                            if (bitmap != null) {
-                                Image(
-                                    bitmap = bitmap,
-                                    contentDescription = "背景预览",
-                                    modifier = Modifier
-                                        .fillMaxWidth()
-                                        .padding(horizontal = 16.dp)
-                                        .height(92.dp)
-                                        .clip(RoundedCornerShape(10.dp)),
-                                    contentScale = ContentScale.Crop
-                                )
-                                Spacer(modifier = Modifier.height(8.dp))
-                            }
-                        }
-
-                        Column(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
-                            verticalArrangement = Arrangement.spacedBy(2.dp)
-                        ) {
-                            Text(
-                                text = "背景遮罩 ${(backgroundScrimAlpha * 100).toInt()}%",
-                                fontSize = 12.sp,
-                                color = palette.muted
-                            )
-                            Slider(
-                                value = backgroundScrimAlpha,
-                                onValueChange = { backgroundScrimAlpha = it },
-                                onValueChangeFinished = {
-                                    viewModel.updateScrimAlpha(semester, backgroundScrimAlpha)
-                                },
-                                valueRange = 0f..0.9f,
-                                colors = SliderDefaults.colors(
-                                    thumbColor = palette.accent,
-                                    activeTrackColor = palette.accent,
-                                    inactiveTrackColor = palette.accentSoft
-                                )
-                            )
-                        }
-
-                        SettingsItem(
-                            icon = Icons.Outlined.Delete,
-                            title = "清除背景",
-                            titleColor = palette.destructive,
-                            isDarkMode = isDarkMode,
-                            onClick = { viewModel.clearBackground(semester) }
+            // 「清空数据」排在页面最下方、靠右：做成玻璃胶囊，压在背景校徽上时
+            // 能透出模糊的蓝色，也是整页"卡片都是玻璃"的最后一块。
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End
+            ) {
+                GlassSurface(
+                    backdrop = backdrop,
+                    isDarkMode = isDarkMode,
+                    modifier = Modifier.height(44.dp),
+                    shape = RoundedCornerShape(22.dp),
+                    corner = 22.dp,
+                    onClick = { showClearDialog = true }
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxHeight()
+                            .padding(horizontal = 14.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = Icons.Outlined.Delete,
+                            contentDescription = null,
+                            tint = palette.destructive.copy(alpha = 0.9f),
+                            modifier = Modifier.size(15.dp)
+                        )
+                        Spacer(modifier = Modifier.width(5.dp))
+                        Text(
+                            text = "清空数据",
+                            fontSize = 12.sp,
+                            color = palette.destructive.copy(alpha = 0.9f),
+                            letterSpacing = 0.2.sp
                         )
                     }
-
-                    SettingsItem(
-                        icon = Icons.Outlined.Tune,
-                        title = "辅助线",
-                        subtitle = "控制课表横向分割线显示",
-                        isDarkMode = isDarkMode,
-                        trailing = {
-                            Switch(
-                                checked = showScheduleGuides,
-                                onCheckedChange = onScheduleGuidesChange,
-                                colors = themeSwitchColors(isDarkMode, palette.accent)
-                            )
-                        }
-                    )
                 }
             }
-
-            // Appearance
-            item {
-                SettingsGroup(isDarkMode = isDarkMode) {
-                    SettingsItem(
-                        icon = Icons.Outlined.Notifications,
-                        title = "上课提醒",
-                        isDarkMode = isDarkMode,
-                        trailing = {
-                            Switch(
-                                checked = notificationsEnabled,
-                                onCheckedChange = { viewModel.toggleNotifications() },
-                                colors = themeSwitchColors(isDarkMode, palette.accent)
-                            )
-                        }
-                    )
-                    SettingsItem(
-                        icon = Icons.Filled.Schedule,
-                        title = "作息时间设置",
-                        subtitle = "自定义课程时间段",
-                        isDarkMode = isDarkMode,
-                        onClick = onTimeSlotSettings
-                    )
-                }
-            }
-
-            // Data management
-            item {
-                SettingsGroup(isDarkMode = isDarkMode) {
-                    SettingsItem(
-                        icon = Icons.Outlined.Delete,
-                        title = "清空所有数据",
-                        titleColor = palette.destructive,
-                        isDarkMode = isDarkMode,
-                        onClick = { showClearDialog = true }
-                    )
-                }
-            }
-
-            // About
-            item {
-                SettingsGroup(isDarkMode = isDarkMode) {
-                    SettingsItem(
-                        icon = Icons.Outlined.Update,
-                        title = "检查更新",
-                        isDarkMode = isDarkMode,
-                        trailing = {
-                            Row(verticalAlignment = Alignment.CenterVertically) {
-                                Text(viewModel.appVersion, fontSize = 12.sp, color = palette.success)
-                                Spacer(modifier = Modifier.width(4.dp))
-                                Icon(Icons.Default.ChevronRight, null, tint = Color(0xFFBDBDBD), modifier = Modifier.size(16.dp))
-                            }
-                        },
-                        onClick = { viewModel.showMessage("已检查更新，当前为最新版本", "success") }
-                    )
-                    SettingsItem(
-                        icon = Icons.Outlined.Info,
-                        title = "关于应用",
-                        isDarkMode = isDarkMode,
-                        onClick = { }
-                    )
-                    SettingsItem(
-                        icon = Icons.Outlined.ChatBubbleOutline,
-                        title = "帮助与反馈",
-                        isDarkMode = isDarkMode,
-                        onClick = { viewModel.showMessage("反馈已提交，感谢您的建议！", "success") }
-                    )
-                }
-            }
-
-            item { Spacer(modifier = Modifier.height(32.dp)) }
         }
 
-        // Snackbar
         if (snackbarState.visible) {
-            AppSnackbar(
-                message = snackbarState.message,
-                type = snackbarState.type,
-                onDismiss = { snackbarState = snackbarState.copy(visible = false) }
-            )
+            Box(
+                modifier = Modifier.fillMaxSize(),
+                contentAlignment = Alignment.BottomCenter
+            ) {
+                AppSnackbar(
+                    message = snackbarState.message,
+                    type = snackbarState.type,
+                    bottomPadding = contentBottom + 58.dp,
+                    onDismiss = { snackbarState = snackbarState.copy(visible = false) }
+                )
+            }
         }
     }
 
-    // Semester management dialog
+    // ── 学期管理 ──
     if (showSemesterDialog) {
         val courseCounts = remember(courses) { courses.groupingBy { it.semester }.eachCount() }
         SemesterDialog(
@@ -309,7 +220,65 @@ fun ProfileScreen(
         )
     }
 
-    // Clear data confirmation
+    // ── 个人信息 ──
+    if (showPersonalInfo) {
+        PersonalInfoDialog(
+            profile = profile,
+            isDarkMode = isDarkMode,
+            onDismiss = { showPersonalInfo = false },
+            onSave = { name, schoolId, major, grade, avatarUri ->
+                viewModel.saveProfile(name, schoolId, major, grade, avatarUri)
+                showPersonalInfo = false
+            }
+        )
+    }
+
+    // ── 课表背景详情（遮罩 / 辅助线也收在这里） ──
+    if (showBackgroundSettings) {
+        BackgroundSettingsDialog(
+            semester = activeSemester,
+            isDarkMode = isDarkMode,
+            showScheduleGuides = showScheduleGuides,
+            onScheduleGuidesChange = onScheduleGuidesChange,
+            onPickImage = {
+                val semester = activeSemester
+                if (semester == null) {
+                    viewModel.showMessage("请先选择或创建学期", "info")
+                } else {
+                    backgroundPickTarget = semester
+                    photoPickerLauncher.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                    )
+                }
+            },
+            onClearImage = { activeSemester?.let { viewModel.clearBackground(it) } },
+            onScrimCommit = { alpha ->
+                activeSemester?.let { viewModel.updateScrimAlpha(it, alpha) }
+            },
+            onCreateSemester = {
+                showBackgroundSettings = false
+                showSemesterDialog = true
+            },
+            onDismiss = { showBackgroundSettings = false }
+        )
+    }
+
+    if (showSupport) {
+        SupportDialog(
+            isDarkMode = isDarkMode,
+            onDismiss = { showSupport = false }
+        )
+    }
+
+    if (showAbout) {
+        AboutDialog(
+            version = viewModel.appVersion,
+            isDarkMode = isDarkMode,
+            onDismiss = { showAbout = false }
+        )
+    }
+
+    // ── 清空数据确认 ──
     if (showClearDialog) {
         AlertDialog(
             onDismissRequest = { showClearDialog = false },
@@ -340,336 +309,496 @@ private data class SnackbarState(
     val visible: Boolean = false
 )
 
-@OptIn(ExperimentalMaterial3Api::class)
+private fun shortSemesterName(name: String): String {
+    val trimmed = name.trim()
+    if (trimmed.length <= 7) return trimmed
+    return trimmed.take(7) + "…"
+}
+
+// ───────────────────────── 顶部身份卡 ─────────────────────────
+
 @Composable
-private fun SemesterDialog(
-    semesters: List<Semester>,
-    activeSemester: Semester?,
-    courseCounts: Map<String, Int>,
+private fun ProfileHero(
+    profile: UserProfile,
     isDarkMode: Boolean,
-    onSelect: (Semester) -> Unit,
-    onAdd: (String, String, String, Int) -> Unit,
-    onUpdate: (Semester) -> Unit,
-    onDelete: (Semester) -> Unit,
-    onDismiss: () -> Unit
+    onClick: () -> Unit
 ) {
-    var showAddForm by remember { mutableStateOf(false) }
-    var pendingDelete by remember { mutableStateOf<Semester?>(null) }
-    var editingSemester by remember { mutableStateOf<Semester?>(null) }
-    var newName by remember { mutableStateOf("") }
-    var newStartDate by remember { mutableStateOf("2026-02-23") }
-    var newWeeks by remember { mutableStateOf("18") }
-    var showAddDatePicker by remember { mutableStateOf(false) }
-    var showEditDatePicker by remember { mutableStateOf(false) }
+    val t = ThemeFade.fractionFor(isDarkMode)
+    fun themeColor(light: Color, dark: Color): Color = lerp(light, dark, t)
+    val shape = RoundedCornerShape(24.dp)
+    val brush = Brush.linearGradient(
+        colorStops = arrayOf(
+            0f to themeColor(Color(0xFF0B4C93), Color(0xFF0A1A30)),
+            0.55f to themeColor(Color(0xFF156CC2), Color(0xFF123C66)),
+            1f to themeColor(Color(0xFF3390E2), Color(0xFF1D5B94))
+        ),
+        start = Offset.Zero,
+        end = Offset(1100f, 900f)
+    )
+    val avatarBg = themeColor(Color(0xFFFFF9E9), Color(0xFFF4EBD6))
+    val avatarInk = themeColor(Color(0xFF0D4A86), Color(0xFF0B3D70))
+    val nameColor = Color(0xFFFFFCF3)
+    val schoolColor = nameColor.copy(alpha = 0.80f)
+    val detailColor = nameColor.copy(alpha = 0.62f)
+    val avatarBitmap = remember(profile.avatarUri) {
+        ProfileAvatarStore.decodeFile(profile.avatarUri, 256)
+    }
 
-    val palette = contentPalette(isDarkMode)
-    val textColor = palette.title
-    val subColor = palette.muted
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(122.dp)
+            .shadow(
+                elevation = 12.dp,
+                shape = shape,
+                ambientColor = Color(0xFF0B3D70).copy(alpha = 0.16f),
+                spotColor = Color(0xFF0B3D70).copy(alpha = 0.22f)
+            )
+            .elasticPress(shape)
+            .clip(shape)
+            .background(brush)
+            .border(1.dp, Color.White.copy(alpha = 0.16f), shape)
+            .clickable(onClick = onClick)
+    ) {
+        // 右上角一团柔光 + 左下角一层淡色，避免大块纯色显得平
+        Canvas(modifier = Modifier.fillMaxSize()) {
+            drawCircle(
+                brush = Brush.radialGradient(
+                    colors = listOf(Color.White.copy(alpha = 0.16f), Color.Transparent),
+                    center = Offset(size.width * 0.92f, size.height * 0.02f),
+                    radius = size.width * 0.62f
+                ),
+                radius = size.width * 0.62f,
+                center = Offset(size.width * 0.92f, size.height * 0.02f)
+            )
+            drawCircle(
+                color = Color.White.copy(alpha = 0.05f),
+                radius = size.height * 0.62f,
+                center = Offset(size.width * 0.04f, size.height * 1.08f)
+            )
+        }
 
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("学期管理", fontWeight = FontWeight.SemiBold) },
-        text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                semesters.forEach { semester ->
-                    val isActive = semester.id == activeSemester?.id
-                    val isEditing = editingSemester?.id == semester.id
-
-                    if (isEditing) {
-                        // Edit form for this semester
-                        var editName by remember { mutableStateOf(semester.name) }
-                        var editStartDate by remember { mutableStateOf(semester.startDate) }
-                        var editWeeks by remember { mutableStateOf(semester.totalWeeks.toString()) }
-                        Column(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(palette.accentSoft)
-                                .padding(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            OutlinedTextField(
-                                value = editName,
-                                onValueChange = { editName = it },
-                                label = { Text("学期名称") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-                            // Date picker trigger
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .elasticPress(RoundedCornerShape(8.dp))
-                                    .clickable { showEditDatePicker = true }
-                            ) {
-                                OutlinedTextField(
-                                    value = editStartDate,
-                                    onValueChange = {},
-                                    label = { Text("起始日期") },
-                                    modifier = Modifier.fillMaxWidth(),
-                                    enabled = false,
-                                    trailingIcon = {
-                                        Icon(Icons.Default.CalendarMonth, "选择日期")
-                                    },
-                                    colors = OutlinedTextFieldDefaults.colors(
-                                        disabledTextColor = textColor,
-                                        disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                        disabledLabelColor = subColor,
-                                        disabledTrailingIconColor = subColor
-                                    )
-                                )
-                            }
-                            OutlinedTextField(
-                                value = editWeeks,
-                                onValueChange = { editWeeks = it },
-                                label = { Text("总周数") },
-                                modifier = Modifier.fillMaxWidth(),
-                                singleLine = true
-                            )
-
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                OutlinedButton(
-                                    onClick = { editingSemester = null },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .elasticPress(ButtonDefaults.outlinedShape)
-                                ) { Text("取消") }
-                                Button(
-                                    onClick = {
-                                        onUpdate(
-                                            semester.copy(
-                                                name = editName,
-                                                startDate = editStartDate,
-                                                totalWeeks = editWeeks.toIntOrNull() ?: 18
-                                            )
-                                        )
-                                        editingSemester = null
-                                    },
-                                    modifier = Modifier
-                                        .weight(1f)
-                                        .elasticPress(ButtonDefaults.shape),
-                                    colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
-                                ) { Text("保存") }
-                            }
-                        }
-
-                        // Edit date picker dialog
-                        if (showEditDatePicker) {
-                            val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                            val initialMillis = try {
-                                sdf.parse(editStartDate)?.time ?: System.currentTimeMillis()
-                            } catch (_: Exception) {
-                                System.currentTimeMillis()
-                            }
-                            val datePickerState = rememberDatePickerState(
-                                initialSelectedDateMillis = initialMillis
-                            )
-                            DatePickerDialog(
-                                onDismissRequest = { showEditDatePicker = false },
-                                confirmButton = {
-                                    TextButton(
-                                        onClick = {
-                                            datePickerState.selectedDateMillis?.let { millis ->
-                                                editStartDate = sdf.format(Date(millis))
-                                            }
-                                            showEditDatePicker = false
-                                        },
-                                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                                    ) { Text("确定") }
-                                },
-                                dismissButton = {
-                                    TextButton(
-                                        onClick = { showEditDatePicker = false },
-                                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                                    ) { Text("取消") }
-                                }
-                            ) { DatePicker(state = datePickerState) }
-                        }
-                    } else {
-                        // Normal display row
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .elasticPress(RoundedCornerShape(8.dp))
-                                .clip(RoundedCornerShape(8.dp))
-                                .background(if (isActive) palette.accentSoft else Color.Transparent)
-                                .clickable { onSelect(semester) }
-                                .padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Text(semester.name, fontSize = 14.sp, fontWeight = FontWeight.Medium, color = textColor)
-                                Text("起始: ${semester.startDate} · ${semester.totalWeeks}周", fontSize = 12.sp, color = subColor)
-                            }
-                            if (isActive) {
-                                Icon(Icons.Default.CheckCircle, null, tint = palette.accent, modifier = Modifier.size(20.dp))
-                            }
-                            // Edit button
-                            IconButton(
-                                onClick = { editingSemester = semester },
-                                modifier = Modifier
-                                    .size(24.dp)
-                                    // 学期行本身已有触感，避免嵌套控件双重震动
-                                    .elasticPress(CircleShape, hapticsEnabled = false)
-                            ) {
-                                Icon(Icons.Default.Edit, "编辑", tint = subColor, modifier = Modifier.size(16.dp))
-                            }
-                            // Delete button (only for non-active)
-                            if (!isActive) {
-                                IconButton(
-                                    onClick = { pendingDelete = semester },
-                                    modifier = Modifier
-                                        .size(24.dp)
-                                        .elasticPress(CircleShape, hapticsEnabled = false)
-                                ) {
-                                    Icon(Icons.Default.Delete, "删除", tint = Error, modifier = Modifier.size(16.dp))
-                                }
-                            }
-                        }
-                    }
+        Row(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 18.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(58.dp)
+                    .clip(CircleShape)
+                    .background(avatarBg)
+                    .border(1.dp, Color.White.copy(alpha = 0.45f), CircleShape),
+                contentAlignment = Alignment.Center
+            ) {
+                if (avatarBitmap != null) {
+                    Image(
+                        bitmap = avatarBitmap.asImageBitmap(),
+                        contentDescription = "头像",
+                        contentScale = ContentScale.Crop,
+                        modifier = Modifier.fillMaxSize()
+                    )
+                } else {
+                    Text(
+                        text = profile.avatarText,
+                        fontSize = 24.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = avatarInk
+                    )
                 }
+            }
 
-                if (showAddForm) {
-                    HorizontalDivider(color = palette.divider)
-                    OutlinedTextField(
-                        value = newName,
-                        onValueChange = { newName = it },
-                        label = { Text("学期名称 (如 2026-2027学年 第一学期)") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    // Date picker trigger for add form
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .elasticPress(RoundedCornerShape(8.dp))
-                            .clickable { showAddDatePicker = true }
-                    ) {
-                        OutlinedTextField(
-                            value = newStartDate,
-                            onValueChange = {},
-                            label = { Text("起始日期") },
-                            modifier = Modifier.fillMaxWidth(),
-                            enabled = false,
-                            trailingIcon = {
-                                Icon(Icons.Default.CalendarMonth, "选择日期")
-                            },
-                            colors = OutlinedTextFieldDefaults.colors(
-                                disabledTextColor = textColor,
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
-                                disabledLabelColor = subColor,
-                                disabledTrailingIconColor = subColor
-                            )
-                        )
-                    }
-                    OutlinedTextField(
-                        value = newWeeks,
-                        onValueChange = { newWeeks = it },
-                        label = { Text("总周数") },
-                        modifier = Modifier.fillMaxWidth(),
-                        singleLine = true
-                    )
-                    Button(
-                        onClick = {
-                            if (newName.isNotBlank() && newStartDate.isNotBlank()) {
-                                val id = newName.replace(Regex("[^\\d-]"), "").ifBlank { System.currentTimeMillis().toString() }
-                                onAdd(id, newName, newStartDate, newWeeks.toIntOrNull() ?: 18)
-                                newName = ""; newStartDate = "2026-02-23"; newWeeks = "18"; showAddForm = false
-                            }
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .elasticPress(RoundedCornerShape(10.dp)),
-                        shape = RoundedCornerShape(10.dp),
-                        colors = ButtonDefaults.buttonColors(containerColor = palette.accent)
-                    ) { Text("添加学期") }
+            Spacer(modifier = Modifier.width(14.dp))
 
-                    // Add date picker dialog
-                    if (showAddDatePicker) {
-                        val sdf = SimpleDateFormat("yyyy-MM-dd", Locale.getDefault())
-                        val initialMillis = try {
-                            sdf.parse(newStartDate)?.time ?: System.currentTimeMillis()
-                        } catch (_: Exception) {
-                            System.currentTimeMillis()
-                        }
-                        val datePickerState = rememberDatePickerState(
-                            initialSelectedDateMillis = initialMillis
+            Column(modifier = Modifier.weight(1f)) {
+                if (profile.isSet) {
+                    Text(
+                        text = profile.name,
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = nameColor,
+                        letterSpacing = 0.4.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = profile.school.name,
+                        fontSize = 12.5.sp,
+                        color = schoolColor,
+                        letterSpacing = 0.2.sp,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (profile.detailLine.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(3.dp))
+                        Text(
+                            text = profile.detailLine,
+                            fontSize = 11.5.sp,
+                            color = detailColor,
+                            letterSpacing = 0.2.sp,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
                         )
-                        DatePickerDialog(
-                            onDismissRequest = { showAddDatePicker = false },
-                            confirmButton = {
-                                TextButton(
-                                    onClick = {
-                                        datePickerState.selectedDateMillis?.let { millis ->
-                                            newStartDate = sdf.format(Date(millis))
-                                        }
-                                        showAddDatePicker = false
-                                    },
-                                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                                ) { Text("确定") }
-                            },
-                            dismissButton = {
-                                TextButton(
-                                    onClick = { showAddDatePicker = false },
-                                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                                ) { Text("取消") }
-                            }
-                        ) { DatePicker(state = datePickerState) }
                     }
                 } else {
-                    TextButton(
-                        onClick = { showAddForm = true },
-                        modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                    ) {
-                        Icon(Icons.Default.Add, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("添加新学期")
-                    }
+                    Text(
+                        text = "登录 / 完善个人信息",
+                        fontSize = 17.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = nameColor,
+                        letterSpacing = 0.3.sp,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "填写姓名、学校与专业，展示在这里",
+                        fontSize = 12.sp,
+                        color = schoolColor,
+                        maxLines = 1
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = "背景默认 · ${Schools.Default.name}",
+                        fontSize = 10.5.sp,
+                        color = detailColor,
+                        maxLines = 1
+                    )
                 }
             }
-        },
-        confirmButton = {
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-            ) { Text("完成") }
-        }
-    )
 
-    // Deleting a semester also deletes its courses, so confirm with the count first.
-    pendingDelete?.let { semester ->
-        val courseCount = courseCounts[semester.id] ?: 0
-        AlertDialog(
-            onDismissRequest = { pendingDelete = null },
-            title = { Text("删除学期") },
-            text = {
-                Text(
-                    if (courseCount > 0) {
-                        "将删除「${semester.name}」及其 $courseCount 门课程，操作不可恢复。"
-                    } else {
-                        "将删除「${semester.name}」，操作不可恢复。"
-                    }
-                )
-            },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        onDelete(semester)
-                        pendingDelete = null
-                    },
-                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                ) { Text("删除", color = Error) }
-            },
-            dismissButton = {
-                TextButton(
-                    onClick = { pendingDelete = null },
-                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
-                ) { Text("取消") }
-            }
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.55f),
+                modifier = Modifier.size(20.dp)
+            )
+        }
+    }
+}
+
+// ───────────────────────── 三个快捷卡片 ─────────────────────────
+
+@Composable
+private fun QuickActions(
+    backdrop: GlassBackdrop,
+    isDarkMode: Boolean,
+    semesterLabel: String,
+    hasBackground: Boolean,
+    onSemester: () -> Unit,
+    onBackground: () -> Unit,
+    onSupport: () -> Unit
+) {
+    val palette = contentPalette(isDarkMode)
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        QuickTile(
+            backdrop = backdrop,
+            isDarkMode = isDarkMode,
+            icon = Icons.Outlined.CalendarMonth,
+            label = "学期",
+            caption = semesterLabel,
+            accent = palette.accent,
+            onClick = onSemester,
+            modifier = Modifier.weight(1f)
         )
+        QuickTile(
+            backdrop = backdrop,
+            isDarkMode = isDarkMode,
+            icon = Icons.Outlined.Image,
+            label = "课表背景",
+            caption = if (hasBackground) "已设置" else "默认",
+            accent = palette.accent,
+            onClick = onBackground,
+            modifier = Modifier.weight(1f)
+        )
+        QuickTile(
+            backdrop = backdrop,
+            isDarkMode = isDarkMode,
+            icon = Icons.Filled.Favorite,
+            label = "支持",
+            caption = "喜欢就分享",
+            accent = palette.accent,
+            onClick = onSupport,
+            modifier = Modifier.weight(1f)
+        )
+    }
+}
+
+@Composable
+private fun QuickTile(
+    backdrop: GlassBackdrop,
+    isDarkMode: Boolean,
+    icon: ImageVector,
+    label: String,
+    caption: String,
+    accent: Color,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val palette = contentPalette(isDarkMode)
+    GlassSurface(
+        backdrop = backdrop,
+        isDarkMode = isDarkMode,
+        modifier = modifier.height(104.dp),
+        onClick = onClick
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(horizontal = 8.dp, vertical = 12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(34.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(accent.copy(alpha = if (isDarkMode) 0.16f else 0.09f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = accent,
+                    modifier = Modifier.size(19.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = label,
+                fontSize = 13.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = palette.title,
+                letterSpacing = 0.3.sp
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = caption,
+                fontSize = 10.sp,
+                color = palette.muted,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+// ───────────────────────── 作息 / 提醒胶囊 ─────────────────────────
+
+@Composable
+private fun PreferenceCapsule(
+    backdrop: GlassBackdrop,
+    isDarkMode: Boolean,
+    notificationsEnabled: Boolean,
+    onNotificationsChange: (Boolean) -> Unit,
+    onTimeSlotSettings: () -> Unit
+) {
+    val palette = contentPalette(isDarkMode)
+    val leftShape = RoundedCornerShape(topStart = 29.dp, bottomStart = 29.dp, topEnd = 8.dp, bottomEnd = 8.dp)
+    val rightShape = RoundedCornerShape(topStart = 8.dp, bottomStart = 8.dp, topEnd = 29.dp, bottomEnd = 29.dp)
+
+    GlassSurface(
+        backdrop = backdrop,
+        isDarkMode = isDarkMode,
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(58.dp),
+        shape = RoundedCornerShape(29.dp),
+        corner = 29.dp
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Row(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .elasticPress(leftShape)
+                    .clip(leftShape)
+                    .clickable(onClick = onTimeSlotSettings)
+                    .padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(9.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Schedule,
+                    contentDescription = null,
+                    tint = palette.accent,
+                    modifier = Modifier.size(19.dp)
+                )
+                Text(
+                    text = "作息时间",
+                    fontSize = 13.sp,
+                    fontWeight = FontWeight.Medium,
+                    color = palette.title,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.weight(1f))
+                Icon(
+                    imageVector = Icons.Default.ChevronRight,
+                    contentDescription = null,
+                    tint = palette.muted.copy(alpha = 0.55f),
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+
+            Box(
+                modifier = Modifier
+                    .width(1.dp)
+                    .height(24.dp)
+                    .background(palette.divider)
+            )
+
+            Row(
+                modifier = Modifier
+                    .clip(rightShape)
+                    .fillMaxHeight()
+                    .elasticPress(rightShape)
+                    .clickable { onNotificationsChange(!notificationsEnabled) }
+                    .padding(start = 13.dp, end = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(7.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Outlined.Notifications,
+                    contentDescription = null,
+                    tint = palette.muted,
+                    modifier = Modifier.size(18.dp)
+                )
+                Text(
+                    text = "上课提醒",
+                    fontSize = 12.sp,
+                    color = palette.title,
+                    maxLines = 1
+                )
+                Spacer(modifier = Modifier.width(2.dp))
+                Switch(
+                    checked = notificationsEnabled,
+                    onCheckedChange = null,
+                    colors = themeSwitchColors(isDarkMode, palette.accent)
+                )
+            }
+        }
+    }
+}
+
+// ───────────────────────── 设置列表 ─────────────────────────
+
+@Composable
+private fun SettingsGlassCard(
+    backdrop: GlassBackdrop,
+    isDarkMode: Boolean,
+    appVersion: String,
+    onCheckUpdate: () -> Unit,
+    onAbout: () -> Unit,
+    onFeedback: () -> Unit
+) {
+    val palette = contentPalette(isDarkMode)
+    GlassSurface(
+        backdrop = backdrop,
+        isDarkMode = isDarkMode,
+        modifier = Modifier.fillMaxWidth(),
+        contentPadding = PaddingValues(vertical = 4.dp)
+    ) {
+        Column {
+            SettingsRow(
+                icon = Icons.Outlined.Update,
+                title = "检查更新",
+                isDarkMode = isDarkMode,
+                onClick = onCheckUpdate,
+                trailing = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = appVersion,
+                            fontSize = 11.sp,
+                            color = palette.success
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Icon(
+                            imageVector = Icons.Default.ChevronRight,
+                            contentDescription = null,
+                            tint = palette.muted.copy(alpha = 0.55f),
+                            modifier = Modifier.size(16.dp)
+                        )
+                    }
+                }
+            )
+            SettingsDivider(isDarkMode)
+            SettingsRow(
+                icon = Icons.Outlined.Info,
+                title = "关于应用",
+                isDarkMode = isDarkMode,
+                onClick = onAbout
+            )
+            SettingsDivider(isDarkMode)
+            SettingsRow(
+                icon = Icons.Outlined.ChatBubbleOutline,
+                title = "帮助与反馈",
+                isDarkMode = isDarkMode,
+                onClick = onFeedback
+            )
+        }
+    }
+}
+
+@Composable
+private fun SettingsDivider(isDarkMode: Boolean) {
+    HorizontalDivider(
+        modifier = Modifier.padding(start = 48.dp, end = 16.dp),
+        thickness = 0.7.dp,
+        color = contentPalette(isDarkMode).divider
+    )
+}
+
+@Composable
+private fun SettingsRow(
+    icon: ImageVector,
+    title: String,
+    isDarkMode: Boolean,
+    onClick: () -> Unit,
+    trailing: (@Composable () -> Unit)? = null
+) {
+    val palette = contentPalette(isDarkMode)
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(56.dp)
+            .padding(horizontal = 6.dp)
+            .elasticPress(RoundedCornerShape(14.dp))
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .padding(horizontal = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = palette.muted,
+            modifier = Modifier.size(20.dp)
+        )
+        Text(
+            text = title,
+            fontSize = 14.sp,
+            color = palette.title,
+            letterSpacing = 0.25.sp,
+            modifier = Modifier.weight(1f)
+        )
+        if (trailing != null) {
+            trailing()
+        } else {
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = palette.muted.copy(alpha = 0.55f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
     }
 }
 
@@ -685,116 +814,4 @@ private fun themeSwitchColors(isDarkMode: Boolean, accent: Color): SwitchColors 
         uncheckedTrackColor = lerp(Color(0xFFE0E0E0), Color(0xFF161852), t),
         uncheckedBorderColor = lerp(Color.Transparent, Color(0xFF3A3F7A), t)
     )
-}
-
-@Composable
-private fun UserHeader(
-    name: String,
-    subtitle: String,
-    isDarkMode: Boolean
-) {
-    // 浅色：鸢尾蓝 135° 渐变；深色：藏蓝 → 紫 → 火山橙微光。
-    // 主题过渡期间按同一进度插值，头图卡片和页面其余元素一起变色。
-    val t = ThemeFade.fractionFor(isDarkMode)
-    fun themeColor(light: Color, dark: Color): Color = lerp(light, dark, t)
-    val brush = androidx.compose.ui.graphics.Brush.linearGradient(
-        colorStops = arrayOf(
-            0.0f to themeColor(Color(0xFF0F64B5), Color(0xFF121552)),
-            0.55f to themeColor(Color(0xFF1E88E5), Color(0xFF2A1B4E)),
-            1.0f to themeColor(Color(0xFF1E88E5), Color(0x80FF6047))
-        )
-    )
-    val avatarBg = themeColor(Color(0xFFFFFBEA), Color(0xFFFF6047))
-    val avatarInk = themeColor(Color(0xFF0F64B5), Color(0xFF000035))
-    val nameColor = themeColor(Color(0xFFFFFBEA), Color(0xFFF5F6FA))
-    val subColor = themeColor(Color(0xFFD6E6F7), Color(0xFF8E92B2))
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp)
-            .shadow(6.dp, RoundedCornerShape(18.dp))
-            .clip(RoundedCornerShape(18.dp))
-            .background(brush = brush)
-            .border(
-                1.dp,
-                Color(0x66FF6047).copy(alpha = 0.4f * t),
-                RoundedCornerShape(18.dp)
-            )
-            .padding(16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        Box(
-            modifier = Modifier
-                .size(56.dp)
-                .clip(CircleShape)
-                .background(avatarBg),
-            contentAlignment = Alignment.Center
-        ) {
-            Text(
-                text = name.first().toString(),
-                fontSize = 24.sp,
-                fontWeight = FontWeight.Bold,
-                color = avatarInk
-            )
-        }
-        Column(modifier = Modifier.weight(1f)) {
-            Text(name, fontSize = 17.sp, fontWeight = FontWeight.SemiBold, color = nameColor, letterSpacing = 0.4.sp)
-            Text(subtitle, fontSize = 12.sp, color = subColor, letterSpacing = 0.3.sp)
-        }
-        Icon(Icons.Default.ChevronRight, null, tint = subColor, modifier = Modifier.size(20.dp))
-    }
-}
-
-@Composable
-private fun SettingsGroup(
-    isDarkMode: Boolean,
-    content: @Composable ColumnScope.() -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp)
-            .contentCard(contentPalette(isDarkMode), radius = 18.dp),
-        content = content
-    )
-}
-
-@Composable
-private fun SettingsItem(
-    icon: ImageVector,
-    title: String,
-    isDarkMode: Boolean,
-    subtitle: String? = null,
-    titleColor: Color? = null,
-    trailing: @Composable (() -> Unit)? = null,
-    onClick: (() -> Unit)? = null
-) {
-    val palette = contentPalette(isDarkMode)
-    val textColor = titleColor ?: palette.title
-    val iconColor = palette.muted
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .elasticPress(RoundedCornerShape(14.dp), enabled = onClick != null)
-            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(14.dp)
-    ) {
-        Icon(icon, null, tint = iconColor, modifier = Modifier.size(20.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(title, fontSize = 14.sp, color = textColor, letterSpacing = 0.3.sp)
-            if (subtitle != null) {
-                Text(subtitle, fontSize = 11.sp, color = palette.muted)
-            }
-        }
-        if (trailing != null) {
-            trailing()
-        } else {
-            Icon(Icons.Default.ChevronRight, null, tint = palette.muted.copy(alpha = 0.6f), modifier = Modifier.size(16.dp))
-        }
-    }
 }
