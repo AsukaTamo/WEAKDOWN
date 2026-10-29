@@ -1,5 +1,7 @@
 # Local machine and secrets
 local.properties
+/.keys/
+keystore.properties
 *.keystore
 *.jks
 *.pem
@@ -7,8 +9,18 @@ local.properties
 .env
 .env.*
 
+# Internal workspace notes, design sources and generated docs (kept locally, never published)
+/docs/
+/design/
+/AGENT.md
+/AGENT-TROUBLESHOOT.md
+/data.html
+/skills-lock.json
+/META-INF/
+
 # Gradle
 .gradle/
+.kotlin/
 build/
 **/build/
 
@@ -16,18 +28,14 @@ build/
 *.apk
 *.aab
 *.ap_
+*.idsig
 *.dex
 *.class
 *.compiler.options
+/release/
 
 # IDE user state and caches
-.idea/caches/
-.idea/workspace.xml
-.idea/tasks.xml
-.idea/shelf/
-.idea/usage.statistics.xml
-.idea/dictionaries/
-.idea/libraries/
+/.idea/
 *.iml
 
 # OS files
