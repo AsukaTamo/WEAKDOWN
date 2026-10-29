@@ -40,7 +40,7 @@ import kotlin.math.roundToInt
 
 private const val WeekColumns = 5
 private val CapsuleCorner = 16.dp
-private val PanelCornerRadius = 22.dp
+private val PanelCornerRadius = 28.dp
 private val PanelGapBelowChip = 10.dp
 private val ArrowTouchSize = 44.dp
 

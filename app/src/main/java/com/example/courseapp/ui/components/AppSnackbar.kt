@@ -17,6 +17,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.ui.theme.Success
@@ -28,6 +29,7 @@ fun AppSnackbar(
     message: String,
     type: String = "info",
     visible: Boolean = true,
+    bottomPadding: Dp = 80.dp,
     onDismiss: () -> Unit = {}
 ) {
     val bgColor = when (type) {
@@ -61,7 +63,7 @@ fun AppSnackbar(
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(bottom = 80.dp),
+                .padding(bottom = bottomPadding),
             contentAlignment = Alignment.BottomCenter
         ) {
             Row(

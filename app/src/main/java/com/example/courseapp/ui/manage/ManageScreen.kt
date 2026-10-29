@@ -24,6 +24,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
@@ -32,10 +33,14 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.CourseType
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.CourseColorPicker
+import com.example.courseapp.ui.components.FieldPickerRequest
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ManageViewModel
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
 
 /** TabBar 48dp + 分隔线；列表顶部留白要加上它，首项才会落在 tab 栏下面。 */
 private val ManageTabBarHeight = 48.dp + 0.8.dp
@@ -45,7 +50,8 @@ fun ManageScreen(
     viewModel: ManageViewModel = hiltViewModel(),
     isDarkMode: Boolean = false,
     onNavigateToImport: () -> Unit = {},
-    contentPadding: PaddingValues = PaddingValues()
+    contentPadding: PaddingValues = PaddingValues(),
+    onOpenFieldPicker: (FieldPickerRequest) -> Unit = {}
 ) {
     val courses by viewModel.courses.collectAsStateWithLifecycle()
     val orphanCourseCount by viewModel.orphanCourseCount.collectAsStateWithLifecycle()
@@ -99,7 +105,8 @@ fun ManageScreen(
                 AddCoursePanel(
                     viewModel = viewModel,
                     isDarkMode = isDarkMode,
-                    contentPadding = listContentPadding
+                    contentPadding = listContentPadding,
+                    onOpenFieldPicker = onOpenFieldPicker
                 )
             }
         }
@@ -645,7 +652,8 @@ private fun CourseListItem(
 private fun AddCoursePanel(
     viewModel: ManageViewModel,
     isDarkMode: Boolean,
-    contentPadding: PaddingValues = PaddingValues()
+    contentPadding: PaddingValues = PaddingValues(),
+    onOpenFieldPicker: (FieldPickerRequest) -> Unit = {}
 ) {
     val palette = contentPalette(isDarkMode)
     val labelColor = palette.muted
@@ -683,8 +691,28 @@ private fun AddCoursePanel(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FormDropdown("上课星期", days, viewModel.selectedDay, { viewModel.updateDay(it) }, isDarkMode, Modifier.weight(1f))
-                FormDropdown("课程类型", types.map { it.displayName }, types.indexOf(viewModel.selectedType), { viewModel.updateType(types[it]) }, isDarkMode, Modifier.weight(1f))
+                MorphFormField(
+                    pickerKey = "day",
+                    label = "上课星期",
+                    options = days,
+                    selectedIndex = viewModel.selectedDay,
+                    columns = 4,
+                    isDarkMode = isDarkMode,
+                    onSelected = { viewModel.updateDay(it) },
+                    onOpenFieldPicker = onOpenFieldPicker,
+                    modifier = Modifier.weight(1f)
+                )
+                MorphFormField(
+                    pickerKey = "type",
+                    label = "课程类型",
+                    options = types.map { it.displayName },
+                    selectedIndex = types.indexOf(viewModel.selectedType),
+                    columns = 2,
+                    isDarkMode = isDarkMode,
+                    onSelected = { viewModel.updateType(types[it]) },
+                    onOpenFieldPicker = onOpenFieldPicker,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
         item {
@@ -699,8 +727,28 @@ private fun AddCoursePanel(
         }
         item {
             Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                FormDropdown("开始节次", slotOptions, viewModel.selectedStartSlot, { viewModel.updateStartSlot(it) }, isDarkMode, Modifier.weight(1f))
-                FormDropdown("持续节数", countOptions, (viewModel.selectedSlotCount - 1).coerceIn(0, 5), { viewModel.updateSlotCount(it + 1) }, isDarkMode, Modifier.weight(1f))
+                MorphFormField(
+                    pickerKey = "start_slot",
+                    label = "开始节次",
+                    options = slotOptions,
+                    selectedIndex = viewModel.selectedStartSlot,
+                    columns = 1,
+                    isDarkMode = isDarkMode,
+                    onSelected = { viewModel.updateStartSlot(it) },
+                    onOpenFieldPicker = onOpenFieldPicker,
+                    modifier = Modifier.weight(1f)
+                )
+                MorphFormField(
+                    pickerKey = "slot_count",
+                    label = "持续节数",
+                    options = countOptions,
+                    selectedIndex = (viewModel.selectedSlotCount - 1).coerceIn(0, 5),
+                    columns = 3,
+                    isDarkMode = isDarkMode,
+                    onSelected = { viewModel.updateSlotCount(it + 1) },
+                    onOpenFieldPicker = onOpenFieldPicker,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
         item {
@@ -772,77 +820,76 @@ private fun FormField(
 }
 
 @Composable
-private fun FormDropdown(
+private fun MorphFormField(
+    pickerKey: String,
     label: String,
     options: List<String>,
     selectedIndex: Int,
-    onSelected: (Int) -> Unit,
+    columns: Int,
     isDarkMode: Boolean,
+    onSelected: (Int) -> Unit,
+    onOpenFieldPicker: (FieldPickerRequest) -> Unit,
     modifier: Modifier = Modifier
 ) {
     val palette = contentPalette(isDarkMode)
-    val inputBg = palette.inputSurface
-    val inputBorder = palette.surfaceBorder
-    val textColor = palette.title
-    val labelColor = palette.muted
-
-    var expanded by remember { mutableStateOf(false) }
+    val shape = RoundedCornerShape(10.dp)
+    var anchor by remember { mutableStateOf(Rect.Zero) }
 
     Column(modifier = modifier) {
         Text(
             text = label,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
-            color = labelColor,
+            color = palette.muted,
             modifier = Modifier.padding(bottom = 4.dp)
         )
-        Box {
-            OutlinedTextField(
-                value = options.getOrElse(selectedIndex) { options.first() },
-                onValueChange = {},
-                readOnly = true,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(46.dp)
-                    .clickable { expanded = true },
-                shape = RoundedCornerShape(10.dp),
-                colors = OutlinedTextFieldDefaults.colors(
-                    focusedBorderColor = palette.accent,
-                    unfocusedBorderColor = inputBorder,
-                    focusedContainerColor = inputBg,
-                    unfocusedContainerColor = inputBg,
-                    focusedTextColor = textColor,
-                    unfocusedTextColor = textColor,
-                    disabledBorderColor = inputBorder,
-                    disabledContainerColor = inputBg,
-                    disabledTextColor = textColor
-                ),
-                enabled = false,
-                trailingIcon = {
-                    Icon(Icons.Default.ArrowDropDown, null, tint = labelColor)
-                },
-                singleLine = true,
-                textStyle = androidx.compose.ui.text.TextStyle(fontSize = 13.sp)
-            )
-            DropdownMenu(
-                expanded = expanded,
-                onDismissRequest = { expanded = false },
-                modifier = Modifier.background(inputBg)
-            ) {
-                options.forEachIndexed { index, option ->
-                    DropdownMenuItem(
-                        text = { Text(option, color = textColor, fontSize = 13.sp) },
-                        modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
-                        onClick = { onSelected(index); expanded = false }
-                    )
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(46.dp)
+                .onGloballyPositioned { anchor = it.boundsInRoot() }
+                .elasticPress(shape)
+                .clip(shape)
+                .background(palette.inputSurface)
+                .border(1.dp, palette.surfaceBorder, shape)
+                .clickable {
+                    // 首帧还没测量到位置时先不开，避免从 (0,0) 长出来。
+                    if (anchor.width > 1f) {
+                        onOpenFieldPicker(
+                            FieldPickerRequest(
+                                key = pickerKey,
+                                label = label,
+                                options = options,
+                                selectedIndex = selectedIndex,
+                                columns = columns,
+                                anchor = anchor,
+                                onSelected = onSelected
+                            )
+                        )
+                    }
                 }
+                .padding(horizontal = 14.dp),
+            contentAlignment = Alignment.CenterStart
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize(),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = options.getOrElse(selectedIndex) { options.firstOrNull().orEmpty() },
+                    fontSize = 13.sp,
+                    color = palette.title,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                    modifier = Modifier.weight(1f)
+                )
+                Icon(
+                    imageVector = Icons.Default.ArrowDropDown,
+                    contentDescription = null,
+                    tint = palette.muted,
+                    modifier = Modifier.size(20.dp)
+                )
             }
-            Spacer(
-                modifier = Modifier
-                    .matchParentSize()
-                    .elasticPress(RoundedCornerShape(10.dp))
-                    .clickable { expanded = true }
-            )
         }
     }
 }

@@ -5,7 +5,9 @@ import android.net.Uri
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.courseapp.data.model.Course
+import com.example.courseapp.data.model.Schools
 import com.example.courseapp.data.model.Semester
+import com.example.courseapp.data.model.UserProfile
 import com.example.courseapp.data.repository.CourseRepository
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -22,9 +24,13 @@ class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    val userName = "张同学"
-    val userSubtitle = "计算机科学与技术 · 2023级"
     val appVersion = "v2.4.1"
+
+    private val profilePrefs =
+        context.getSharedPreferences("profile_settings", Context.MODE_PRIVATE)
+
+    private val _profile = MutableStateFlow(readProfile())
+    val profile: StateFlow<UserProfile> = _profile.asStateFlow()
 
     val courses: StateFlow<List<Course>> = repository.getAllCourses()
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5000), emptyList())
@@ -45,6 +51,40 @@ class ProfileViewModel @Inject constructor(
 
     fun toggleNotifications() {
         _notificationsEnabled.value = !_notificationsEnabled.value
+    }
+
+    // ── 个人信息（本地保存，当前阶段不做账号体系） ──
+
+    private fun readProfile(): UserProfile = UserProfile(
+        name = profilePrefs.getString(KEY_NAME, "").orEmpty(),
+        schoolId = Schools.byId(profilePrefs.getString(KEY_SCHOOL, Schools.Default.id)).id,
+        major = profilePrefs.getString(KEY_MAJOR, "").orEmpty(),
+        grade = profilePrefs.getString(KEY_GRADE, "").orEmpty(),
+        avatarUri = profilePrefs.getString(KEY_AVATAR, "").orEmpty()
+    )
+
+    fun saveProfile(name: String, schoolId: String, major: String, grade: String, avatarUri: String) {
+        val previous = _profile.value
+        val next = UserProfile(
+            name = name.trim(),
+            schoolId = Schools.byId(schoolId).id,
+            major = major.trim(),
+            grade = grade.trim(),
+            avatarUri = avatarUri
+        )
+        // 头像每次保存成新文件；换头像或移除头像时把旧文件删掉，避免私有目录越堆越多。
+        if (previous.avatarUri.isNotEmpty() && previous.avatarUri != next.avatarUri) {
+            File(previous.avatarUri).delete()
+        }
+        profilePrefs.edit()
+            .putString(KEY_NAME, next.name)
+            .putString(KEY_SCHOOL, next.schoolId)
+            .putString(KEY_MAJOR, next.major)
+            .putString(KEY_GRADE, next.grade)
+            .putString(KEY_AVATAR, next.avatarUri)
+            .apply()
+        _profile.value = next
+        showMessage("个人信息已保存", "success")
     }
 
     fun showMessage(message: String, type: String = "info") {
@@ -193,5 +233,13 @@ class ProfileViewModel @Inject constructor(
             courses.value.forEach { repository.deleteCourse(it) }
             _snackbarMessage.emit("已清空所有课程数据" to "success")
         }
+    }
+
+    private companion object {
+        const val KEY_NAME = "name"
+        const val KEY_SCHOOL = "school_id"
+        const val KEY_MAJOR = "major"
+        const val KEY_GRADE = "grade"
+        const val KEY_AVATAR = "avatar"
     }
 }

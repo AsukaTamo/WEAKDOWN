@@ -102,9 +102,20 @@ Box(Modifier.fillMaxSize()) {
 - 页面视口顶部按 **28dp 圆角**裁切（`PageTopCorner`，与顶栏玻璃圆角呼应）：内容上滑时在左右两侧
   以圆角消失，而不是一条横贯全屏的直边；顶部不叠加 `scrollEdgeEffect` 的顶边 veil（全宽矩形
   会越过圆角栏在状态栏下方留方角），只保留圆角裁切；
-- 管理 / 我的页面也改成铺满视口的滚动内容 + `contentPadding`：列表首项落在栏下，滚动时可以真实经过
-  顶/底栏玻璃。管理的 Tab 栏固定在顶栏下方、用不透明底色压住滚动内容，列表从它下面经过后进入顶栏
-  玻璃的采样区；我的页面没有固定头部，整条 LazyColumn 直接滚过两条栏；
+- 管理页也改成铺满视口的滚动内容 + `contentPadding`：列表首项落在栏下，滚动时可以真实经过
+  顶/底栏玻璃。Tab 栏固定在顶栏下方、用不透明底色压住滚动内容，列表从它下面经过后进入顶栏
+  玻璃的采样区；
+- **「我的」页（2026-10-29 改版）**：页面内容改为放在 backdrop **之外** 的玻璃层。学校水印画在
+  backdrop 的右下角（固定、不随页面滚动），快捷卡 / 作息胶囊 / 设置卡 / 清空胶囊各自
+  `glassEffect` 采样这一层：材质是 `Glass.Regular` 的高不透明度变体（70–74% 暖白/近黑染色、16dp 模糊、
+  `refractionAmount = 0`，只模糊不折射），并用 `glassEffectContainer(spacing = 0.dp)` 合批绘制。
+  卡片因此不会采样到自己，滚动时水印保持不动；代价是这一页的顶/底栏只采样到背景，采样不到页面内容，
+  所以页面用 `contentPadding` 把内容留在栏外，不做"滚动穿过栏"；
+- **添加课程表单选择器（2026-10-30）**：星期 / 类型 / 开始节次 / 持续节数不再用 Material
+  `DropdownMenu`，改由根布局的 `FieldMorphOverlay` 承接：从字段矩形长成面板，位置/宽高/圆角
+  由同一个 `Animatable` 驱动（spring 0.90 / 280，面板圆角 28dp，起点圆角 10dp）。
+  开始节次是竖向列表，面板高度取字段上方可用空间，列表内部可下滑；上方空间不够时翻到字段下方
+  （"位置不够就下滑"）。周面板圆角同步改成 28dp；
 - 深浅模式切换只做视觉过渡，不再额外弹“浅色/深色模式已开启”的 snackbar；
 - 页面**底部**用 `edgeBlur`（`ui/components/EdgeBlur.kt`）做真正的高斯模糊渐变：从
   `backdrop.layer` 重录底部 200dp 带状区域到一个小图层，`BlurEffect` 模糊后用 DstIn 竖向渐变
@@ -179,6 +190,7 @@ Box(Modifier.fillMaxSize()) {
 | 滚动 + 玻璃动态折射 | 课程色块与文字从顶栏/底栏后方经过，玻璃内采样随内容移动，栏内无黑块或固定纹理 |
 | 首页纵向滚动 `gfxinfo` | p50 12ms / p90 16ms / p99 21ms，janky 2.04%，missed vsync 0，GPU p90 9ms |
 | 我的页滚动 `gfxinfo` | p50 7ms / p90 10ms / p99 15ms，janky 1.00%，missed vsync 0 |
+| 我的页玻璃卡片滚动 `gfxinfo`（2026-10-29） | p50 10ms / p90 14ms / p99 30ms，janky 1.96%，missed vsync 0（6 块玻璃用 `glassEffectContainer` 合批，卡片带 elasticPress） |
 | 管理页（全部课程）`gfxinfo` | p50 9ms / p90 12ms / p99 14ms，janky 0.51%，missed vsync 0 |
 | 管理页（添加课程）`gfxinfo` | p50 9ms / p90 12ms / p99 15ms，janky 0.27%，missed vsync 0 |
 | 面板展开/收起（玻璃） | p50 12ms / p90 17ms / p99 40ms，janky 3.35%，missed vsync 0；无玻璃的旧动画也在同一量级，玻璃不是瓶颈 |

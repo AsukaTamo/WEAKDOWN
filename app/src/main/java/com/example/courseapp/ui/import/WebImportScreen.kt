@@ -23,22 +23,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.courseapp.data.model.Schools
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
 
-data class SchoolInfo(
-    val name: String,
-    val url: String
-)
-
-private val schoolList = listOf(
-    SchoolInfo("中国地质大学(武汉)", "https://sfrz.cug.edu.cn/tpass/login?service=https%3A%2F%2Fi.cug.edu.cn%2Fweb%2F%3FCASLOGIN%3DCASLOGIN%23%2Flogin%3FredirectUrl%3D%252Fweb%252F%253FCASLOGIN%253DCASLOGIN%2523%252Fcurrent%252Fsys-portal"),
-    SchoolInfo("武汉大学", "https://www.whu.edu.cn/"),
-    SchoolInfo("华中科技大学", "https://www.hust.edu.cn/"),
-    SchoolInfo("武汉理工大学", "https://www.whut.edu.cn/"),
-    SchoolInfo("华中师范大学", "https://www.ccnu.edu.cn/"),
-    SchoolInfo("中南财经政法大学", "https://www.zuel.edu.cn/")
-)
+private val schoolList = Schools.All
 
 @Composable
 fun WebImportScreen(
@@ -163,14 +152,14 @@ fun WebImportScreen(
             }
 
             Spacer(modifier = Modifier.height(12.dp))
-            Text(selectedSchool.url, fontSize = 12.sp, color = subColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(selectedSchool.portalUrl, fontSize = 12.sp, color = subColor, maxLines = 1, overflow = TextOverflow.Ellipsis)
 
             Spacer(modifier = Modifier.height(40.dp))
 
             Button(
                 onClick = {
                     val intent = Intent(context, WebImportActivity::class.java).apply {
-                        putExtra("school_url", selectedSchool.url)
+                        putExtra("school_url", selectedSchool.portalUrl)
                     }
                     webImportLauncher.launch(intent)
                 },
