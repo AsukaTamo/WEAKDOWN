@@ -41,6 +41,7 @@ import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.UserProfile
 import com.example.courseapp.ui.components.AppSnackbar
 import com.example.courseapp.ui.components.elasticPress
+import com.example.courseapp.ui.components.tiltPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ProfileViewModel
 import io.github.itshedimisawi.vitro.GlassBackdrop
@@ -348,6 +349,8 @@ private fun ProfileHero(
         modifier = Modifier
             .fillMaxWidth()
             .height(122.dp)
+            // 3D 倾斜放在 shadow 外层：卡片转动时阴影跟着一起偏，不会只剩内容在动。
+            .tiltPress(shape)
             .shadow(
                 elevation = 12.dp,
                 shape = shape,
