@@ -24,7 +24,7 @@ class ProfileViewModel @Inject constructor(
     @ApplicationContext private val context: Context
 ) : ViewModel() {
 
-    val appVersion = "v2.4.1"
+    val appVersion = "v2.4.2"
 
     private val profilePrefs =
         context.getSharedPreferences("profile_settings", Context.MODE_PRIVATE)
@@ -57,7 +57,7 @@ class ProfileViewModel @Inject constructor(
 
     private fun readProfile(): UserProfile = UserProfile(
         name = profilePrefs.getString(KEY_NAME, "").orEmpty(),
-        schoolId = Schools.byId(profilePrefs.getString(KEY_SCHOOL, Schools.Default.id)).id,
+        schoolId = Schools.byIdOrNull(profilePrefs.getString(KEY_SCHOOL, ""))?.id.orEmpty(),
         major = profilePrefs.getString(KEY_MAJOR, "").orEmpty(),
         grade = profilePrefs.getString(KEY_GRADE, "").orEmpty(),
         avatarUri = profilePrefs.getString(KEY_AVATAR, "").orEmpty()
@@ -67,7 +67,8 @@ class ProfileViewModel @Inject constructor(
         val previous = _profile.value
         val next = UserProfile(
             name = name.trim(),
-            schoolId = Schools.byId(schoolId).id,
+            // 空字符串表示「不设置学校」，此时「我的」页不画校徽，不能回落成默认学校。
+            schoolId = Schools.byIdOrNull(schoolId)?.id.orEmpty(),
             major = major.trim(),
             grade = grade.trim(),
             avatarUri = avatarUri

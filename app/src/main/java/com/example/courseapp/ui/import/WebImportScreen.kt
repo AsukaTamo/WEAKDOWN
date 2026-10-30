@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.example.courseapp.data.model.School
 import com.example.courseapp.data.model.Schools
 import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.*
@@ -35,11 +36,14 @@ private val schoolList = Schools.All
 fun WebImportScreen(
     isDarkMode: Boolean = false,
     showHeader: Boolean = true,
+    initialSchool: School? = null,
     onBack: () -> Unit = {},
     onParseHtml: (String) -> Unit = {}
 ) {
     val context = LocalContext.current
-    var selectedSchool by remember { mutableStateOf(schoolList[0]) }
+    var selectedSchool by remember(initialSchool) {
+        mutableStateOf(initialSchool ?: schoolList.first())
+    }
     var showSchoolDropdown by remember { mutableStateOf(false) }
     var showHelp by remember { mutableStateOf(false) }
 
@@ -169,6 +173,8 @@ fun WebImportScreen(
                 onClick = {
                     val intent = Intent(context, WebImportActivity::class.java).apply {
                         putExtra("school_url", selectedSchool.portalUrl)
+                        // 只对移动端 Web 教务（如武理 jwapp）默认用手机 UA，其余仍走电脑版。
+                        putExtra("mobile_ua", selectedSchool.mobileUa)
                     }
                     webImportLauncher.launch(intent)
                 },

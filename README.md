@@ -30,15 +30,15 @@
 
 <p align="center">
   <a href="https://github.com/AsukaTamo/WEAKDOWN/releases">
-    <img src="https://img.shields.io/badge/下载-WEAKDOWN%202.4.1-0F64B5?style=for-the-badge&logo=android&logoColor=white" alt="下载 WEAKDOWN 2.4.1">
+    <img src="https://img.shields.io/badge/下载-WEAKDOWN%202.4.2-0F64B5?style=for-the-badge&logo=android&logoColor=white" alt="下载 WEAKDOWN 2.4.2">
   </a>
 </p>
 
 | 项目 | 说明 |
 | --- | --- |
-| 最新版本 | v2.4.1 |
+| 最新版本 | v2.4.2 |
 | 系统要求 | Android 8.0（API 26）及以上 |
-| 安装包 | `WEAKDOWN-2.4.1.apk`（约 16 MB） |
+| 安装包 | `WEAKDOWN-2.4.2.apk`（约 16 MB） |
 | 下载 | [GitHub Releases](https://github.com/AsukaTamo/WEAKDOWN/releases) |
 
 ### 安装步骤

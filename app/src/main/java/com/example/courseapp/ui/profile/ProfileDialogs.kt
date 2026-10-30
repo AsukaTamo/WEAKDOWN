@@ -36,6 +36,7 @@ import com.example.courseapp.data.model.Schools
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.UserProfile
 import com.example.courseapp.ui.components.elasticPress
+import com.example.courseapp.ui.theme.ContentPalette
 import com.example.courseapp.ui.theme.contentPalette
 import kotlin.math.roundToInt
 
@@ -59,7 +60,7 @@ fun PersonalInfoDialog(
     var schoolMenuOpen by remember { mutableStateOf(false) }
     var pendingAvatar by remember { mutableStateOf<String?>(null) }
     var avatarRemoved by remember { mutableStateOf(false) }
-    val school = remember(schoolId) { Schools.byId(schoolId) }
+    val school = remember(schoolId) { Schools.byIdOrNull(schoolId) }
     val dialogSurface = if (isDarkMode) Color(0xFF17171E) else Color(0xFFFFFCF2)
 
     val avatarPicker = rememberLauncherForActivityResult(
@@ -231,7 +232,7 @@ fun PersonalInfoDialog(
 
                     Box {
                         OutlinedTextField(
-                            value = school.name,
+                            value = school?.name ?: "未选择",
                             onValueChange = {},
                             modifier = Modifier.fillMaxWidth(),
                             label = { Text("学校") },
@@ -262,6 +263,36 @@ fun PersonalInfoDialog(
                             onDismissRequest = { schoolMenuOpen = false },
                             modifier = Modifier.background(if (isDarkMode) Color(0xFF17171E) else Color(0xFFFFFCF2))
                         ) {
+                            // 学校默认留空：选「不设置」后「我的」页只留渐变背景，不画校徽。
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = "不设置（背景不显示校徽）",
+                                        fontSize = 14.sp,
+                                        color = palette.title,
+                                        fontWeight = if (schoolId.isBlank()) {
+                                            FontWeight.SemiBold
+                                        } else {
+                                            FontWeight.Normal
+                                        }
+                                    )
+                                },
+                                modifier = Modifier.elasticPress(RoundedCornerShape(8.dp)),
+                                onClick = {
+                                    schoolId = ""
+                                    schoolMenuOpen = false
+                                },
+                                trailingIcon = {
+                                    if (schoolId.isBlank()) {
+                                        Icon(
+                                            imageVector = Icons.Default.Check,
+                                            contentDescription = null,
+                                            tint = palette.accent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            )
                             Schools.All.forEach { item ->
                                 DropdownMenuItem(
                                     text = {
@@ -636,17 +667,19 @@ fun SupportDialog(
     onDismiss: () -> Unit
 ) {
     val context = LocalContext.current
+    val palette = contentPalette(isDarkMode)
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("支持 CourseApp", fontWeight = FontWeight.SemiBold) },
+        title = { Text("支持 WEAKDOWN", fontWeight = FontWeight.SemiBold) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Text("如果它帮到了你，欢迎分享给同学。", fontSize = 13.sp)
                 Text(
                     "也可以到「帮助与反馈」留下建议，每一条都会看。",
                     fontSize = 12.sp,
-                    color = contentPalette(isDarkMode).muted
+                    color = palette.muted
                 )
+                RepoLinkRow(palette)
             }
         },
         confirmButton = {
@@ -656,11 +689,11 @@ fun SupportDialog(
                         type = "text/plain"
                         putExtra(
                             Intent.EXTRA_TEXT,
-                            "推荐一个干净的课表 App：CourseApp，支持教务系统导入、液态玻璃课表。"
+                            "推荐一个干净的课表 App：WEAKDOWN，支持教务系统导入、液态玻璃课表。\n$PROJECT_REPO_URL"
                         )
                     }
                     runCatching {
-                        context.startActivity(Intent.createChooser(send, "分享 CourseApp"))
+                        context.startActivity(Intent.createChooser(send, "分享 WEAKDOWN"))
                     }
                     onDismiss()
                 },
@@ -677,6 +710,32 @@ fun SupportDialog(
 }
 
 @Composable
+private fun RepoLinkRow(palette: ContentPalette) {
+    val context = LocalContext.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(10.dp))
+            .clickable { openExternalUrl(context, PROJECT_REPO_URL) }
+            .padding(vertical = 5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Icon(
+            imageVector = Icons.Outlined.Link,
+            contentDescription = null,
+            tint = palette.accent,
+            modifier = Modifier.size(15.dp)
+        )
+        Text(
+            text = PROJECT_REPO_URL.removePrefix("https://"),
+            fontSize = 12.sp,
+            color = palette.accent
+        )
+    }
+}
+
+@Composable
 fun AboutDialog(
     version: String,
     isDarkMode: Boolean,
@@ -688,9 +747,10 @@ fun AboutDialog(
         title = { Text("关于应用", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                Text("CourseApp  $version", fontSize = 13.sp, color = palette.title)
+                Text("WEAKDOWN  $version", fontSize = 13.sp, color = palette.title)
                 Text("面向大学生的课程表应用", fontSize = 12.sp, color = palette.muted)
                 Text("课表展示 · 教务导入 · 学期与作息管理", fontSize = 12.sp, color = palette.muted)
+                RepoLinkRow(palette)
             }
         },
         confirmButton = {

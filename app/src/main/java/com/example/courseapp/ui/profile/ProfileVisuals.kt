@@ -31,12 +31,13 @@ import com.example.courseapp.data.model.School
 import com.example.courseapp.data.model.Schools
 
 /**
- * 学校 → 校徽资源。目前只内置中国地质大学（武汉）；
+ * 学校 → 校徽资源。已内置中国地质大学（武汉）和武汉理工大学；
  * 其他学校在 [SchoolBadge] 里退化成"校名缩写圆形徽章"，不会出现错 logo。
  */
 @DrawableRes
 fun schoolEmblemRes(school: School): Int? = when (school.id) {
     Schools.CUG.id -> R.drawable.school_cug_emblem
+    Schools.WHUT.id -> R.drawable.school_whut_emblem
     else -> null
 }
 
@@ -45,10 +46,12 @@ fun schoolEmblemRes(school: School): Int? = when (school.id) {
  *
  * 它画在 backdrop 里、页面滚动层之外，所以列表怎么滑它都不动；
  * 上面的磨砂卡片用 Vitro 采样这一层，透出来的就是这团模糊的校徽。
+ *
+ * [school] 为 null（个人信息里还没选学校）时只保留冷色光，不画任何校徽。
  */
 @Composable
 fun SchoolBackdrop(
-    school: School,
+    school: School?,
     isDarkMode: Boolean
 ) {
     val accent = if (isDarkMode) Color(0xFF7FB8FF) else Color(0xFF2E7FD1)
@@ -89,15 +92,17 @@ fun SchoolBackdrop(
             )
         }
 
-        SchoolBadge(
-            school = school,
-            size = 264.dp,
-            alpha = if (isDarkMode) 0.21f else 0.19f,
-            isDarkMode = isDarkMode,
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .offset(x = 58.dp, y = -18.dp)
-        )
+        if (school != null) {
+            SchoolBadge(
+                school = school,
+                size = 264.dp,
+                alpha = if (isDarkMode) 0.21f else 0.19f,
+                isDarkMode = isDarkMode,
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .offset(x = 58.dp, y = -18.dp)
+            )
+        }
     }
 }
 

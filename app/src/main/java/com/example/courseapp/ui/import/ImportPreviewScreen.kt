@@ -27,6 +27,7 @@ import com.example.courseapp.viewmodel.ImportViewModel
 fun ImportPreviewScreen(
     viewModel: ImportViewModel,
     isDarkMode: Boolean,
+    timeSlotCount: Int = Int.MAX_VALUE,
     onBack: () -> Unit,
     onImportComplete: () -> Unit
 ) {
@@ -139,6 +140,37 @@ fun ImportPreviewScreen(
                         color = subColor,
                         modifier = Modifier.padding(bottom = 8.dp)
                     )
+                }
+
+                // 武理这类学校有 13 节，默认作息模板只有 12 节；超出的课在课表里会被挤出网格，
+                // 所以在预览里先提醒去「作息时间」补一节，而不是导入后才发现看不到课。
+                val overflowCount = parsedCourses.count {
+                    it.startSlot + it.slotCount > timeSlotCount
+                }
+                if (overflowCount > 0) {
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .contentCard(palette, radius = 14.dp)
+                                .padding(12.dp),
+                            verticalAlignment = Alignment.Top
+                        ) {
+                            Icon(
+                                Icons.Default.WarningAmber,
+                                contentDescription = null,
+                                tint = palette.warning,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "有 $overflowCount 门课超过当前作息的 $timeSlotCount 节，" +
+                                    "导入后请在「我的 → 作息时间」添加时段，否则这些课会显示不全",
+                                fontSize = 12.sp,
+                                color = palette.warning
+                            )
+                        }
+                    }
                 }
 
                 items(parsedCourses) { course ->

@@ -2,6 +2,7 @@ package com.example.courseapp.data.model
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
@@ -37,6 +38,16 @@ class UserProfileTest {
     fun `unknown school falls back to the default emblem school`() {
         assertEquals(Schools.Default, Schools.byId("not-a-school"))
         assertEquals("武大", Schools.byId("whu").shortName)
-        assertEquals(Schools.Default.id, UserProfile().schoolId)
+    }
+
+    @Test
+    fun `empty school means no emblem by default`() {
+        // 没填学校时不画任何校徽，也不能默默顶着默认学校的校徽。
+        assertEquals("", UserProfile().schoolId)
+        assertNull(UserProfile().school)
+        assertNull(Schools.byIdOrNull(""))
+        assertNull(Schools.byIdOrNull(null))
+        assertEquals(Schools.WHUT, UserProfile(schoolId = "whut").school)
+        assertEquals("武汉理工大学", Schools.byId("whut").name)
     }
 }

@@ -69,6 +69,7 @@ import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.courseapp.data.model.Schools
 import com.example.courseapp.ui.components.CourseDetailSheet
 import com.example.courseapp.ui.components.ElasticTabIndicator
 import com.example.courseapp.ui.components.FabActionModalHost
@@ -501,6 +502,8 @@ fun CourseApp(
                     ImportPreviewScreen(
                         viewModel = importViewModel,
                         isDarkMode = isDarkMode,
+                        // 用来提示「有课超出当前作息节数」（武理有 13 节，默认模板 12 节）。
+                        timeSlotCount = timeSlots.size,
                         onBack = { currentScreen = sheetReturnScreen },
                         onImportComplete = {
                             currentScreen = Screen.Schedule
@@ -1000,6 +1003,8 @@ fun CourseApp(
             FabSheetAction.Import -> WebImportScreen(
                 isDarkMode = isDarkMode,
                 showHeader = false,
+                // 个人信息里选过学校的话，导入页直接选中它，免得每次导入都要重挑。
+                initialSchool = userProfile.school ?: Schools.Default,
                 onBack = { actionModal = null },
                 onParseHtml = { html ->
                     importViewModel.parseHtml(

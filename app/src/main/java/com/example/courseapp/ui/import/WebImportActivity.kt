@@ -5,6 +5,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.util.Log
 import android.webkit.ConsoleMessage
+import android.webkit.CookieManager
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
@@ -34,12 +35,15 @@ class WebImportActivity : ComponentActivity() {
         val btnImport = findViewById<Button>(R.id.btnImport)
         btnToggleUA = findViewById(R.id.btnToggleUA)
 
+        // 部分学校（武理 jwapp）的教务只有移动端页面才给课表表格，由调用方指定首屏 UA。
+        isDesktopMode = !intent.getBooleanExtra("mobile_ua", false)
+
         // WebView settings
         webView.settings.apply {
             javaScriptEnabled = true
             domStorageEnabled = true
-            useWideViewPort = true
-            loadWithOverviewMode = true
+            useWideViewPort = isDesktopMode
+            loadWithOverviewMode = isDesktopMode
             
             // Zoom settings
             setSupportZoom(true)
@@ -56,9 +60,13 @@ class WebImportActivity : ComponentActivity() {
             textZoom = 100
             
             mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-            // Desktop UA so sites serve full PC layout
-            userAgentString = desktopUA
+            // 桌面 UA 让站点返回完整 PC 版布局；移动端 Web 教务（武理）则直接用手机 UA
+            userAgentString = if (isDesktopMode) desktopUA else mobileUA
         }
+        btnToggleUA.text = if (isDesktopMode) "手机版" else "电脑版"
+
+        // 统一身份认证（CAS）会跨域跳转几次，第三方 Cookie 不放行的话登录态带不到教务系统。
+        CookieManager.getInstance().setAcceptThirdPartyCookies(webView, true)
 
         // Keep navigation in-app
         webView.webViewClient = object : WebViewClient() {
@@ -122,9 +130,7 @@ class WebImportActivity : ComponentActivity() {
             btnImport.text = "正在提取..."
 
             // Use JSON array wrapper so JSONArray can decode all escape sequences
-            webView.evaluateJavascript(
-                "(function() { return [document.documentElement.outerHTML]; })()"
-            ) { json ->
+            webView.evaluateJavascript(EXTRACT_HTML_SCRIPT) { json ->
                 try {
                     val jsonArray = org.json.JSONArray(json)
                     val html = jsonArray.getString(0) ?: ""
@@ -166,5 +172,36 @@ class WebImportActivity : ComponentActivity() {
     override fun onDestroy() {
         webView.destroy()
         super.onDestroy()
+    }
+
+    private companion object {
+        /**
+         * 抓当前页面的 HTML，顺带把同源 iframe 的 body 拼进同一个字符串。
+         *
+         * 武理 jwapp 的「我的课表」是嵌在首页里的 iframe：只取顶层
+         * `document.documentElement.outerHTML` 拿到的是 React 空壳，课表表格根本不在里面。
+         * 同源 iframe 可以直接读 contentDocument（跨域会抛异常，这里跳过）；
+         * 当前教务都只嵌一层，所以只拼一层 body，不做递归。
+         */
+        const val EXTRACT_HTML_SCRIPT = """
+            (function() {
+              function collect(doc) {
+                var html = doc.documentElement ? doc.documentElement.outerHTML : '';
+                var frames = doc.querySelectorAll('iframe, frame');
+                for (var i = 0; i < frames.length; i++) {
+                  try {
+                    var sub = frames[i].contentDocument;
+                    if (sub && sub.body) {
+                      html += '<div data-import-frame="' + i + '">' + sub.body.innerHTML + '</div>';
+                    }
+                  } catch (e) {
+                    // 跨域 iframe 读不到 contentDocument，忽略即可
+                  }
+                }
+                return html;
+              }
+              return [collect(document)];
+            })()
+        """
     }
 }

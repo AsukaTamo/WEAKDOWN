@@ -36,7 +36,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.lifecycle.viewmodel.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.example.courseapp.data.model.Schools
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.UserProfile
 import com.example.courseapp.ui.components.AppSnackbar
@@ -78,6 +77,7 @@ fun ProfileScreen(
     var showBackgroundSettings by remember { mutableStateOf(false) }
     var showSupport by remember { mutableStateOf(false) }
     var showAbout by remember { mutableStateOf(false) }
+    var showFeedback by remember { mutableStateOf(false) }
 
     // 背景图选择
     var backgroundPickTarget by remember { mutableStateOf<Semester?>(null) }
@@ -147,9 +147,7 @@ fun ProfileScreen(
                     viewModel.showMessage("已检查更新，当前为最新版本", "success")
                 },
                 onAbout = { showAbout = true },
-                onFeedback = {
-                    viewModel.showMessage("反馈已提交，感谢您的建议！", "success")
-                }
+                onFeedback = { showFeedback = true }
             )
 
             // 「清空数据」排在页面最下方、靠右：做成玻璃胶囊，压在背景校徽上时
@@ -276,6 +274,18 @@ fun ProfileScreen(
             version = viewModel.appVersion,
             isDarkMode = isDarkMode,
             onDismiss = { showAbout = false }
+        )
+    }
+
+    if (showFeedback) {
+        FeedbackDialog(
+            isDarkMode = isDarkMode,
+            appVersion = viewModel.appVersion,
+            onDismiss = { showFeedback = false },
+            onSendResult = { message, type ->
+                viewModel.showMessage(message, type)
+                showFeedback = false
+            }
         )
     }
 
@@ -427,7 +437,7 @@ private fun ProfileHero(
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = profile.school.name,
+                        text = profile.school?.name ?: "未选择学校",
                         fontSize = 12.5.sp,
                         color = schoolColor,
                         letterSpacing = 0.2.sp,
@@ -463,7 +473,7 @@ private fun ProfileHero(
                     )
                     Spacer(modifier = Modifier.height(3.dp))
                     Text(
-                        text = "背景默认 · ${Schools.Default.name}",
+                        text = "填写学校后显示校徽背景",
                         fontSize = 10.5.sp,
                         color = detailColor,
                         maxLines = 1
