@@ -45,8 +45,15 @@ object CourseHtmlParser {
 
         val results = mutableListOf<ParsedCourse>()
 
-        results.addAll(parseTableFormat(doc))
-        logD("parseTableFormat returned ${results.size} courses")
+        // 武理 jwapp 课表的表格结构和通用表格解析完全不同（行是大节 unit、格子带 data-*），
+        // 先走专用解析；解析不到内容再回落到通用策略，避免专用结构变化后直接导入 0 门课。
+        results.addAll(parseWutTable(doc))
+        logD("parseWutTable returned ${results.size} courses")
+
+        if (results.isEmpty()) {
+            results.addAll(parseTableFormat(doc))
+            logD("parseTableFormat returned ${results.size} courses")
+        }
 
         if (results.isEmpty()) {
             results.addAll(parseDivFormat(doc))
@@ -58,6 +65,169 @@ object CourseHtmlParser {
         }
 
         return results.distinctBy { "${it.name}_${it.dayOfWeek}_${it.startSlot}_${it.weekRange}" }
+    }
+
+    // ── Strategy 0: 武汉理工大学 jwapp 课表 ──
+
+    /** 武理格子里 "[1-4周, 6周, 7-9周],第一节-第二节,南湖校区,南院-博学西楼-212" 的拆解结果。 */
+    private data class WutRoomInfo(
+        val raw: String = "",
+        val weekList: String = "",
+        val periodText: String = "",
+        val campus: String = "",
+        val location: String = ""
+    )
+
+    /**
+     * 武理教务（jwxt.whut.edu.cn/jwapp）的课表：`table.wut_table`，行是 16 个 unit 的「大节」，
+     * 列是 7 天，每个格子带 data-week / data-begin-unit / data-end-unit，格子里再堆
+     * `div.mtt_arrange_item`（一个格子里可能有两门课）。
+     *
+     * unit 不能直接当节次：第 6-7 unit 是「中课」、第 13 unit 是「晚课」，都不排课，
+     * 所以先用行标题里的「第X-Y节」推出 unit → 节次的映射，再用每门课自己房间信息里的
+     * 「第X-Y节」修正（同一大节里不同课程可能只占其中几节）。
+     */
+    private fun parseWutTable(doc: Document): List<ParsedCourse> {
+        val itemCells = doc.select("td[data-week][data-begin-unit]")
+        if (itemCells.isEmpty()) return emptyList()
+
+        val unitPeriod = wutUnitPeriodMap(doc)
+        val results = mutableListOf<ParsedCourse>()
+
+        for (cell in itemCells) {
+            val dayOfWeek = (cell.attr("data-week").toIntOrNull() ?: continue) - 1
+            if (dayOfWeek !in 0..6) continue
+            val beginUnit = cell.attr("data-begin-unit").toIntOrNull() ?: continue
+            val endUnit = cell.attr("data-end-unit").toIntOrNull() ?: beginUnit
+
+            // data-* 给出的大节范围，作为房间信息里没有节次时的兜底。
+            val cellStartPeriod = unitPeriod[beginUnit] ?: beginUnit
+            val cellEndPeriod = unitPeriod[endUnit] ?: endUnit
+
+            val courseBlocks = cell.select("div.mtt_arrange_item").let { if (it.isEmpty()) listOf(cell) else it.toList() }
+            for (block in courseBlocks) {
+                val name = wutCourseName(block) ?: continue
+                val teacher = block.select("div.mtt_item_jxbmc")
+                    .map { it.text().trim() }
+                    .filter { it.isNotEmpty() }
+                    .distinct()
+                    .joinToString("/")
+                val room = parseWutRoomText(block.selectFirst("div.mtt_item_room")?.text().orEmpty())
+
+                val ownPeriods = parseChinesePeriodRange(room.periodText)
+                val startPeriod = ownPeriods?.first ?: cellStartPeriod
+                val endPeriod = ownPeriods?.second ?: cellEndPeriod
+                val startSlot = (startPeriod - 1).coerceAtLeast(0)
+                val slotCount = (endPeriod - startPeriod + 1).coerceIn(1, 13)
+
+                val weekSource = if (room.weekList.contains("周")) room.weekList else room.raw
+                val weekRange = extractWeekRangeFromText(weekSource).orEmpty()
+
+                logD("WUT cell day=$dayOfWeek begin=$beginUnit end=$endUnit -> '$name' slot=$startSlot+$slotCount weeks=$weekRange")
+                results.add(
+                    ParsedCourse(
+                        name = name,
+                        teacher = teacher,
+                        location = room.location,
+                        campus = room.campus,
+                        dayOfWeek = dayOfWeek,
+                        startSlot = startSlot,
+                        slotCount = slotCount,
+                        weekRange = normalizeWeekRange(weekRange),
+                        // 表格里只有「本/研」标记，没有必修/选修信息，先按课程名判断实验类，其余留自定义。
+                        type = parseCourseType(name)
+                    )
+                )
+            }
+        }
+
+        return results
+    }
+
+    /** 行标题的「第X-Y节」+ rowspan → unit(1 基) 到节次(1 基)的映射。 */
+    private fun wutUnitPeriodMap(doc: Document): Map<Int, Int> {
+        val map = mutableMapOf<Int, Int>()
+        for (rowLabel in doc.select("td[data-unit]")) {
+            val unit = rowLabel.attr("data-unit").toIntOrNull() ?: continue
+            val span = rowLabel.attr("rowspan").toIntOrNull() ?: 1
+            val text = rowLabel.text()
+            val firstPeriod = parseChinesePeriodRange(text)?.first ?: continue
+            for (offset in 0 until span) {
+                map[unit + offset] = firstPeriod + offset
+            }
+        }
+        return map
+    }
+
+    private fun wutCourseName(block: Element): String? {
+        val titleCell = block.selectFirst("div.mtt_item_kcmc") ?: return null
+        val badge = titleCell.selectFirst("span.mtt_item_bybz")?.text()?.trim().orEmpty()
+        val raw = titleCell.text().trim()
+        val name = if (badge.isNotEmpty() && raw.startsWith(badge)) {
+            raw.removePrefix(badge).trim()
+        } else {
+            raw
+        }
+        return name.ifEmpty { null }
+    }
+
+    private fun parseWutRoomText(raw: String): WutRoomInfo {
+        val text = raw.trim()
+        if (text.isEmpty()) return WutRoomInfo()
+        val weekList = Regex("\\[([^\\]]*)]").find(text)?.groupValues?.get(1).orEmpty()
+        val rest = text.replaceFirst(Regex("\\[[^\\]]*]"), "")
+
+        var campus = ""
+        var location = ""
+        var periodText = ""
+        for (segment in rest.split(",", "，").map { it.trim() }.filter { it.isNotEmpty() }) {
+            when {
+                segment.contains("节") -> periodText = segment
+                segment.endsWith("校区") -> campus = segment
+                else -> location = segment
+            }
+        }
+        return WutRoomInfo(raw = text, weekList = weekList, periodText = periodText, campus = campus, location = location)
+    }
+
+    /** 解析「第一节-第二节」「第11-13节」这类节次描述，返回 (起始节, 结束节)，1 基。 */
+    private fun parseChinesePeriodRange(text: String): Pair<Int, Int>? {
+        if (text.isBlank()) return null
+        val token = "([一二三四五六七八九十]+|\\d+)"
+        // 「第一节-第二节」中间夹着一个「节」，「第11-13节」却没有，所以第一个节字要可省。
+        val range = Regex("第\\s*$token\\s*节?\\s*[-~至]\\s*第?\\s*$token\\s*节").find(text)
+        if (range != null) {
+            val start = periodNumber(range.groupValues[1]) ?: return null
+            val end = periodNumber(range.groupValues[2]) ?: return null
+            return if (end >= start) start to end else null
+        }
+        val single = Regex("第\\s*$token\\s*节").find(text) ?: return null
+        val start = periodNumber(single.groupValues[1]) ?: return null
+        return start to start
+    }
+
+    /** 节次数字：阿拉伯数字（行标题「第1-2节」）和中文数字（格子里的「第一节」）都要认。 */
+    private fun periodNumber(raw: String): Int? = raw.trim().toIntOrNull() ?: chineseNumber(raw)
+
+    private fun chineseNumber(raw: String): Int? {
+        val text = raw.trim()
+        if (text.isEmpty()) return null
+        val digits = mapOf(
+            '一' to 1, '二' to 2, '三' to 3, '四' to 4, '五' to 5,
+            '六' to 6, '七' to 7, '八' to 8, '九' to 9
+        )
+        return when {
+            text == "十" -> 10
+            text.length == 1 -> digits[text[0]]
+            text.startsWith("十") -> digits[text[1]]?.plus(10)
+            text.length == 2 && text[1] == '十' -> digits[text[0]]?.times(10)
+            text.length == 3 && text[1] == '十' -> {
+                val tens = digits[text[0]] ?: return null
+                val ones = digits[text[2]] ?: return null
+                tens * 10 + ones
+            }
+            else -> null
+        }
     }
 
     // ── Strategy 1: Table-based (most common Chinese university schedule) ──
