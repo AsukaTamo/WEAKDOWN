@@ -29,4 +29,8 @@ interface SemesterDao {
 
     @Query("UPDATE semesters SET isActive = 1 WHERE id = :id")
     suspend fun activateSemester(id: String)
+
+    /** 旧版主键 → 新主键；只换标识，其余字段（含 isActive、背景）保持原样。 */
+    @Query("UPDATE semesters SET id = :newId WHERE id = :oldId")
+    suspend fun rekeySemester(oldId: String, newId: String)
 }

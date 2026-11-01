@@ -118,6 +118,24 @@ class ProfileViewModel @Inject constructor(
         }
     }
 
+    /**
+     * 旧版按名称生成的主键（如 "2026-2027"）会让同学年两个学期互相覆盖，这里换掉标识。
+     * 课程原样保留，只提醒用户核对归属——被覆盖掉的那个学期名已经找不回来了。
+     */
+    fun repairLegacySemesterId(semester: Semester) {
+        viewModelScope.launch {
+            val courseCount = repository.getCourseCount(semester.id)
+            repository.rekeySemester(semester.id)
+            _snackbarMessage.emit(
+                (if (courseCount > 0) {
+                    "已重建「${semester.name}」的学期标识，$courseCount 门课程已保留"
+                } else {
+                    "已重建「${semester.name}」的学期标识"
+                }) to "success"
+            )
+        }
+    }
+
     fun deleteSemester(semester: Semester) {
         viewModelScope.launch {
             val courseCount = repository.getCourseCount(semester.id)

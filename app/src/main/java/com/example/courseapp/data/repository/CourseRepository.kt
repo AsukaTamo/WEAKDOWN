@@ -9,6 +9,7 @@ import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.TimeSlotTemplate
 import kotlinx.coroutines.flow.Flow
+import java.util.UUID
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -77,6 +78,17 @@ class CourseRepository @Inject constructor(
     suspend fun deleteSemesterWithCourses(semester: Semester) = database.withTransaction {
         courseDao.deleteAllBySemester(semester.id)
         semesterDao.deleteSemester(semester)
+    }
+
+    /**
+     * 把旧版按名称生成的主键（如 "2026-2027"）换成唯一主键，课程一起迁过去。
+     * 只改标识，不尝试拆分已经被覆盖合并的课程——原始学期名已随旧行删除，无法还原。
+     */
+    suspend fun rekeySemester(oldId: String): String = database.withTransaction {
+        val newId = UUID.randomUUID().toString()
+        courseDao.rekeyCourseSemester(oldSemester = oldId, newSemester = newId)
+        semesterDao.rekeySemester(oldId = oldId, newId = newId)
+        newId
     }
 
     // ── Time Slot Templates ──
