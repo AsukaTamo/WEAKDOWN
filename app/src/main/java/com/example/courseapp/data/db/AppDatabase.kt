@@ -5,18 +5,42 @@ import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.example.courseapp.data.model.Todo
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.TimeSlotTemplate
 
-@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class], version = 5, exportSchema = false)
+@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class, Todo::class], version = 7, exportSchema = false)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
+    abstract fun todoDao(): TodoDao
     abstract fun courseDao(): CourseDao
     abstract fun semesterDao(): SemesterDao
     abstract fun timeSlotTemplateDao(): TimeSlotTemplateDao
 
     companion object {
+        val MIGRATION_6_7 = object : Migration(6, 7) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("ALTER TABLE todos ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0")
+            }
+        }
+
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL("""
+                    CREATE TABLE IF NOT EXISTS todos (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        title TEXT NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        dueAt INTEGER,
+                        notes TEXT NOT NULL,
+                        tags TEXT NOT NULL,
+                        completedAt INTEGER,
+                        imagePath TEXT
+                    )
+                """.trimIndent())
+            }
+        }
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE courses ADD COLUMN credits REAL NOT NULL DEFAULT 0")

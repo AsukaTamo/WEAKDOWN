@@ -24,6 +24,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -37,6 +38,7 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -93,6 +95,11 @@ import com.example.courseapp.ui.schedule.ScheduleScreen
 import com.example.courseapp.ui.settings.TimeSlotSettingsScreen
 import com.example.courseapp.ui.splash.WeakdownSplashOverlay
 import com.example.courseapp.ui.theme.*
+import com.example.courseapp.ui.todo.TodoScreen
+import com.example.courseapp.ui.todo.TodoContextMenu
+import com.example.courseapp.ui.todo.TodoContextRequest
+import com.example.courseapp.data.model.Todo
+import com.example.courseapp.viewmodel.TodoViewModel
 import com.example.courseapp.viewmodel.ImportViewModel
 import com.example.courseapp.viewmodel.ManageViewModel
 import com.example.courseapp.viewmodel.ProfileViewModel
@@ -110,6 +117,8 @@ import dagger.hilt.android.AndroidEntryPoint
 sealed class Screen {
     data object Schedule : Screen()
     data object Profile : Screen()
+    data object Todo : Screen()
+    data object Notes : Screen()
     data object ImportPreview : Screen()
 }
 
@@ -256,6 +265,19 @@ fun CourseApp(
     homeEntranceEpoch: Int = 1
 ) {
     var currentScreen by remember { mutableStateOf<Screen>(Screen.Schedule) }
+    val pageStateHolder = rememberSaveableStateHolder()
+    val todoViewModel: TodoViewModel = hiltViewModel()
+    var todoContext by remember { mutableStateOf<TodoContextRequest?>(null) }
+    var todoContextVisible by remember { mutableStateOf(false) }
+    var contextDeleteTarget by remember { mutableStateOf<Todo?>(null) }
+    val todoContextProgress = animateFloatAsState(
+        if (todoContextVisible) 1f else 0f,
+        spring(dampingRatio = .76f, stiffness = 550f), label = "todoContextSpring"
+    )
+    val todoContextBlur = remember { derivedStateOf {
+        (todoContextProgress.value.coerceIn(0f, 1f) * 12f).roundToInt() / 12f
+    } }
+
     val manageViewModel: ManageViewModel = hiltViewModel()
     val importViewModel: ImportViewModel = hiltViewModel()
     // 「我的」页的个人信息/学校要同时在 backdrop 层（背景水印）和页面层使用，
@@ -293,16 +315,17 @@ fun CourseApp(
     // 保证太阳/月亮动画不会被快照盖住。
     var themeButtonCenter by remember { mutableStateOf(Offset.Zero) }
 
-    // 底栏固定三个位置：首页 / 加号 / 我的。首页与我的按钮保持不变，
-    // 中间只留图标并稍微放大，作为加号「悬浮按钮」；它不参与页面切换。
+    // 四个页面与中央课程添加按钮共享五个等宽槽位。
     val navItems = listOf(
         NavItem(Screen.Schedule, "首页", Icons.Filled.CalendarMonth, Icons.Outlined.CalendarMonth),
-        NavItem(Screen.Profile, "我的", Icons.Filled.Person, Icons.Outlined.Person)
+        NavItem(Screen.Profile, "我的", Icons.Filled.Person, Icons.Outlined.Person),
+        NavItem(Screen.Todo, "待办", Icons.Filled.Checklist, Icons.Outlined.Checklist),
+        NavItem(Screen.Notes, "随手记", Icons.Filled.PhotoCamera, Icons.Outlined.PhotoCamera)
     )
-    // 三个槽位：首页=0、加号=1、我的=2。加号槽不记录矩形，指示器不会落到它上面。
-    val bottomTabSlots = 3
+    // 首页=0、待办=1、加号=2、随手记=3、我的=4。
+    val bottomTabSlots = 5
     val scheduleTabSlot = 0
-    val profileTabSlot = 2
+    val profileTabSlot = 4
 
     // 底栏指示器：先记录每个 Tab 按钮在窗口中的矩形，再换算成底栏内部的相对坐标。
     // 用窗口坐标做基线，底栏上下移动（导航栏 inset 变化）时也不会错位。
@@ -329,6 +352,8 @@ fun CourseApp(
     val topBarTitle = when (currentScreen) {
         Screen.Schedule -> activeSemester?.name ?: "未设置学期"
         Screen.Profile -> "我的"
+        Screen.Todo -> "待办"
+        Screen.Notes -> "随手记"
         Screen.ImportPreview -> "导入预览"
     }
     val showWeekSelector = currentScreen == Screen.Schedule
@@ -408,7 +433,8 @@ fun CourseApp(
         }
     }
 
-    Box(modifier = Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize()) {
+    Box(modifier = Modifier.fillMaxSize().fabModalPageBlur(todoContextBlur)) {
         // 背景层：底色 + 壁纸 + 遮罩。玻璃从这一层采样，所以它必须画在栏之前、
         // 并且单独成为一个 backdrop（玻璃自己不在这一层里）。
         Box(
@@ -521,8 +547,23 @@ fun CourseApp(
                     .edgeBlur(glassBackdrop, radius = 20.dp, edgeHeight = 200.dp)
             )
 
-            // 「我的」页放在 backdrop 之外：每张卡片都是独立的 Vitro 玻璃节点，
-            // 采样的是下面那层固定的学校背景，而不是页面自己。
+            // 待办和我的卡片放在 backdrop 之外，避免玻璃采样到自身。
+            if (currentScreen == Screen.Todo) {
+                Box(
+                    Modifier.fillMaxSize().padding(top = pageViewportTop)
+                        .clip(RoundedCornerShape(topStart = PageTopCorner, topEnd = PageTopCorner))
+                        .fabModalPageBlur(actionModalBlurProgress)
+                ) {
+                    pageStateHolder.SaveableStateProvider("todo") {
+                        TodoScreen(isDarkMode = isDarkMode, backdrop = glassBackdrop, contentPadding = mainPagePadding,
+                            viewModel = todoViewModel, onContextRequest = { todo, bounds, expanded ->
+                                todoContext = TodoContextRequest(todo, bounds, expanded)
+                                todoContextVisible = true
+                            })
+                    }
+                }
+            }
+
             if (currentScreen == Screen.Profile) {
                 Box(
                     modifier = Modifier
@@ -676,7 +717,8 @@ fun CourseApp(
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = barMutedInk,
-                                letterSpacing = 0.2.sp
+                                letterSpacing = 0.2.sp,
+                maxLines = 1
                             )
                             Spacer(modifier = Modifier.height(4.dp))
                             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -780,10 +822,12 @@ fun CourseApp(
                     }
                 }
             }
-            // 加号槽（1）永远不是选中项：点加号只开面板，不触发指示器换位。
+            // 加号槽（2）永远不是选中项：点加号只开面板，不触发指示器换位。
             val selectedTabSlot = when (currentScreen) {
                 Screen.Schedule -> scheduleTabSlot
                 Screen.Profile -> profileTabSlot
+                Screen.Todo -> 1
+                Screen.Notes -> 3
                 else -> -1
             }
             // 面板打开时加号变成向下的箭头（只保留两侧斜线，不带竖线）。
@@ -800,7 +844,7 @@ fun CourseApp(
                     .align(Alignment.BottomCenter)
                     .fillMaxWidth()
                     .navigationBarsPadding()
-                    .padding(start = 28.dp, top = 4.dp, end = 28.dp, bottom = 10.dp)
+                    .padding(start = 14.dp, top = 4.dp, end = 14.dp, bottom = 10.dp)
                     .onGloballyPositioned { measuredBottomBarPx = it.size.height }
                     // 底栏同理快速退场，避免橙色加号/选中横线透过面板形成色块。
                     .graphicsLayer {
@@ -842,7 +886,7 @@ fun CourseApp(
                     Row(
                         modifier = Modifier
                             .fillMaxSize()
-                            .padding(horizontal = 14.dp, vertical = 8.dp),
+                            .padding(horizontal = 4.dp, vertical = 8.dp),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
@@ -862,6 +906,15 @@ fun CourseApp(
                                 fabSheetVisible = false
                                 currentScreen = Screen.Schedule
                             }
+                        )
+
+                        BottomBarTab(
+                            item = navItems[2],
+                            isSelected = currentScreen == Screen.Todo,
+                            selectedColor = palette.topContent,
+                            inactiveColor = navInactiveInk,
+                            onBoundsChange = { bottomTabBoundsInWindow[1] = it },
+                            onClick = { fabSheetVisible = false; currentScreen = Screen.Todo }
                         )
 
                         // 中间加号：去掉文字、只留图案，并稍微放大成 FAB。
@@ -918,6 +971,15 @@ fun CourseApp(
                         }
 
                         BottomBarTab(
+                            item = navItems[3],
+                            isSelected = currentScreen == Screen.Notes,
+                            selectedColor = palette.topContent,
+                            inactiveColor = navInactiveInk,
+                            onBoundsChange = { bottomTabBoundsInWindow[3] = it },
+                            onClick = { fabSheetVisible = false; currentScreen = Screen.Notes }
+                        )
+
+                        BottomBarTab(
                             item = navItems[1],
                             isSelected = currentScreen == Screen.Profile,
                             // 选中态现在只有底部横线，没有强调色胶囊垫底，
@@ -962,7 +1024,7 @@ fun CourseApp(
                 fabSheetVisible = false
                 // 三个入口不再切页：记录发起页后弹出对应的毛玻璃浮层。
                 sheetReturnScreen = when (currentScreen) {
-                    Screen.Schedule, Screen.Profile -> currentScreen
+                    Screen.Schedule, Screen.Profile, Screen.Todo, Screen.Notes -> currentScreen
                     else -> Screen.Schedule
                 }
                 actionModal = action
@@ -984,7 +1046,7 @@ fun CourseApp(
                 isDarkMode = isDarkMode,
                 onNavigateToImport = {
                     sheetReturnScreen = when (currentScreen) {
-                        Screen.Schedule, Screen.Profile -> currentScreen
+                        Screen.Schedule, Screen.Profile, Screen.Todo, Screen.Notes -> currentScreen
                         else -> Screen.Schedule
                     }
                     actionModal = FabSheetAction.Import
@@ -1129,8 +1191,26 @@ fun CourseApp(
             scheduleViewModel.addCourseQuickly(course, replaceExisting)
         }
     )
-}
-
+    }
+    TodoContextMenu(
+        request = todoContext, visible = todoContextVisible, progress = todoContextProgress.value,
+        dark = isDarkMode, backdrop = glassBackdrop,
+        onDismiss = { todoContextVisible = false },
+        onDelete = { todo -> todoContextVisible = false; contextDeleteTarget = todo },
+        onPin = { todo, pinned ->
+            todoContextVisible = false
+            todoViewModel.setPinned(todo, pinned)
+        }
+    )
+    contextDeleteTarget?.let { todo ->
+        AlertDialog(onDismissRequest = { contextDeleteTarget = null },
+            title = { Text("删除待办？") }, text = { Text(todo.title) },
+            confirmButton = { TextButton(modifier = Modifier.elasticPress(CircleShape), onClick = {
+                todoViewModel.delete(todo) { contextDeleteTarget = null }
+            }) { Text("删除", color = appColors(isDarkMode).danger) } },
+            dismissButton = { TextButton(modifier = Modifier.elasticPress(CircleShape), onClick = { contextDeleteTarget = null }) { Text("取消") } })
+    }
+    }
 }
 
 /**
@@ -1162,9 +1242,12 @@ private fun RowScope.BottomBarTab(
                 .onGloballyPositioned { onBoundsChange(it.boundsInRoot()) }
                 .elasticPress(RoundedCornerShape(22.dp))
                 .clip(RoundedCornerShape(22.dp))
-                .clickable(onClick = onClick)
+                .selectable(selected = isSelected, role = androidx.compose.ui.semantics.Role.Tab, onClick = onClick)
+                .semantics { contentDescription = item.label }
                 // 选中态不改内边距：按钮宽度稳定，横线只需要处理位置/宽度。
-                .padding(horizontal = 18.dp, vertical = 6.dp),
+                .fillMaxWidth()
+                .heightIn(min = 48.dp)
+                .padding(horizontal = 2.dp, vertical = 6.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.Center
         ) {
@@ -1174,19 +1257,22 @@ private fun RowScope.BottomBarTab(
             ) {
                 Icon(
                     imageVector = if (isSelected) item.selectedIcon else item.unselectedIcon,
-                    contentDescription = item.label,
+                    contentDescription = null,
                     tint = if (isSelected) selectedColor else inactiveColor,
                     modifier = Modifier.size(20.dp)
                 )
             }
+            if (androidx.compose.ui.platform.LocalDensity.current.fontScale <= 1.35f) {
             Spacer(modifier = Modifier.height(2.dp))
             Text(
                 text = item.label,
                 fontSize = 10.sp,
                 fontWeight = if (isSelected) FontWeight.SemiBold else FontWeight.Medium,
                 color = if (isSelected) selectedColor else inactiveColor,
-                letterSpacing = 0.2.sp
+                letterSpacing = 0.2.sp,
+                maxLines = 1
             )
+            }
         }
     }
 }

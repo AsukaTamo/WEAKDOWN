@@ -24,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -236,14 +237,17 @@ fun FabSheetOverlay(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    // 遮罩与点击区只到玻璃底栏的上沿：底栏完整露出，并且仍然可以切换页面。
-                    // 底栏占用的是屏幕底部 screenHeight - bar.top 这一段，所以底部 padding 取它。
+                    // 绘制范围覆盖整屏，避免在底栏上沿形成遮罩明暗硬边。
+                    .drawWithContent {
+                        drawRect(Color.Black.copy(alpha = 0.32f * colorFraction))
+                        drawContent()
+                    }
+                    // 点击区仍只到玻璃底栏上沿；面板留在同一父层内，底栏继续接收触摸。
                     .padding(
                         bottom = with(density) {
                             (screenHeightPx - bar.top).coerceAtLeast(0f).toDp()
                         }
                     )
-                    .background(Color.Black.copy(alpha = 0.32f * colorFraction))
                     .clickable(
                         interactionSource = remember { MutableInteractionSource() },
                         indication = null

@@ -3,6 +3,7 @@ package com.example.courseapp.ui.theme
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
 
 // Material 组件（对话框 / 开关 / 菜单 / 时间选择器）的配色由 AppColors 派生，
@@ -51,7 +52,10 @@ fun CourseAppTheme(
     val colors = appColors(darkTheme)
     MaterialTheme(
         colorScheme = if (darkTheme) darkScheme(colors) else lightScheme(colors),
-        typography = Typography,
-        content = content
-    )
+        typography = Typography
+    ) {
+        CompositionLocalProvider(LocalContentColor provides colors.textPrimary) {
+            content()
+        }
+    }
 }

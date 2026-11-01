@@ -3,6 +3,7 @@ package com.example.courseapp.di
 import android.content.Context
 import androidx.room.Room
 import com.example.courseapp.data.db.AppDatabase
+import com.example.courseapp.data.db.TodoDao
 import com.example.courseapp.data.db.CourseDao
 import com.example.courseapp.data.db.SemesterDao
 import com.example.courseapp.data.db.TimeSlotTemplateDao
@@ -25,10 +26,16 @@ object AppModule {
                 AppDatabase.MIGRATION_1_2,
                 AppDatabase.MIGRATION_2_3,
                 AppDatabase.MIGRATION_3_4,
-                AppDatabase.MIGRATION_4_5
+                AppDatabase.MIGRATION_4_5,
+                AppDatabase.MIGRATION_5_6,
+                AppDatabase.MIGRATION_6_7
             )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
+
+    @Provides
+    @Singleton
+    fun provideTodoDao(db: AppDatabase): TodoDao = db.todoDao()
 
     @Provides
     @Singleton
