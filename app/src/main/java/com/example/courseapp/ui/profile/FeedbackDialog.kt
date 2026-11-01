@@ -34,7 +34,7 @@ import com.example.courseapp.ui.components.elasticPress
 import com.example.courseapp.ui.theme.contentPalette
 
 /** 反馈统一寄到这个邮箱，改地址只改这里。 */
-const val FEEDBACK_EMAIL = "lingfangod666@gmail.com"
+const val FEEDBACK_EMAIL = "lingfangod666@163.com"
 
 /** 关于 / 支持与分享里展示的仓库地址。 */
 const val PROJECT_REPO_URL = "https://github.com/AsukaTamo/WEAKDOWN"
