@@ -214,6 +214,7 @@ fun ProfileScreen(
             onSelect = { viewModel.setActiveSemester(it.id) },
             onAdd = { id, name, startDate, weeks -> viewModel.addSemester(id, name, startDate, weeks) },
             onUpdate = { viewModel.updateSemester(it) },
+            onRepairLegacyId = { viewModel.repairLegacySemesterId(it) },
             onDelete = { viewModel.deleteSemester(it) },
             onDismiss = { showSemesterDialog = false }
         )

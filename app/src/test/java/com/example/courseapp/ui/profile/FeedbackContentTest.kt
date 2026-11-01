@@ -47,7 +47,7 @@ class FeedbackContentTest {
 
     @Test
     fun `feedback goes to the developer mailbox and repo link is the project page`() {
-        assertEquals("lingfangod666@gmail.com", FEEDBACK_EMAIL)
+        assertEquals("lingfangod666@163.com", FEEDBACK_EMAIL)
         assertEquals("https://github.com/AsukaTamo/WEAKDOWN", PROJECT_REPO_URL)
     }
 }

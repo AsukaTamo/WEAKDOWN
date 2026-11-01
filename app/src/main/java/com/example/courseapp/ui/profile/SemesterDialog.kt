@@ -18,11 +18,13 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.ui.components.elasticPress
+import com.example.courseapp.ui.theme.ContentPalette
 import com.example.courseapp.ui.theme.Error
 import com.example.courseapp.ui.theme.contentPalette
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
+import java.util.UUID
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,6 +36,7 @@ fun SemesterDialog(
     onSelect: (Semester) -> Unit,
     onAdd: (String, String, String, Int) -> Unit,
     onUpdate: (Semester) -> Unit,
+    onRepairLegacyId: (Semester) -> Unit,
     onDelete: (Semester) -> Unit,
     onDismiss: () -> Unit
 ) {
@@ -49,12 +52,26 @@ fun SemesterDialog(
     val palette = contentPalette(isDarkMode)
     val textColor = palette.title
     val subColor = palette.muted
+    // 旧版按名称生成的主键会残留成 "2026-2027"，这里一次性把它们挑出来让用户重建。
+    val legacySemesters = remember(semesters) { semesters.filter { Semester.isLegacyGeneratedId(it.id) } }
 
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text("学期管理", fontWeight = FontWeight.SemiBold) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (legacySemesters.isNotEmpty()) {
+                    LegacySemesterNotice(
+                        semesters = legacySemesters,
+                        courseCounts = courseCounts,
+                        palette = palette,
+                        textColor = textColor,
+                        subColor = subColor,
+                        onRepair = onRepairLegacyId
+                    )
+                    HorizontalDivider(color = palette.divider)
+                }
+
                 semesters.forEach { semester ->
                     val isActive = semester.id == activeSemester?.id
                     val isEditing = editingSemester?.id == semester.id
@@ -259,7 +276,9 @@ fun SemesterDialog(
                     Button(
                         onClick = {
                             if (newName.isNotBlank() && newStartDate.isNotBlank()) {
-                                val id = newName.replace(Regex("[^\\d-]"), "").ifBlank { System.currentTimeMillis().toString() }
+                                // 主键不能从名称推导：同一学年的「第一/第二学期」名称里的年份数字相同，
+                                // 会生成同一个 id，插入时 REPLACE 把上一学期的记录覆盖掉。
+                                val id = UUID.randomUUID().toString()
                                 onAdd(id, newName, newStartDate, newWeeks.toIntOrNull() ?: 18)
                                 newName = ""; newStartDate = "2026-02-23"; newWeeks = "18"; showAddForm = false
                             }
@@ -354,5 +373,55 @@ fun SemesterDialog(
                 ) { Text("取消") }
             }
         )
+    }
+}
+
+/**
+ * 旧版学期主键的修复入口：只重建标识并保留课程。
+ * 文案要短，但"已合并的课程不会还原"不能省，否则用户会以为重建能把覆盖掉的学期找回来。
+ */
+@Composable
+private fun LegacySemesterNotice(
+    semesters: List<Semester>,
+    courseCounts: Map<String, Int>,
+    palette: ContentPalette,
+    textColor: Color,
+    subColor: Color,
+    onRepair: (Semester) -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(8.dp))
+            .background(palette.accentSoft)
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(Icons.Default.Warning, null, tint = palette.warning, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("学期标识冲突", fontSize = 13.sp, fontWeight = FontWeight.SemiBold, color = textColor)
+        }
+        Text(
+            "再添加同学年学期会覆盖旧记录。重建只换标识，已合并的课程不会还原。",
+            fontSize = 11.sp,
+            color = subColor
+        )
+        semesters.forEach { semester ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(semester.name, fontSize = 13.sp, color = textColor)
+                    Text(
+                        "标识 ${semester.id} · ${courseCounts[semester.id] ?: 0} 门课程",
+                        fontSize = 11.sp,
+                        color = subColor
+                    )
+                }
+                TextButton(
+                    onClick = { onRepair(semester) },
+                    modifier = Modifier.elasticPress(ButtonDefaults.textShape)
+                ) { Text("重建标识", fontSize = 12.sp) }
+            }
+        }
     }
 }
