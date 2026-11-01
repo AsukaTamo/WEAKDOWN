@@ -4,7 +4,7 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.AnimationVector1D
 import androidx.compose.animation.core.CubicBezierEasing
-import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -41,6 +41,7 @@ import com.example.courseapp.ui.theme.contentPalette
 import io.github.itshedimisawi.vitro.Glass
 import io.github.itshedimisawi.vitro.GlassBackdrop
 import io.github.itshedimisawi.vitro.glassEffect
+import kotlinx.coroutines.launch
 import kotlin.math.min
 import kotlin.math.roundToInt
 
@@ -54,15 +55,27 @@ enum class FabSheetAction {
 /**
  * FAB → Sheet 的形变参数。
  *
- * 容器用同一条 cubic-bezier(.2, .9, .22, 1) 走完 480ms：开头冲得快、末段收得稳，
- * 展开和收起共用同一条曲线（收起只是把进度反向走）。容器落定后，三个选项
- * 每隔 4 帧（66ms @60Hz）交错淡入。
+ * 容器用 cubic-bezier(.2, .9, .22, 1) 走完 480ms：开头冲得快、末段收得稳，
+ * 展开和收起共用同一条曲线。三个选项由另一条**线性**的内容进度驱动：这条钟比形变短，
+ * 与形变同时开始，所以框一开始长按钮就依次出现，而且每档间隔是真实时间，
+ * 不会被容器那条前快后慢的曲线压扁成"几乎同时"。
  */
 internal object FabSheetMotion {
     const val MorphMillis = 480
-    const val StaggerMillis = 66
-    const val OptionFadeMillis = 200
-    const val OptionFadeOutMillis = 110
+
+    /** 内容进度（0~1，线性）上每一项的起点与淡入长度。 */
+    const val ContentStartFraction = 0.10f
+    const val ContentStaggerFraction = 0.20f
+    const val ContentItemSpanFraction = 0.45f
+
+    /**
+     * 内容总时长只占形变的前 55%：容器的曲线前段就冲完了，选项必须在这段里走完，
+     * 否则看起来还是"等框画好再挨个冒出来"。最后一项比容器视觉落定稍晚一拍收尾。
+     */
+    const val ContentDurationRatio = 0.55f
+
+    /** 收起时选项先快速淡出，容器再缩回加号。 */
+    const val ContentFadeOutMillis = 120
 
     val Curve = CubicBezierEasing(0.2f, 0.9f, 0.22f, 1f)
 }
@@ -81,8 +94,8 @@ private val FabSheetBarGap = 10.dp
  * 与底栏同宽同底的圆角卡片。位置 / 宽 / 高 / 圆角由同一个 [progress] 驱动，
  * 所以看起来是“这颗加号自己长成了面板”，而不是另开一个弹层。
  *
- * 面板内容等容器落定后才出现：每个选项按 4 帧的间隔交错淡入；关闭时选项先快速淡出，
- * 容器再沿同一条曲线缩回加号原位。
+ * 面板内容跟着一条与形变同时启动的线性内容进度出现：约 25ms 后第一项淡入，
+ * 之后每 50ms 一档，最后一项比容器视觉落定稍晚收尾。关闭时选项先快速淡出，容器再缩回。
  *
  * 玻璃与遮罩沿用现有面板的父层结构：遮罩是面板的父层，子控件的点击优先于遮罩，
  * 避免 Vitro 的 sibling 命中共享把选项点击吞掉。
@@ -105,28 +118,46 @@ fun FabSheetOverlay(
     val density = LocalDensity.current
 
     var contentHeightPx by remember { mutableFloatStateOf(0f) }
-    var revealed by remember { mutableStateOf(false) }
+
+    // 内容进度用线性时钟单独跑：形变曲线前快后慢，直接复用它会让三项的错峰几乎看不见。
+    val contentProgress = remember { Animatable(0f) }
 
     LaunchedEffect(visible, contentHeightPx) {
         if (visible && contentHeightPx > 0f) {
-            progress.animateTo(
-                targetValue = 1f,
-                animationSpec = tween(
-                    durationMillis = FabSheetMotion.MorphMillis,
-                    easing = FabSheetMotion.Curve
+            launch {
+                progress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = FabSheetMotion.MorphMillis,
+                        easing = FabSheetMotion.Curve
+                    )
                 )
-            )
-            // 容器落定之后再放选项，淡入节奏才不会和形变打架。
-            revealed = true
+            }
+            launch {
+                contentProgress.animateTo(
+                    targetValue = 1f,
+                    animationSpec = tween(
+                        durationMillis = (FabSheetMotion.MorphMillis * FabSheetMotion.ContentDurationRatio).toInt(),
+                        easing = LinearEasing
+                    )
+                )
+            }
         } else if (!visible && progress.value > 0.001f) {
-            revealed = false
-            progress.animateTo(
-                targetValue = 0f,
-                animationSpec = tween(
-                    durationMillis = FabSheetMotion.MorphMillis,
-                    easing = FabSheetMotion.Curve
+            launch {
+                contentProgress.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(durationMillis = FabSheetMotion.ContentFadeOutMillis)
                 )
-            )
+            }
+            launch {
+                progress.animateTo(
+                    targetValue = 0f,
+                    animationSpec = tween(
+                        durationMillis = FabSheetMotion.MorphMillis,
+                        easing = FabSheetMotion.Curve
+                    )
+                )
+            }
         }
     }
 
@@ -227,7 +258,8 @@ fun FabSheetOverlay(
                     ) {
                         FabSheetContent(
                             palette = palette,
-                            revealed = false,
+                            contentProgress = 0f,
+                            interactive = false,
                             onAction = {},
                             modifier = Modifier.onSizeChanged {
                                 contentHeightPx = it.height.toFloat()
@@ -273,7 +305,8 @@ fun FabSheetOverlay(
                     ) {
                         FabSheetContent(
                             palette = palette,
-                            revealed = revealed,
+                            contentProgress = contentProgress.value,
+                            interactive = visible && p >= 1f,
                             onAction = onAction
                         )
                     }
@@ -286,7 +319,8 @@ fun FabSheetOverlay(
 @Composable
 private fun FabSheetContent(
     palette: ContentPalette,
-    revealed: Boolean,
+    contentProgress: Float,
+    interactive: Boolean,
     onAction: (FabSheetAction) -> Unit,
     modifier: Modifier = Modifier
 ) {
@@ -297,27 +331,30 @@ private fun FabSheetContent(
     ) {
         FabSheetOption(
             index = 0,
-            revealed = revealed,
+            contentProgress = contentProgress,
+            enabled = interactive,
             icon = Icons.AutoMirrored.Filled.MenuBook,
             title = "本学期课程",
             subtitle = "查看和批量管理本学期全部课程",
             palette = palette,
             onClick = { onAction(FabSheetAction.AllCourses) }
         )
-        OptionDivider(palette = palette, revealed = revealed, index = 1)
+        OptionDivider(palette = palette, contentProgress = contentProgress, index = 1)
         FabSheetOption(
             index = 1,
-            revealed = revealed,
+            contentProgress = contentProgress,
+            enabled = interactive,
             icon = Icons.Default.Add,
             title = "手动添加",
             subtitle = "填写课程信息，保存到当前学期",
             palette = palette,
             onClick = { onAction(FabSheetAction.AddCourse) }
         )
-        OptionDivider(palette = palette, revealed = revealed, index = 2)
+        OptionDivider(palette = palette, contentProgress = contentProgress, index = 2)
         FabSheetOption(
             index = 2,
-            revealed = revealed,
+            contentProgress = contentProgress,
+            enabled = interactive,
             icon = Icons.Default.CloudDownload,
             title = "从教务系统导入",
             subtitle = "打开教务页面，自动解析整张课表",
@@ -327,25 +364,24 @@ private fun FabSheetContent(
     }
 }
 
+/**
+ * 选项透明度由线性内容进度算：约 40ms 后第一项开始淡入，之后每档错开 70ms 左右，
+ * 最后一项在容器落定前一帧到位。分隔线用下一项的进度，跟着它一起出现。
+ */
+private fun optionReveal(contentProgress: Float, index: Int): Float {
+    val start = FabSheetMotion.ContentStartFraction + index * FabSheetMotion.ContentStaggerFraction
+    val t = ((contentProgress - start) / FabSheetMotion.ContentItemSpanFraction).coerceIn(0f, 1f)
+    return t * t * (3f - 2f * t) // smoothstep，首尾不出现生硬折点
+}
+
 @Composable
 private fun OptionDivider(
     palette: ContentPalette,
-    revealed: Boolean,
+    contentProgress: Float,
     index: Int
 ) {
-    // 分隔线和它下面那一项同步出现，避免容器还在长大时先露出两条横线。
-    val alpha by animateFloatAsState(
-        targetValue = if (revealed) 1f else 0f,
-        animationSpec = if (revealed) {
-            tween(
-                durationMillis = FabSheetMotion.OptionFadeMillis,
-                delayMillis = index * FabSheetMotion.StaggerMillis
-            )
-        } else {
-            tween(durationMillis = FabSheetMotion.OptionFadeOutMillis)
-        },
-        label = "fabSheetDividerAlpha$index"
-    )
+    // 分隔线跟随它下面那一项的进度，避免容器还在长时先露出两条横线。
+    val alpha = optionReveal(contentProgress, index)
     HorizontalDivider(
         modifier = Modifier
             .padding(start = 66.dp, end = 18.dp)
@@ -358,33 +394,22 @@ private fun OptionDivider(
 @Composable
 private fun FabSheetOption(
     index: Int,
-    revealed: Boolean,
+    contentProgress: Float,
+    enabled: Boolean,
     icon: ImageVector,
     title: String,
     subtitle: String,
     palette: ContentPalette,
     onClick: () -> Unit
 ) {
-    // 容器落定后每项延迟 4 帧出现；收起时不排队，直接快速淡出。
-    val alpha by animateFloatAsState(
-        targetValue = if (revealed) 1f else 0f,
-        animationSpec = if (revealed) {
-            tween(
-                durationMillis = FabSheetMotion.OptionFadeMillis,
-                delayMillis = index * FabSheetMotion.StaggerMillis
-            )
-        } else {
-            tween(durationMillis = FabSheetMotion.OptionFadeOutMillis)
-        },
-        label = "fabSheetOptionAlpha$index"
-    )
+    val alpha = optionReveal(contentProgress, index)
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(FabSheetRowHeight)
             .graphicsLayer { this.alpha = alpha }
-            .clickable(enabled = revealed, onClick = onClick)
+            .clickable(enabled = enabled, onClick = onClick)
             .padding(horizontal = 18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
