@@ -274,8 +274,9 @@ class ScheduleViewModel @Inject constructor(
 
     fun getWeekDates(week: Int): List<String> {
         val sdf = SimpleDateFormat("M/d", Locale.getDefault())
-        val cal = semesterStartDate.clone() as Calendar
-        cal.add(Calendar.WEEK_OF_YEAR, week - 1)
+        val cal = Calendar.getInstance().apply {
+            timeInMillis = weekStartMillis(semesterStartDate.timeInMillis, week)
+        }
         return (0..6).map { day ->
             val d = cal.clone() as Calendar
             d.add(Calendar.DAY_OF_YEAR, day)
@@ -430,9 +431,35 @@ class ScheduleViewModel @Inject constructor(
 
         /** 开学日期到 now 属于第几周（1 基），早于开学按第 1 周、超出总周数按最后一周收敛。 */
         fun weekOfSemester(startDateMillis: Long, nowMillis: Long, totalWeeks: Int): Int {
-            val diffWeeks = ((nowMillis - startDateMillis) / WEEK_MILLIS).toInt() + 1
+            val diffWeeks = ((nowMillis - firstMondayMillis(startDateMillis)) / WEEK_MILLIS).toInt() + 1
             return diffWeeks.coerceIn(1, totalWeeks.coerceAtLeast(1))
         }
+
+        /**
+         * 课表按周一到周日排布，一周必须从周一起算。
+         * 旧实现直接从开学日期往后累加 7 天，开学日期不是周一时日期列会和列头整体错位：
+         * 开学日填 2026-08-30（周日）时，周日那列会显示成 11-07（周六）。
+         */
+        fun firstMondayMillis(startDateMillis: Long): Long {
+            val cal = Calendar.getInstance().apply {
+                timeInMillis = startDateMillis
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            // Calendar.DAY_OF_WEEK：周日=1 … 周六=7，换算成"距离本周一几天"。
+            val daysSinceMonday = (cal.get(Calendar.DAY_OF_WEEK) + 5) % 7
+            cal.add(Calendar.DAY_OF_YEAR, -daysSinceMonday)
+            return cal.timeInMillis
+        }
+
+        /** 第 [week] 周（1 基）周一 0 点。 */
+        fun weekStartMillis(startDateMillis: Long, week: Int): Long =
+            Calendar.getInstance().apply {
+                timeInMillis = firstMondayMillis(startDateMillis)
+                add(Calendar.DAY_OF_YEAR, (week - 1) * 7)
+            }.timeInMillis
 
         fun defaultTimeSlots() = listOf(
             TimeSlot("08:30", "09:15"),
