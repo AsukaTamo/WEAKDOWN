@@ -70,6 +70,9 @@ fun sortCompletedTodos(todos: List<Todo>): List<Todo> = todos.filter { it.comple
     .sortedWith(compareByDescending<Todo> { isExamTodo(it) }
         .thenByDescending { isTodoPinned(it) }.thenByDescending { it.completedAt })
 
+fun completedTodoDays(completedAt: Long, now: Long): Long =
+    ((now.toDouble() - completedAt.toDouble()).coerceAtLeast(0.0) / 86_400_000.0).toLong()
+
 fun todoTimeProgress(todo: Todo, now: Long): Float? {
     val due = todo.dueAt ?: return null
     if (due <= todo.createdAt) return 1f

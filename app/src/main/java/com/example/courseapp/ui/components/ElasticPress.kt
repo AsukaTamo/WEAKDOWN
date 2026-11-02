@@ -13,21 +13,15 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithCache
-import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Rect
-import androidx.compose.ui.graphics.BlendMode
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.Paint
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.addOutline
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.clipPath
-import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.graphics.nativePaint
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.unit.dp
@@ -150,43 +144,9 @@ fun Modifier.elasticPress(
 
 /**
  * 按压深度内阴影：
- * 1. 外圈用模糊的 DstOut 挖洞，留下贴边的一圈暗部（真实内阴影）；
- * 2. 顶部纵向压深 + 底部内侧高光，让控件看起来被按进面板里。
- *
- * API 28 以下硬件绘制不支持 BlurMaskFilter，直接用内描边兜底。
+ * 形状内的纵向暗部和底部高光，让控件看起来被按进面板里。
  */
 private fun DrawScope.drawPressedDepth(shapePath: Path, depth: Float) {
-    // 小控件（色块、图标按钮）用更小的模糊半径，避免内阴影糊成一团。
-    val minSide = size.minDimension
-    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
-        val blurPx = (minSide * 0.16f).coerceIn(2.dp.toPx(), 8.dp.toPx())
-        val offsetY = (minSide * 0.06f).coerceIn(1.dp.toPx(), 2.5.dp.toPx())
-        drawIntoCanvas { canvas ->
-            canvas.save()
-            canvas.clipPath(shapePath)
-            canvas.saveLayer(Rect(Offset.Zero, size), Paint())
-            canvas.drawRect(
-                Rect(Offset.Zero, size),
-                Paint().apply { color = Color.Black.copy(alpha = 0.46f * depth) }
-            )
-            val hole = Paint().apply {
-                color = Color.Black
-                blendMode = BlendMode.DstOut
-            }
-            hole.nativePaint.apply {
-                isAntiAlias = true
-                maskFilter = android.graphics.BlurMaskFilter(
-                    blurPx,
-                    android.graphics.BlurMaskFilter.Blur.NORMAL
-                )
-            }
-            canvas.translate(0f, offsetY)
-            canvas.drawPath(shapePath, hole)
-            canvas.restore()
-            canvas.restore()
-        }
-    }
-
     clipPath(shapePath) {
         drawRect(
             brush = Brush.verticalGradient(

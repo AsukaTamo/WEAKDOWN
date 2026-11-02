@@ -6,12 +6,14 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,7 +46,7 @@ internal fun todoSheetGeometry(clock: Float): Float =
 private data class SheetLayout(val width: Dp, val height: Dp, val top: Dp)
 
 @Composable
-internal fun TodoFabSheet(dark: Boolean, backdrop: GlassBackdrop, padding: PaddingValues, requested: Boolean,
+internal fun TodoFabSheet(dark: Boolean, backdrop: GlassBackdrop, padding: PaddingValues, requested: Boolean, editing: Boolean,
     onRequestChange: (Boolean) -> Unit, saveError: String?, existingTodoIds: Set<String>, onPending: (String?) -> Unit,
     onSave: (Todo, () -> Unit) -> Unit, onReveal: (Todo) -> Unit) {
     val colors = appColors(dark)
@@ -64,6 +66,10 @@ internal fun TodoFabSheet(dark: Boolean, backdrop: GlassBackdrop, padding: Paddi
             (values[6] as Long).takeUnless { it == -1L },(values[7] as String).ifBlank { null },values.getOrNull(8) as? Boolean ?: false) })
     var saved by rememberSaveable(stateSaver=savedTodoSaver) { mutableStateOf<Todo?>(null) }
     val reduced = !android.animation.ValueAnimator.areAnimatorsEnabled()
+    var collapsed by rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(editing) { collapsed = editing }
+    val slide by animateDpAsState(if (collapsed && !requested) 44.dp else 0.dp,
+        if (reduced) snap() else spring(dampingRatio = .7f, stiffness = Spring.StiffnessMediumLow), label = "todoFabSlide")
     val isRequested by rememberUpdatedState(requested)
     fun close() { if (!saving) { closingLayout = lastOpenLayout; keyboard?.hide(); onRequestChange(false) } }
     BackHandler(requested || progress.value > 0f) { close() }
@@ -121,14 +127,27 @@ internal fun TodoFabSheet(dark: Boolean, backdrop: GlassBackdrop, padding: Paddi
             else Modifier)) {
         // One persistent glass surface is shared by the FAB and the expanded form.
         GlassSurface(backdrop, dark,
-            Modifier.offset(left,top).size(width,height)
+            Modifier.offset(left + slide,top).size(width,height)
+                .pointerInput(requested, editing, collapsed) {
+                    if (!requested && !editing && !collapsed) {
+                        var drag = 0f
+                        detectHorizontalDragGestures(onDragEnd = {
+                            if (drag > 24.dp.toPx()) collapsed = true
+                            drag = 0f
+                        }, onHorizontalDrag = { change, amount -> drag += amount; change.consume() })
+                    }
+                }
                 .then(if(requested) Modifier.clickable(interactionSource=remember { MutableInteractionSource() }, indication=null) {} else Modifier)
                 .elasticPress(RoundedCornerShape(corner), enabled=p == 0f)
-                .then(if(saved == null && (p == 0f || !requested)) Modifier.semantics { contentDescription="添加待办" }
-                    .clickable { onRequestChange(true) } else Modifier),
+                .then(if(saved == null && (p == 0f || !requested)) Modifier.semantics { contentDescription=if (collapsed) "展开添加按钮" else "添加待办" }
+                    .clickable(enabled = !editing, interactionSource = remember { MutableInteractionSource() }, indication = null) {
+                        if (collapsed) collapsed = false else onRequestChange(true)
+                    } else Modifier),
             shape=RoundedCornerShape(corner),corner=corner) {
-            Icon(Icons.Default.Add, null, tint=colors.accent,
-                modifier=Modifier.align(Alignment.Center).size(28.dp).graphicsLayer { alpha=1f-(p*5f).coerceIn(0f,1f); rotationZ=45f*p })
+            Icon(if (collapsed && p == 0f) Icons.Default.ChevronLeft else Icons.Default.Add, null, tint=colors.accent,
+                modifier=Modifier.align(if (collapsed && p == 0f) Alignment.CenterStart else Alignment.Center)
+                    .then(if (collapsed && p == 0f) Modifier.padding(start = 4.dp) else Modifier)
+                    .size(28.dp).graphicsLayer { alpha=1f-(p*5f).coerceIn(0f,1f); rotationZ=45f*p })
             // Keep fields composed across close/open so cancelling retains the unsaved draft.
             key(draftId) {
                 Column(Modifier.wrapContentSize(Alignment.TopStart,unbounded=true).requiredSize(panelWidth,panelHeight).padding(16.dp)

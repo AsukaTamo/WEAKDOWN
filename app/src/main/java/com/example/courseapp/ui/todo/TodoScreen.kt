@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.asImageBitmap
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.*
 import androidx.compose.foundation.layout.*
@@ -23,6 +24,7 @@ import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.saveable.listSaver
 import com.example.courseapp.ui.components.elasticPress
+import com.example.courseapp.ui.components.contentEdgeBlur
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.*
@@ -69,7 +71,9 @@ fun TodoScreen(isDarkMode: Boolean, backdrop: GlassBackdrop, contentPadding: Pad
     var now by remember { mutableLongStateOf(System.currentTimeMillis()) }
     val snack = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val list = rememberLazyListState()
+    val pendingList = rememberLazyListState()
+    val completedList = rememberLazyListState()
+    val list = if (completed) completedList else pendingList
     val density = LocalDensity.current
     val contextMenuTop = WindowInsets.statusBars.getTop(density) + with(density) {
         (16.dp + 52.dp * density.fontScale.coerceAtLeast(1f) * 2 + 16.dp + 8.dp).toPx()
@@ -88,10 +92,17 @@ fun TodoScreen(isDarkMode: Boolean, backdrop: GlassBackdrop, contentPadding: Pad
     BackHandler(draft != null || expanded != null) { if (draft != null) draft = null else expanded = null }
     fun add() { sheetRequested = true }
     val displayedTodos = todos.filter { it.id != pendingInsert }
-    val visible = if (completed) sortCompletedTodos(displayedTodos)
-        else displayedTodos.filter { it.completedAt == null }
     Box(Modifier.fillMaxSize()) {
-        LazyColumn(state = list, modifier = Modifier.fillMaxSize(),
+        val reduced = !android.animation.ValueAnimator.areAnimatorsEnabled()
+        AnimatedContent(targetState = completed, transitionSpec = {
+            val spec = if (reduced) snap<IntOffset>() else spring(dampingRatio = .85f, stiffness = Spring.StiffnessMediumLow)
+            val direction = if (targetState) 1 else -1
+            (slideInHorizontally(spec) { it * direction } + fadeIn(tween(if (reduced) 0 else 180))) togetherWith
+                (slideOutHorizontally(spec) { -it * direction } + fadeOut(tween(if (reduced) 0 else 180)))
+        }, label = "todoTabs") { showingCompleted ->
+        val visible = if (showingCompleted) sortCompletedTodos(displayedTodos)
+            else displayedTodos.filter { it.completedAt == null }
+        LazyColumn(state = if (showingCompleted) completedList else pendingList, modifier = Modifier.fillMaxSize().contentEdgeBlur(contentPadding.calculateBottomPadding()),
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp,
                 top = contentPadding.calculateTopPadding() + 12.dp,
                 bottom = contentPadding.calculateBottomPadding() + 100.dp),
@@ -99,7 +110,7 @@ fun TodoScreen(isDarkMode: Boolean, backdrop: GlassBackdrop, contentPadding: Pad
             item(key = "tabs") {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     listOf(false to "待办", true to "已完成").forEach { (done, label) ->
-                        FilterChip(modifier = Modifier.elasticPress(RoundedCornerShape(20.dp)), selected = completed == done, onClick = { completed = done; expanded = null },
+                        FilterChip(modifier = Modifier.elasticPress(RoundedCornerShape(20.dp)), selected = showingCompleted == done, onClick = { completed = done; expanded = null },
                             label = { Text("$label ${displayedTodos.count { (it.completedAt != null) == done }}") },
                             colors = FilterChipDefaults.filterChipColors(
                                 containerColor = colors.surface.copy(alpha = .3f), labelColor = colors.textSecondary,
@@ -109,11 +120,11 @@ fun TodoScreen(isDarkMode: Boolean, backdrop: GlassBackdrop, contentPadding: Pad
             }
             if (visible.isEmpty()) item(key = "empty") {
                 Column(Modifier.fillMaxWidth().padding(vertical = 64.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text(if (completed) "还没有已完成的待办" else "还没有待办", color = colors.textSecondary)
-                    if (!completed) TextButton(modifier = Modifier.elasticPress(CircleShape), onClick = { add() }) { Text("添加待办") }
+                    Text(if (showingCompleted) "还没有已完成的待办" else "还没有待办", color = colors.textSecondary)
+                    if (!showingCompleted) TextButton(modifier = Modifier.elasticPress(CircleShape), onClick = { add() }) { Text("添加待办") }
                 }
             }
-            val groups = if (completed) listOf("" to visible) else groupTodos(displayedTodos, now).map { it.key.label to it.value }
+            val groups = if (showingCompleted) listOf("" to visible) else groupTodos(displayedTodos, now).map { it.key.label to it.value }
             groups.forEach { (label, entries) ->
                 if (label.isNotEmpty()) item(key = "group:$label") {
                     Text(label, color = colors.textSecondary, style = MaterialTheme.typography.labelLarge,
@@ -141,7 +152,8 @@ fun TodoScreen(isDarkMode: Boolean, backdrop: GlassBackdrop, contentPadding: Pad
                 }
             }
         }
-        TodoFabSheet(isDarkMode, backdrop, contentPadding, sheetRequested,
+        }
+        TodoFabSheet(isDarkMode, backdrop, contentPadding, sheetRequested, editing = draft != null,
             onRequestChange = { sheetRequested = it }, saveError = error, existingTodoIds = todos.map { it.id }.toSet(),
             onPending = { pendingInsert = it },
             onSave = { value, success -> viewModel.save(value, success) },
@@ -163,6 +175,7 @@ fun TodoScreen(isDarkMode: Boolean, backdrop: GlassBackdrop, contentPadding: Pad
 }
 
 private fun deadline(todo: Todo, now: Long): String {
+    todo.completedAt?.let { return "已完成 ${completedTodoDays(it, now)} 天" }
     val due = todo.dueAt ?: return "未设置截止时间"
     val difference = due - now
     return when {
@@ -203,7 +216,7 @@ internal fun TodoCard(todo: Todo, expanded: Boolean, highlighted: Boolean, now: 
                         if (isTodoPinned(todo)) Icon(Icons.Default.PushPin, "已置顶", Modifier.padding(end = 4.dp).size(14.dp), tint = colors.accentText)
                         Text(todo.title, color = colors.textPrimary, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
                     }
-                    Text(deadline(todo, now), color = if(todo.dueAt != null && todo.dueAt <= now) colors.danger else colors.textSecondary, style = MaterialTheme.typography.labelMedium)
+                    Text(deadline(todo, now), color = if(todo.completedAt == null && todo.dueAt != null && todo.dueAt <= now) colors.danger else colors.textSecondary, style = MaterialTheme.typography.labelMedium)
                 }
                 Icon(Icons.Default.ExpandMore, null, tint = colors.textMuted, modifier = Modifier.padding(12.dp).graphicsLayer { rotationZ = p*180 })
             }

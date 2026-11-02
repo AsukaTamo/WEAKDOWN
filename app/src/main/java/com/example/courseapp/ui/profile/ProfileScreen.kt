@@ -44,7 +44,6 @@ import com.example.courseapp.ui.components.tiltPress
 import com.example.courseapp.ui.theme.*
 import com.example.courseapp.viewmodel.ProfileViewModel
 import io.github.itshedimisawi.vitro.GlassBackdrop
-import io.github.itshedimisawi.vitro.glassEffectContainer
 
 /**
  * 「我的」页。
@@ -102,7 +101,7 @@ fun ProfileScreen(
     val contentTop = contentPadding.calculateTopPadding() + 8.dp
     val contentBottom = contentPadding.calculateBottomPadding()
 
-    Box(modifier = Modifier.fillMaxSize().glassEffectContainer(spacing = 0.dp)) {
+    Box(modifier = Modifier.fillMaxSize()) {
         Column(
             modifier = Modifier
                 .fillMaxSize()

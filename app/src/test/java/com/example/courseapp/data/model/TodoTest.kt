@@ -6,6 +6,12 @@ import java.time.Instant
 import java.time.ZoneId
 
 class TodoTest {
+    @Test fun completedDaysCountElapsedFullDaysAndClampFutureTimes() {
+        assertEquals(0L, completedTodoDays(1000, 1000))
+        assertEquals(0L, completedTodoDays(1000, 1000 + 86_400_000 - 1))
+        assertEquals(1L, completedTodoDays(1000, 1000 + 86_400_000))
+        assertEquals(0L, completedTodoDays(2000, 1000))
+    }
     private val zone = ZoneId.of("Asia/Shanghai")
     private val now = Instant.parse("2026-11-01T04:00:00Z").toEpochMilli()
     private fun todo(id: String, due: Long?, created: Long = now - 1000) =
