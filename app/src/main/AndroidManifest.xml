@@ -4,6 +4,10 @@
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 随手记：课堂拍摄。相机按需申请；相册导入走 Photo Picker，不申请全盘媒体权限。 -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.camera.autofocus" android:required="false" />
 
     <!-- 「帮助与反馈」要判断设备上有没有邮件应用（Android 11+ 默认查不到其他应用）。 -->
     <queries>
@@ -44,6 +48,17 @@
             android:name=".ui.import.WebImportActivity"
             android:configChanges="orientation|screenSize|keyboardHidden"
             android:hardwareAccelerated="true" />
+
+        <!-- 随手记：分享应用私有目录中的照片时使用 content://，不暴露 file://。 -->
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
     </application>
 

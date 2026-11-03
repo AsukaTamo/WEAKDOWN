@@ -9,16 +9,113 @@ import com.example.courseapp.data.model.Todo
 import com.example.courseapp.data.model.Course
 import com.example.courseapp.data.model.Semester
 import com.example.courseapp.data.model.TimeSlotTemplate
+import com.example.courseapp.data.model.NoteCategory
+import com.example.courseapp.data.model.NoteEditDocumentEntity
+import com.example.courseapp.data.model.NotePhoto
+import com.example.courseapp.data.model.UNCATEGORIZED_CATEGORY_ID
+import com.example.courseapp.data.model.uncategorizedCategory
 
-@Database(entities = [Course::class, Semester::class, TimeSlotTemplate::class, Todo::class], version = 7, exportSchema = false)
+@Database(
+    entities = [
+        Course::class,
+        Semester::class,
+        TimeSlotTemplate::class,
+        Todo::class,
+        NoteCategory::class,
+        NotePhoto::class,
+        NoteEditDocumentEntity::class
+    ],
+    version = 8,
+    exportSchema = false
+)
 @TypeConverters(Converters::class)
 abstract class AppDatabase : RoomDatabase() {
     abstract fun todoDao(): TodoDao
     abstract fun courseDao(): CourseDao
     abstract fun semesterDao(): SemesterDao
     abstract fun timeSlotTemplateDao(): TimeSlotTemplateDao
+    abstract fun noteDao(): NoteDao
 
     companion object {
+        /**
+         * 随手记三张表。分类保持独立，照片只存 categoryId；
+         * 系统「未归类」在迁移时初始化，后续由 Repository 的 ensureUncategorized 兜底。
+         */
+        val MIGRATION_7_8 = object : Migration(7, 8) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS note_categories (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        name TEXT NOT NULL,
+                        iconKey TEXT NOT NULL,
+                        colorValue INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL,
+                        isSystem INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS note_photos (
+                        id TEXT NOT NULL PRIMARY KEY,
+                        categoryId TEXT NOT NULL,
+                        originalFileName TEXT NOT NULL,
+                        originalRelativePath TEXT NOT NULL,
+                        editedRelativePath TEXT,
+                        previewRelativePath TEXT,
+                        title TEXT NOT NULL,
+                        note TEXT NOT NULL,
+                        capturedAt INTEGER NOT NULL,
+                        createdAt INTEGER NOT NULL,
+                        width INTEGER NOT NULL,
+                        height INTEGER NOT NULL,
+                        mimeType TEXT NOT NULL,
+                        originalRotation INTEGER NOT NULL,
+                        sortOrder INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_note_photos_categoryId ON note_photos(categoryId)")
+                db.execSQL("CREATE INDEX IF NOT EXISTS index_note_photos_capturedAt ON note_photos(capturedAt)")
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS note_edit_documents (
+                        photoId TEXT NOT NULL PRIMARY KEY,
+                        cropLeft REAL NOT NULL,
+                        cropTop REAL NOT NULL,
+                        cropRight REAL NOT NULL,
+                        cropBottom REAL NOT NULL,
+                        rotation INTEGER NOT NULL,
+                        textLayersJson TEXT NOT NULL,
+                        strokesJson TEXT NOT NULL,
+                        version INTEGER NOT NULL,
+                        updatedAt INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+                val now = System.currentTimeMillis()
+                val system = uncategorizedCategory(now)
+                db.execSQL(
+                    "INSERT OR IGNORE INTO note_categories " +
+                        "(id, name, iconKey, colorValue, createdAt, updatedAt, sortOrder, isSystem) " +
+                        "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                    arrayOf<Any?>(
+                        UNCATEGORIZED_CATEGORY_ID,
+                        system.name,
+                        system.iconKey,
+                        system.colorValue,
+                        now,
+                        now,
+                        system.sortOrder,
+                        1
+                    )
+                )
+            }
+        }
+
         val MIGRATION_6_7 = object : Migration(6, 7) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 db.execSQL("ALTER TABLE todos ADD COLUMN isPinned INTEGER NOT NULL DEFAULT 0")

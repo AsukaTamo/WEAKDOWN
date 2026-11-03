@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.courseapp"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "2.4.2"
+        versionCode = 3
+        versionName = "3.0.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
             useSupportLibrary = true
@@ -82,6 +82,13 @@ dependencies {
 
     // Jsoup
     implementation("org.jsoup:jsoup:1.17.2")
+
+    // CameraX（随手记：真实取景 + 拍照 + 镜头/闪光灯控制）
+    val cameraX = "1.6.2"
+    implementation("androidx.camera:camera-core:$cameraX")
+    implementation("androidx.camera:camera-camera2:$cameraX")
+    implementation("androidx.camera:camera-lifecycle:$cameraX")
+    implementation("androidx.camera:camera-view:$cameraX")
 
     // Coroutines
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.11.0")
