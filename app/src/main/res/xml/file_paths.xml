@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- 随手记的私有图片目录；只暴露 FileProvider 需要的 notebook 子目录。 -->
+<paths>
+    <files-path name="notebook" path="notebook/" />
+</paths>

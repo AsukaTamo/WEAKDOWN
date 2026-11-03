@@ -89,6 +89,8 @@ import com.example.courseapp.ui.components.keepPlacedWhen
 import com.example.courseapp.ui.import.ImportPreviewScreen
 import com.example.courseapp.ui.import.WebImportScreen
 import com.example.courseapp.ui.manage.ManageScreen
+import com.example.courseapp.ui.notes.NotesChromeState
+import com.example.courseapp.ui.notes.NotesScreen
 import com.example.courseapp.ui.profile.ProfileScreen
 import com.example.courseapp.ui.profile.SchoolBackdrop
 import com.example.courseapp.ui.schedule.ScheduleScreen
@@ -280,6 +282,8 @@ fun CourseApp(
 
     val manageViewModel: ManageViewModel = hiltViewModel()
     val importViewModel: ImportViewModel = hiltViewModel()
+    // 随手记首页/分类详情的网格-列表状态：由页面持有，顶栏左侧按钮触发。
+    val notesChrome = remember { NotesChromeState() }
     // 「我的」页的个人信息/学校要同时在 backdrop 层（背景水印）和页面层使用，
     // 所以在这里提一个 activity 级的实例，再显式传给 ProfileScreen。
     val profileViewModel: ProfileViewModel = hiltViewModel()
@@ -590,6 +594,29 @@ fun CourseApp(
                 }
             }
 
+            if (currentScreen == Screen.Notes) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .padding(top = pageViewportTop)
+                        .clip(
+                            RoundedCornerShape(
+                                topStart = PageTopCorner,
+                                topEnd = PageTopCorner
+                            )
+                        )
+                        .fabModalPageBlur(actionModalBlurProgress)
+                ) {
+                    pageStateHolder.SaveableStateProvider("notes") {
+                        NotesScreen(
+                            isDarkMode = isDarkMode,
+                            contentPadding = mainPagePadding,
+                            chrome = notesChrome
+                        )
+                    }
+                }
+            }
+
             // 顶栏 / 底栏不再放进 Material3 Scaffold：Scaffold 内部的 Surface 是全屏的，并且自带一个
             // pointerInput 节点，会在命中测试里赢得整屏，导致 backdrop 里的页面永远收不到触摸
             // （只有 Surface 内部的栏按钮能响应）。直接作为根 Box 的子节点摆放，位置与原来一致，
@@ -637,6 +664,39 @@ fun CourseApp(
                         .glassBevel(themeDarkFraction)
                         .padding(horizontal = 18.dp, vertical = 6.dp)
                 ) {
+                    // 随手记：左侧布局切换（沿用现有顶栏圆角容器，不改变全局导航）。
+                    if (currentScreen == Screen.Notes && notesChrome.showLayoutToggle) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.CenterStart)
+                                .padding(start = 2.dp)
+                                .size(38.dp)
+                                .elasticPress(CircleShape)
+                                .clip(RoundedCornerShape(19.dp))
+                                .background(
+                                    palette.topContent.copy(
+                                        alpha = if (hasBackground) 0.16f else 0.08f
+                                    )
+                                )
+                                .clickable { notesChrome.toggleLayout() }
+                                .semantics {
+                                    contentDescription = notesChrome.layoutToggleDescription
+                                },
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = if (notesChrome.isGrid) {
+                                    Icons.Outlined.GridView
+                                } else {
+                                    Icons.Outlined.ViewList
+                                },
+                                contentDescription = null,
+                                tint = palette.topContent,
+                                modifier = Modifier.size(19.dp)
+                            )
+                        }
+                    }
+
                     IconButton(
                         onClick = {
                             // 切换/淡出期间忽略重复点击，避免两段动画互相覆盖

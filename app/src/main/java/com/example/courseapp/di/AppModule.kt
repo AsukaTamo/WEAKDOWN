@@ -7,6 +7,7 @@ import com.example.courseapp.data.db.TodoDao
 import com.example.courseapp.data.db.CourseDao
 import com.example.courseapp.data.db.SemesterDao
 import com.example.courseapp.data.db.TimeSlotTemplateDao
+import com.example.courseapp.data.db.NoteDao
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -28,7 +29,8 @@ object AppModule {
                 AppDatabase.MIGRATION_3_4,
                 AppDatabase.MIGRATION_4_5,
                 AppDatabase.MIGRATION_5_6,
-                AppDatabase.MIGRATION_6_7
+                AppDatabase.MIGRATION_6_7,
+                AppDatabase.MIGRATION_7_8
             )
             .fallbackToDestructiveMigration(dropAllTables = true)
             .build()
@@ -48,4 +50,8 @@ object AppModule {
     @Provides
     @Singleton
     fun provideTimeSlotTemplateDao(db: AppDatabase): TimeSlotTemplateDao = db.timeSlotTemplateDao()
+
+    @Provides
+    @Singleton
+    fun provideNoteDao(db: AppDatabase): NoteDao = db.noteDao()
 }
